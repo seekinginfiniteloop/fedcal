@@ -1,6 +1,6 @@
 # fedcal, a democratic python calendar enhancement to pandas
 
-![fedcal logo](docs/imgs/fedcal.png)
+![fedcal logo](.docs/imgs/fedcal-med.png)
 
 Current version - unstable alpha 0.1
 
