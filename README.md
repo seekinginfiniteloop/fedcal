@@ -59,7 +59,7 @@ Of course, as a calendar library, fedcal can help you streamline more developmen
 
 1. `FedDateStamp` - fedcal's enhanced pupeteer class to [pandas' Timestamp class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timestamp.html)
 
-2. `FedDateIndex` a companion class that add matching capabiilities to [pandas' DatetimeIndex class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DatetimeIndex.html#pandas-datetimeindex)
+2. `FedDateIndex` a companion class that adds similar functionality to [pandas' DatetimeIndex class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DatetimeIndex.html#pandas-datetimeindex)
 
 > [!IMPORTANT] > `FedDateStamp` and `FedDateIndex` **retain all functionality** of pandas `Timestamp` and `DatetimeIndex`. (... or they should, pending testing and refinement and your issue submissions...)
 
