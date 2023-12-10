@@ -1,0 +1,102 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Tuple
+
+from attrs import field, frozen, astuple
+
+if TYPE_CHECKING:
+    from .constants import (
+        EXECUTIVE_DEPARTMENT,
+        FUNDING_STATUS,
+        OPERATIONAL_STATUS,
+        STATUS_MAP,
+    )
+    from ._typing import StatusDictType, StatusTupleType, StatusMapType
+
+
+@frozen(order=True)
+class FedDepartment:
+    """
+    Represents a federal department with a specific funding and operational
+    status.
+
+    Attributes
+    ----------
+    name : The name of the executive department.
+    funding_status : The funding status of the department.
+    operational_status : The operational status of the department.
+
+    Methods
+    -------
+    dept_tuple()
+        Returns a tuple representation of the department's name and statuses.
+    dept_dict()
+        Returns a dictionary representation of the department's name and
+        statuses.
+    """
+
+    name: "EXECUTIVE_DEPARTMENT" = field()
+    funding_status: "FUNDING_STATUS" = field()
+    operational_status: "OPERATIONAL_STATUS" = field()
+
+    def __str__(self) -> str:
+        """We override attrs default to provide a meaningful string representation"""
+        return f"{self.name.ABBREV}: funding: {self.funding_status}, operational: {self.operational_status}"
+
+    def to_tuple(
+        self,
+    ) -> Tuple["EXECUTIVE_DEPARTMENT", "FUNDING_STATUS", "OPERATIONAL_STATUS"]:
+        """
+        Return a tuple of FedDepartment attributes.
+        Returns
+        -------
+        A tuple of FedDepartment attributes.
+
+        """
+
+        return astuple(inst=self)
+
+    def to_status_tuple(self) -> "StatusTupleType":
+        """
+        Returns a StatusTupleType (Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] for the FedDepartment instance
+
+        Returns
+        -------
+        A StatusTupleType for the instance.
+        """
+        return self.funding_status, self.operational_status
+
+    @property
+    def status(self) -> str:
+        """
+        Return a simplified string representation of the department's status.
+
+        Returns
+        -------
+        A string representation of the department's status.
+        """
+        status: "StatusTupleType" = self.to_status_tuple()
+        s_map: "StatusMapType" = STATUS_MAP
+        s_keys: list[str] = sorted(list(s_map.keys()))
+        str_list: list[str] = [
+            "open, full year approps",
+            "open with limits, continuing resolution",
+            "unknown open, either CR or full approps",
+            "minimally open, no approps",
+            "closed, shutdown",
+            "future unknown",
+        ]
+        statuses = zip(s_keys, str_list)
+        for k, v in statuses:
+            if s_map[k] == status:
+                return v
+
+    def to_dict(self) -> "StatusDictType":
+        """
+        Return a dictionary of FedDepartment attributes.
+
+        Returns
+        -------
+        A dictionary of FedDepartment attributes.
+        """
+        return {self.name: self.to_status_tuple()}
