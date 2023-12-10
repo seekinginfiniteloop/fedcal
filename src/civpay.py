@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from attrs import define, field
 from pandas import DatetimeIndex, Series, Timestamp, date_range
 
-from constants import FEDPAYDAY_REFERENCE_DATE
-from time_utils import to_datestamp
+from .constants import FEDPAYDAY_REFERENCE_DATE
+from .time_utils import to_datestamp
 
 if TYPE_CHECKING:
-    from fedcal import FedDateIndex, FedDateStamp
+    from .fedcal import FedDateIndex, FedDateStamp
 
 
 @define(order=True)

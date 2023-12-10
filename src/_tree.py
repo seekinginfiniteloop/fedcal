@@ -5,29 +5,30 @@ from typing import TYPE_CHECKING, Any, Self, Tuple
 from attrs import define, field, frozen
 from intervaltree import IntervalTree
 
-from _typing import (
-    AppropriationsGapsMapType,
-    AssembledBudgetIntervalType,
-    CRMapType,
-    FedDateStampConvertibleTypes,
-)
-from constants import (
+from .constants import (
     APPROPRIATIONS_GAPS,
     CR_DEPARTMENTS,
     EXECUTIVE_DEPARTMENT,
     EXECUTIVE_DEPARTMENTS_SET,
     STATUS_MAP,
+    SHUTDOWN_FLAG,
 )
-from time_utils import YearMonthDay, to_datestamp
+from .time_utils import YearMonthDay, to_datestamp
 
 if TYPE_CHECKING:
-    from fedcal import FedDateStamp
+    from ._typing import (
+        AppropriationsGapsMapType,
+        AssembledBudgetIntervalType,
+        CRMapType,
+        FedDateStampConvertibleTypes,
+    )
+    from .fedcal import FedDateStamp
 
 
 def _get_date_interval(
     dates: Tuple[int, int]
     | Tuple["FedDateStamp", "FedDateStamp"]
-    | Tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes]
+    | Tuple["FedDateStampConvertibleTypes", "FedDateStampConvertibleTypes"]
 ) -> tuple[int, int]:
     """
     Converts a tuple dates to a tuple of POSIX timestamps for use in our
@@ -44,15 +45,15 @@ def _get_date_interval(
     -------
         A tuple of POSIX timestamps representing the start and end dates.
     """
-    start: "FedDateStamp" | int | FedDateStampConvertibleTypes
-    end: "FedDateStamp" | int | FedDateStampConvertibleTypes
+    start: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
+    end: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
     start, end = dates
     if start is not isinstance(start, int):
         start_datestamp: "FedDateStamp" = to_datestamp(start)
-        start = start_datestamp.timestamp()
+        start = start_datestamp.fedtimestamp()
     if end is not isinstance(end, int):
         end_datestamp: "FedDateStamp" = to_datestamp(end)
-        end: "FedDateStamp" = end_datestamp.timestamp()
+        end: "FedDateStamp" = end_datestamp.fedtimestamp()
     if start == end:
         # we add a day because intervaltree's end intervals are exclusive, and our calendar otherwise uses inclusive dates.
         end = end + 86400
@@ -64,7 +65,7 @@ def _get_overlap_interval(
     end: int,
     date_range: Tuple[int, int]
     | Tuple["FedDateStamp", "FedDateStamp"]
-    | Tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes]
+    | Tuple["FedDateStampConvertibleTypes", "FedDateStampConvertibleTypes"]
     | None = None,
 ) -> Tuple[int, int] | None:
     """
@@ -86,12 +87,12 @@ def _get_overlap_interval(
         return start, end
     start_range, end_range = date_range
     start_range: int = (
-        (to_datestamp(start_range).timestamp())
+        (to_datestamp(start_range).fedtimestamp())
         if start_range is not isinstance(start_range, int)
         else start_range
     )
     end_range: int = (
-        (to_datestamp(end_range).timestamp())
+        (to_datestamp(end_range).fedtimestamp())
         if end_range is not isinstance(end_range, int)
         else end_range
     )
@@ -130,10 +131,10 @@ class CRTreeGrower:
     """
 
     executive_departments_set: set[EXECUTIVE_DEPARTMENT] = field(
-        default=EXECUTIVE_DEPARTMENTS_SET, factory=set
+        default=EXECUTIVE_DEPARTMENTS_SET
     )
-    cr_departments: CRMapType = field(default=CR_DEPARTMENTS, factory=dict)
-    tree: IntervalTree = field(default=None, factory=IntervalTree)
+    cr_departments: "CRMapType" = field(default=CR_DEPARTMENTS)
+    tree: IntervalTree = field(factory=IntervalTree)
 
     def __attrs_post_init__(self) -> None:
         """
@@ -160,7 +161,7 @@ class CRTreeGrower:
 
     def grow_cr_tree(
         self,
-        cr_departments: CRMapType | None = None,
+        cr_departments: "CRMapType" | None = None,
         dates: Tuple[YearMonthDay, YearMonthDay] | None = None,
     ) -> IntervalTree:
         """
@@ -194,7 +195,7 @@ class CRTreeGrower:
                 generated_departments: set[
                     EXECUTIVE_DEPARTMENT
                 ] = self._filter_cr_department_sets(departments=departments)
-                data: AssembledBudgetIntervalType = (
+                data: "AssembledBudgetIntervalType" = (
                     generated_departments,
                     STATUS_MAP["CR_STATUS"],
                 )
@@ -227,9 +228,9 @@ class AppropriationsGapsTreeGrower:
         gaps (from constants.py).
     """
 
-    tree: IntervalTree = field(default=None, factory=IntervalTree)
-    appropriations_gaps: AppropriationsGapsMapType = field(
-        default=APPROPRIATIONS_GAPS, factory=dict
+    tree: IntervalTree = field(factory=IntervalTree)
+    appropriations_gaps: "AppropriationsGapsMapType" = field(
+        default=APPROPRIATIONS_GAPS
     )
     dates: Any | None = field(default=None)
 
@@ -242,8 +243,8 @@ class AppropriationsGapsTreeGrower:
 
     def grow_appropriation_gaps_tree(
         self,
-        appropriations_gaps: AppropriationsGapsMapType | None = None,
-        dates: "FedDateStamp" | FedDateStampConvertibleTypes = None,
+        appropriations_gaps: "AppropriationsGapsMapType" | None = None,
+        dates: "FedDateStamp" | "FedDateStampConvertibleTypes" = None,
     ) -> IntervalTree:
         """
         Grows an interval tree based on the provided data for appropriations
@@ -266,7 +267,7 @@ class AppropriationsGapsTreeGrower:
             if appropriations_gaps is not None
             else self.appropriations_gaps
         )
-        tree: IntervalTree = self.tree if self.tree is not None else IntervalTree()
+        gap_tree: IntervalTree = self.tree if self.tree is not None else IntervalTree()
         date_range: tuple[int, int] | None = (
             _get_date_interval(dates=dates) if dates else None
         )
@@ -276,19 +277,19 @@ class AppropriationsGapsTreeGrower:
                 start=start, end=end, date_range=date_range
             ):
                 if shutdown == SHUTDOWN_FLAG.SHUTDOWN:
-                    data: AssembledBudgetIntervalType = (
+                    data: "AssembledBudgetIntervalType" = (
                         departments,
                         STATUS_MAP["SHUTDOWN_STATUS"],
                     )
                 else:
-                    data: AssembledBudgetIntervalType = (
+                    data: "AssembledBudgetIntervalType" = (
                         departments,
                         STATUS_MAP["GAP_STATUS"],
                     )
-                tree.addi(begin=start, end=end + 86400, data=data)
+                gap_tree.addi(begin=start, end=end + 86400, data=data)
+        return gap_tree
 
 
-@frozen()
 class Tree:
     """
     Class representing a combined interval tree with CR and appropriations
@@ -341,13 +342,13 @@ class Tree:
 
     _instance = None
 
-    def __new__(cls, *args, **kwargs) -> Self | "Tree":
+    def __new__(cls) -> Self | "Tree":
         """
         We override __new__ to ensure only one Tree is created and make
         creation intuitive.
         """
         if cls._instance is None:
-            cls._instance: Self = super(Tree, cls).__new__(cls=cls, *args, **kwargs)
+            cls._instance: Self = super(Tree, cls).__new__(cls)
         return cls._instance
 
     def __init__(self) -> None:
@@ -391,10 +392,8 @@ class Tree:
         -------
         CRTreeGrower.tree : The CR tree.
         """
-        if hasattr(CRTreeGrower, "tree"):
-            return CRTreeGrower.tree
-        else:
-            return CRTreeGrower().tree
+        crtree = CRTreeGrower()
+        return crtree.tree
 
     def _initialize_gap_tree(self) -> IntervalTree:
         """
@@ -405,7 +404,5 @@ class Tree:
         -------
         AppropriationsGapsTreeGrower.tree : The appropriations gaps tree.
         """
-        if hasattr(AppropriationsGapsTreeGrower, "tree"):
-            return AppropriationsGapsTreeGrower.tree
-        else:
-            return AppropriationsGapsTreeGrower().tree
+        gaptree = AppropriationsGapsTreeGrower()
+        return gaptree.tree
