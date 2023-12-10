@@ -6,29 +6,16 @@ from functools import singledispatch, wraps
 from typing import TYPE_CHECKING, Any, Tuple
 
 import pytz
-from _typing import FedDateIndexConvertibleTypes, FedDateStampConvertibleTypes
 from attrs import astuple, define, field
 from numpy import datetime64, int64, ndarray
 from pandas import DatetimeIndex, Index, Series, Timestamp, date_range
 from pandas.tseries.frequencies import to_offset
 
 if TYPE_CHECKING:
-    from fedcal import FedDateIndex, FedDateStamp
     from pytz.tzinfo import DstTzInfo
 
-
-def get_today_in_posix() -> int:
-    """
-    Returns the current date in POSIX format.
-
-    Returns
-    -------
-    int
-        The current date in POSIX format.
-    """
-    from fedcal import FedDateStamp
-
-    return FedDateStamp().timestamp()
+    from ._typing import FedDateIndexConvertibleTypes, FedDateStampConvertibleTypes
+    from .fedcal import FedDateIndex, FedDateStamp
 
 
 def _pydate_to_posix(pydate: date) -> int:
@@ -44,6 +31,19 @@ def _pydate_to_posix(pydate: date) -> int:
     A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
     """
     return int(time.mktime(pydate))
+
+
+def get_today_in_posix() -> int:
+    """
+    Returns the current date in POSIX format.
+
+    Returns
+    -------
+    int
+        The current date in POSIX format.
+    """
+    today: datetime = datetime.now()
+    return int(time.mktime(today.timetuple()))
 
 
 @define(order=True)
@@ -126,7 +126,7 @@ class YearMonthDay:
         -------
         A FedDateStamp object.
         """
-        from fedcal import FedDateStamp
+        from .fedcal import FedDateStamp
 
         return FedDateStamp(self.to_pdtimestamp())
 
@@ -164,7 +164,7 @@ class YearMonthDay:
 
 
 @singledispatch
-def to_datestamp(date_input: FedDateStampConvertibleTypes) -> "FedDateStamp" | None:
+def to_datestamp(date_input: "FedDateStampConvertibleTypes") -> "FedDateStamp" | None:
     """
     We want to handle diverse date inputs without tripping, because one
     goal of our library is to provide a feature-rich addition that
@@ -186,7 +186,7 @@ def to_datestamp(date_input: FedDateStampConvertibleTypes) -> "FedDateStamp" | N
         Raises a type error if it encounters unsupported date types.
     """
     raise TypeError(
-        f"Unsupported date format. You provided type: {type(date_input)}. Supported types are {FedDateStampConvertibleTypes}"
+        f"Unsupported date format. You provided type: {type(date_input)}. Supported types are FedDateStampConvertibleTypes"
     )
 
 
@@ -324,7 +324,7 @@ def _stamp_date(timestamp: Timestamp) -> "FedDateStamp":
     -------
     A FedDateStamp object.
     """
-    from fedcal import FedDateStamp
+    from .fedcal import FedDateStamp
 
     if timestamp.tzinfo is None:
         return FedDateStamp(timestamp)
@@ -366,7 +366,9 @@ def wrap_tuple(
 
 @wrap_tuple
 @singledispatch
-def to_feddateindex(input_dates: FedDateIndexConvertibleTypes) -> "FedDateIndex" | None:
+def to_feddateindex(
+    input_dates: "FedDateIndexConvertibleTypes",
+) -> "FedDateIndex" | None:
     """
     A singledispatch function for handling date conversions to FedDateIndex.
     Most types are pushed into tuples by wrap_tuple and funneled to our
@@ -389,7 +391,7 @@ def to_feddateindex(input_dates: FedDateIndexConvertibleTypes) -> "FedDateIndex"
     """
 
     raise TypeError(
-        f"You provided unsupported types. Supported types are {FedDateIndexConvertibleTypes}"
+        "You provided unsupported types. Supported types are FedDateIndexConvertibleTypes"
     )
 
 
@@ -407,7 +409,7 @@ def _from_tuple(input_dates) -> "FedDateIndex":
 @to_feddateindex.register(cls=DatetimeIndex)
 def _from_datetimeindex(input_dates) -> "FedDateIndex":
     """We subclass and return a DatetimeIndex"""
-    from fedcal import FedDateIndex
+    from .fedcal import FedDateIndex
 
     return FedDateIndex(input_dates)
 
@@ -426,7 +428,7 @@ def _from_array_like(input_dates) -> "FedDateIndex":
     """
     try:
         datetimeindex = DatetimeIndex(input_dates)
-        from fedcal import FedDateIndex
+        from .fedcal import FedDateIndex
 
         return FedDateIndex(datetimeindex)
     except:
@@ -436,8 +438,8 @@ def _from_array_like(input_dates) -> "FedDateIndex":
 
 
 def _get_feddateindex(
-    start: "FedDateStamp" | FedDateStampConvertibleTypes,
-    end: "FedDateStamp" | FedDateStampConvertibleTypes,
+    start: "FedDateStamp" | "FedDateStampConvertibleTypes",
+    end: "FedDateStamp" | "FedDateStampConvertibleTypes",
 ) -> "FedDateIndex":
     """
     Converts a start and end date to a FedDateIndex.
@@ -451,7 +453,7 @@ def _get_feddateindex(
     --------
     A FedDateIndex object.
     """
-    from fedcal import FedDateIndex, FedDateStamp
+    from .fedcal import FedDateIndex, FedDateStamp
 
     start = start if isinstance(start, FedDateStamp) else to_datestamp(start)
     end = end if isinstance(end, FedDateStamp) else to_datestamp(end)

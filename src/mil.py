@@ -1,15 +1,16 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from enum import Enum, unique
-from pandas import DataFrame, Series, Timestamp, DatetimeIndex, Timedelta, date_range
+from pandas import DataFrame, Series, Timestamp, Timedelta, date_range
 
 from attrs import define, field
 
-from date_attributes import FedBusDay, FedHolidays
-from time_utils import to_datestamp, to_feddateindex
+from .date_attributes import FedBusDay, FedHolidays
+from .time_utils import to_datestamp, to_feddateindex
 
 if TYPE_CHECKING:
-    from fedcal import FedDateIndex, FedDateStamp
+    from pandas import DatetimeIndex
+    from .fedcal import FedDateIndex, FedDateStamp
 
 
 @define(order=True)
@@ -39,9 +40,11 @@ class MilitaryPayDay:
             Checks if the next business day falls within the provided range of dates.
     """
 
-    date: FedDateStamp = field(converter=to_datestamp)
+    date: "FedDateStamp" = field(converter=to_datestamp)
 
-    def is_military_payday(self, date: Timestamp | FedDateStamp | None = None) -> bool:
+    def is_military_payday(
+        self, date: Timestamp | "FedDateStamp" | None = None
+    ) -> bool:
         """
         Determines if the given date is a military payday.
 
@@ -54,7 +57,7 @@ class MilitaryPayDay:
         Boolean indicating whether the date is a military payday.
         """
         if date is None:
-            date: FedDateStamp = self.date
+            date: "FedDateStamp" = self.date
 
         if date.day in (1, 15) and FedBusDay.is_bday(date=date):
             return True
@@ -64,7 +67,7 @@ class MilitaryPayDay:
             next_payday: Timestamp = self._calculate_next_payday(
                 date=date, next_month=True
             )
-            payday_range: DatetimeIndex = self._generate_payday_range(
+            payday_range: "DatetimeIndex" = self._generate_payday_range(
                 payday=next_payday
             )
         elif date.day < 15:
@@ -74,7 +77,7 @@ class MilitaryPayDay:
         return self._is_next_bday_in_range(date=date, payday_range=payday_range)
 
     def _calculate_next_payday(
-        self, date: Timestamp | FedDateStamp, next_month: bool
+        self, date: Timestamp | "FedDateStamp", next_month: bool
     ) -> Timestamp:
         """
         Calculates the next military payday based on the given date.
@@ -104,7 +107,9 @@ class MilitaryPayDay:
 
         return to_datestamp(Timestamp(year=year, month=month, day=day))
 
-    def _generate_payday_range(self, payday: Timestamp | FedDateStamp) -> DatetimeIndex:
+    def _generate_payday_range(
+        self, payday: Timestamp | "FedDateStamp"
+    ) -> "DatetimeIndex":
         """
         Generates a range of dates around a payday for further processing.
 
@@ -121,7 +126,7 @@ class MilitaryPayDay:
         )
 
     def _is_next_bday_in_range(
-        self, date: Timestamp | FedDateStamp, payday_range: DatetimeIndex
+        self, date: Timestamp | "FedDateStamp", payday_range: "DatetimeIndex"
     ) -> bool:
         """
         Checks if the next business day falls within the provided range of dates.
@@ -232,7 +237,7 @@ class ProbableMilitaryPassDay:
         -------
         List of holidays within the specified range.
         """
-        offset_range: DatetimeIndex = date_range(
+        offset_range: "DatetimeIndex" = date_range(
             start=date - Timedelta(days=3), end=date + Timedelta(days=3)
         )
         if holidays_in_offset := [

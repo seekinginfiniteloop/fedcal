@@ -1,165 +1,873 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Any, Self
+from datetime import date, datetime
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    List,
+    Self,
+)
 
-from pandas import DatetimeIndex, Timestamp
+from pandas import DatetimeIndex, Timestamp, Index
 
-from civpay import FedPayDay
-from date_attributes import FedBusDay, FedFiscalQuarter, FedFiscalYear, FedHolidays
-from dept_status import DepartmentState
-from mil import MilitaryPayDay, MilPayPassRange, ProbableMilitaryPassDay
-from time_utils import YearMonthDay, _pydate_to_posix, to_datestamp, to_feddateindex
+from ._dept_status import DepartmentState
+from .civpay import FedPayDay
+from .constants import (
+    CR_DATA_CUTOFF_DATE,
+    DHS_FORMED,
+    EXECUTIVE_DEPARTMENTS_SET,
+    STATUS_MAP,
+)
+from .date_attributes import FedBusDay, FedFiscalQuarter, FedFiscalYear, FedHolidays
+from .depts import FedDepartment
+from .mil import MilitaryPayDay, MilPayPassRange, ProbableMilitaryPassDay
+from .time_utils import YearMonthDay, _pydate_to_posix, to_datestamp, to_feddateindex
+
+if TYPE_CHECKING:
+    from pandas import Series, DataFrame
+    from numpy import ndarray
+    from ._dept_status import FedDepartment
+    from ._typing import (
+        FedDateStampConvertibleTypes,
+        StatusDictType,
+        StatusTupleType,
+        StatusGeneratorType,
+        StatusCacheType,
+    )
+    from .constants import EXECUTIVE_DEPARTMENT, FUNDING_STATUS, OPERATIONAL_STATUS
 
 
 class FedDateStamp(Timestamp):
     """
-    A child class for pandas Timestamp that extends functionality for
-    federal_calendar. For the record, I hate subclassing, but this was
-    the cleanest way to add functionality to pandas Timestamp objects.
-    FedTimestamp instances support all functionality of pandas' Timestamp
-    objects, but add substantial functionality for federal_calendar.
-    (https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timestamp.html).
+    A child class of pandas Timestamp, extending functionality for
+    fedcal. Supports all functionalities of pandas' Timestamp
+    objects, while adding specific features for the fedcal.
+
+    Attributes
+    ----------
+    No attributes at initialization except those inherited from pandas'
+    Timestamp.
+
+    self._status_cache : A *private* lazy attribute that caches StatusDictType
+    dictionary (Dict[EXECUTIVE_DEPARTMENT, FedDepartment]) from _dept_status.
+    DepartmentState for the date for supplying status-related properties.
+    Provided by _get_status_cache() and _set_status_cache() private methods.
+
+    Methods
+    -------
+    dict_to_dept_set(status_dict)
+        Converts a StatusDictType dictionary to a set of EXECUTIVE_DEPARTMENT
+        enum objects.
+
+    dict_to_dept_list(status_dict)
+        Utility method that converts a status dictionary (which most of the
+        status-related property methods return) to a sorted list of
+        EXECUTIVE_DEPARTMENT enum objects.
+
+    dict_to_feddept_list(status_dict)
+        Utility method that converts a status dictionary (which most of the
+        status-related property methods return) to a sorted list of
+        FedDepartment objects.
+
+    get_departments_by_status(status_key)
+        Retrieves departments matching a specific status, primary getter for
+        status-related property methods.
+
+    year_month_day
+        returns the FedDateStamp as a YearMonthDay object.
+
+    fedtimestamp
+        Returns the POSIX timestamp normalized to midnight.
+
+    business_day
+        Checks if the date is a business day.
+
+    holiday
+        Checks if the date is a federal holiday.
+
+    proclamation_holiday
+        Checks if the date was a proclaimed holiday (i.e. a one-off holiday proclaimed by executive order).
+
+    possible_proclamation_holiday
+        Guesses (I take no further ownership of the result) if the date is likely to be a proclaimed holiday.
+
+    probable_military_passday
+        Estimates if the date is likely a military pass day. Actual passdays
+        vary across commands and locations, but this should return a result
+        that's correct in the majority of cases.
+
+    mil_payday
+        Checks if the date is a military payday.
+
+    civ_payday
+        Checks if the date is a civilian payday.
+
+    fiscal_quarter
+        Retrieves the [Federal] fiscal quarter of the timestamp.
+
+    fy
+        Retrieves the [Federal] fiscal year of the timestamp.
+
+    departments
+        Retrieves the set of executive departments active on the date, as
+        EXECUTIVE_DEPARTMENT enum objects.
+
+    all_depts_status
+        Retrieves the status of all departments as a dictionary on the date.
+
+    all_depts_full_approps
+        Checks if all departments are fully appropriated on the date,
+        returning bool.
+
+    all_depts_cr
+        Checks if all departments were/are under a continuing resolution on
+        the date, returning bool.
+
+    all_depts_cr_or_full_approps
+        Checks if all departments were/are either fully appropriated or under
+        a continuing resolution on the date, returning bool.
+
+    all_unfunded
+        Checks if all departments were/are unfunded on the date (either
+        shutdown or otherwise gapped), returning bool.
+
+    cr
+        Checks if the date was during a continuing resolution (can include
+        near-future dates since we know CR expiration dates at the time they
+        are passed), returning bool.
+
+    shutdown
+        Checks if the date was/is during a shutdown, returning bool.
+
+    approps_gap
+        Checks if the date was/is during an appropriations gap, returning bool.
+
+    funding_gap
+        Check if the date was/is during a funding gap (appropriations gap or shutdown), returning bool.
+
+    full_op_depts
+        Retrieves departments that were fully operational (had a full-year
+        appropriation) on the date, returning a dict.
+
+    full_or_cr_depts
+        Retrieves departments that were/are either fully operational or under
+        a continuing resolution on the date, returning a dict.
+
+    cr_depts
+        Retrieves departments that were/are under a continuing resolution on
+        the date, returning a dict. Current data are from FY99 to present. As
+        discussed above for cr, these can include near future dates.
+
+    gapped_depts
+        Retrieves departments that were/are in an appropriations gap on the
+        date but not shutdown, returning a dict. Notably, these are isolated
+        to the 1970s and early 80s.
+
+    shutdown_depts
+        Retrieves departments that were/are shut down on the date. Data
+        available from FY75 to present.
+
+    unfunded_depts
+        Retrieves departments that were/are unfunded on the date (either
+        gapped or shutdown), returning a dict.
+
+    Notes
+    -----
+    *Private Methods*:
+    _get_status_cache()
+        Retrieves the status cache.
+
+    _set_status_cache()
+        Sets the status cache if not already set.
     """
 
     def __new__(cls, ts_input=None, *args, **kwargs) -> Self:
+        """
+        We ensure new instances mirror Timestamp behavior and pass any args/
+        kwargs. Like Timestamp, if you don't pass a date, FedDateStamp will
+        initialize for today.
+        """
         if ts_input is None:
-            ts_input: Timestamp = Timestamp.now()
+            ts_input: Timestamp = datetime.now()
 
         return super().__new__(cls, ts_input, *args, **kwargs)
 
+    # static utility methods
+    @staticmethod
+    def dict_to_dept_set(status_dict: "StatusDictType") -> set["EXECUTIVE_DEPARTMENT"]:
+        """
+        Convert a status dictionary to a set of executive departments.
+
+        Parameters
+        ----------
+        status_dict : A dictionary mapping departments to their statuses from a dictionary structure (StatusDictType) supplied by most of FedDateStamp's status-related property methods.
+
+        Returns
+        -------
+        A set representing the departments.
+        """
+        return set(status_dict.keys())
+
+    @staticmethod
+    def dict_to_dept_set(status_dict: "StatusDictType") -> set["FedDepartment"]:
+        """
+        Convert a status dictionary to a sorted list of executive departments.
+
+        Parameters
+        ----------
+        status_dict
+            A dictionary mapping departments to their statuses.
+
+        Returns
+        -------
+        A sorted list representing the departments.
+        """
+        return set(status_dict.values())
+
+    @staticmethod
+    def dict_to_dept_list(
+        status_dict: "StatusDictType",
+    ) -> List["EXECUTIVE_DEPARTMENT"]:
+        """
+        Convert a status dictionary to a sorted list of executive departments.
+
+        Parameters
+        ----------
+        status_dict
+            A dictionary mapping departments to their statuses.
+
+        Returns
+        -------
+        A sorted list representing the departments.
+        """
+        return sorted(list(status_dict.keys()))
+
+    @staticmethod
+    def dict_to_feddept_list(status_dict: "StatusDictType") -> list["FedDepartment"]:
+        """
+        Convert a status dictionary to a sorted list of FedDepartment objects.
+
+        Parameters
+        ----------
+        status_dict
+            A dictionary mapping departments to their FedDepartment objects.
+
+        Returns
+        -------
+        A sorted list of FedDepartment objects.
+        """
+        return sorted(list(status_dict.values()))
+
+    # caching methods
+    def _get_status_cache(self) -> "StatusDictType":
+        """
+        Retrieve the current status cache.
+
+        Returns
+        -------
+        The current status cache, mapping departments to their statuses.
+        """
+        self.state = DepartmentState()
+        return DepartmentState.get_state(date=self)
+
+    def _set_status_cache(self) -> None:
+        """
+        Set the status cache if not already set.
+        """
+        self.status_cache: "StatusDictType" = (
+            self.status_cache or self._get_status_cache()
+        )
+
+    # getter methods for retrieving from cache by department and by status
+
+    def get_departments_by_status(self, status_key: str) -> "StatusDictType":
+        """
+        Retrieve departments matching a specific status. This is the primary
+        getter method for FedDateStamp's status-related property methods.
+
+        Parameters
+        ----------
+        status_key
+            The key representing the status to filter departments by.
+
+        Returns
+        -------
+        A dictionary of departments and their status, filtered by the specified status key.
+        """
+        self._set_status_cache()
+        cache: "StatusDictType" | None = self.status_cache
+
+        if self.timestamp() < CR_DATA_CUTOFF_DATE and status_key in {
+            "DEFAULT_STATUS",
+            "CR_STATUS",
+        }:
+            status_key = "CR_DATA_CUTOFF_DEFAULT_STATUS"
+
+        target_status: "StatusTupleType" | None = STATUS_MAP.get(status_key)
+
+        if cache is None or target_status is None:
+            return {}
+
+        return {
+            dept: fed_dept
+            for dept, fed_dept in cache.items()
+            if fed_dept.to_status_tuple() == target_status
+        }
+
+    # utility properties
+    @property
+    def year_month_day(self) -> YearMonthDay:
+        """
+        Returns a YearMonthDay object for the date.
+
+        Returns
+        -------
+        A YearMonthDay object representing the year, month, and day of the
+        timestamp.
+        """
+        return YearMonthDay(year=self.year, month=self.month, day=self.day)
+
+    @property
+    def fedtimestamp(self) -> int:
+        """
+        Built for internal use in fedcal, variation of Timestamp.timestamp()
+        method, which remains available. Returns the number of seconds since
+        the Unix epoch (1970-01-01 00:00:00 UTC) as an integer normalized to
+        midnight (vice pandas' return of a float).
+
+        Returns
+        -------
+        Integer POSIX timestamp in seconds.
+        """
+        date_obj: date = date(year=self.year, month=self.month, day=self.day)
+        return _pydate_to_posix(pydate=date_obj)
+
+    # business day property
+    @property
+    def business_day(self) -> bool:
+        """
+        Checks if the date is a [Federal] business day.
+
+        Returns
+        -------
+        True if the date is a business day, False otherwise.
+        """
+        return FedBusDay.is_bday(date=self)
+
+    # holiday properties
     @property
     def holiday(self) -> bool:
         """
-        Returns True if the timestamp is a federal holiday, False otherwise.
+        Checks if the date is a federal holiday.
+
+        Returns
+        -------
+        True if the date is a federal holiday, False otherwise.
+
+        Notes
+        -----
+        This property is built on pandas' USFederalHolidayCalendar, but
+        supplemented with historical holidays proclaimed by the President
+        from FY74 to present (no known examples before that year).
         """
         return FedHolidays.is_holiday(date=self)
 
     @property
-    def business_day(self) -> bool:
+    def proclamation_holiday(self) -> bool:
         """
-        Returns True if the timestamp is a business day, False otherwise.
+        Checks if the date was an out-of-cycle holiday proclaimed by executive order. Data available from FY74 to present (no known instances before that time).
+
+        Returns
+        -------
+        True if the timestamp was a proclaimed holiday, False otherwise.
         """
-        return FedBusDay.is_bday(date=self)
+        return FedHolidays.was_proclaimed_holiday(date=self)
+
+    @property
+    def possible_proclamation_holiday(self) -> bool:
+        """
+        If given a future date, guesses if it may be a proclaimed holiday.
+
+        Returns
+        -------
+        True if the timestamp is a proclaimed holiday, False otherwise.
+
+        Notes
+        -----
+        This method is probably very inaccurate, and uses a simple heuristic
+        method based on the day of week Christmas and Christmas Eve fall
+        (nearly all President-proclaimed holidays were for Christmas Eve).
+        A quick analysis of historical trends suggests that these proclamations
+        are highly variable and most closely correlated with the President or
+        recency of the President issuing them than the date. For example,
+        Presidents' Obama and Trump are responsible for 55% of of
+        proclamations, and 73% occurred after the year 2000.
+        """
+        return FedHolidays.guess_christmas_eve_proclamation_holiday(date=self)
+
+    @property
+    def probable_mil_passday(self) -> bool:
+        """
+        Estimates if the timestamp is likely a military pass day.
+
+        Returns
+        -------
+        True if the timestamp is likely a military pass day, False otherwise.
+
+        Notes
+        -----
+        Future versions of this method will add customization options for the
+        heuristic used to determine these dates. Military passdays associated
+        with holidays are highly variable across commands and locations based
+        on a range of factors. However, the majority fall into a reasonably
+        predictable pattern. Results from this method should be accurate for
+        the majority of cases, and otherwise provide an approximation
+        for predictable gaps in military person-power.
+        """
+        return ProbableMilitaryPassDay.is_likely_passday(date=self)
+
+    # payday properties
+    @property
+    def mil_payday(self) -> bool:
+        """
+        Checks if the date is a military payday based on DFAS pay schedule.
+
+        Returns
+        -------
+        True if the timestamp is a military payday, False otherwise.
+        """
+        return MilitaryPayDay.is_military_payday(date=self)
 
     @property
     def civ_payday(self) -> bool:
         """
-        Returns True if the timestamp is a civilian payday, False otherwise.
+        Checks if the date is a civilian payday.
+
+        Returns
+        -------
+        True if the date is a civilian payday, False otherwise.
+
+        Notes
+        -----
+        Method is based on the Federal biweekly pay schedule, which applies to
+        *nearly* all, but **not all**, Federal employee.
         """
-        return FedPayDay.is_fed_payday(self)
+        return FedPayDay.is_fed_payday(date=self)
 
-    @property
-    def mil_payday(self) -> bool:
-        pass
-
+    # FY/FQ properties
     @property
     def fiscal_quarter(self) -> int:
         """
-        Returns the fiscal quarter of the timestamp.
+        Retrieves the fiscal quarter of the date.
+
+        Returns
+        -------
+        An integer representing the fiscal quarter (1-4).
         """
         return FedFiscalQuarter.get_fiscal_quarter(date=self)
 
     @property
     def fy(self) -> int:
         """
-        Returns the fiscal year of the timestamp.
+        Retrieves the fiscal year of the date.
+
+        Returns
+        -------
+        An integer representing the fiscal year (e.g. 23 for FY23).
         """
         return FedFiscalYear.get_fiscal_year(date=self)
 
+    # department and appropriations related status properties
     @property
-    def shutdown(self) -> bool:
+    def departments(self) -> set["EXECUTIVE_DEPARTMENT"]:
         """
-        Returns True if the timestamp is a shutdown date, False otherwise.
+        Retrieves the set of executive departments active on the date.
+
+        Returns
+        -------
+        A set of EXECUTIVE_DEPARTMENT enums.
         """
-        return is_shutdown()
+        return DepartmentState.get_executive_departments_set_at_time(date=self)
 
     @property
-    def appropriations_gap(self) -> bool:
+    def all_depts_status(self) -> "StatusDictType":
         """
-        Returns True if the timestamp is an appropriations gap date, False otherwise.
+        Retrieves the status of all departments.
+
+        Returns
+        -------
+        A StatusDictType mapping each department to its status on the date.
         """
-        return is_appropriations_gap()
+        self._set_status_cache()
+        return self.status_cache
+
+    @property
+    def all_depts_full_approps(self) -> bool:
+        """
+        Checks if all departments were/are fully appropriated on the date.
+
+        Returns
+        -------
+        True if all departments are fully appropriated, False otherwise.
+        """
+        self._set_status_cache()
+        return self.dict_to_dept_set(status_dict=self.full_op_depts) == self.departments
+
+    @property
+    def all_depts_cr(self) -> bool:
+        """
+        Checks if all departments are/were under a continuing resolution on the date.
+
+        Returns
+        -------
+        True if all departments are under a continuing resolution, False otherwise.
+        """
+        self._set_status_cache()
+        return (
+            self.dict_to_dept_set(
+                status_dict=self.get_departments_by_status(status_key="CR_STATUS")
+            )
+            == self.departments
+        )
+
+    @property
+    def all_depts_cr_or_full_approps(self) -> bool:
+        """
+        Checks if all departments were/are either fully appropriated or under a continuing resolution on the date.
+
+        Returns
+        -------
+        True if all departments are either fully appropriated or under a continuing resolution, False otherwise.
+        """
+        self._set_status_cache()
+        return (
+            self.dict_to_dept_set(status_dict=self.full_or_cr_depts) == self.departments
+        )
+
+    @property
+    def all_unfunded(self) -> bool:
+        """
+        Checks if all departments were/are unfunded (appropriations gap or shutdown) on the date.
+
+        Returns
+        -------
+        True if all departments are unfunded, False otherwise.
+        """
+        self._set_status_cache()
+        return (
+            self.dict_to_dept_set(status_dict=self.unfunded_depts) == self.departments
+        )
 
     @property
     def cr(self) -> bool:
         """
         Returns True if the timestamp is a continuing resolution date, False otherwise.
         """
-        return is_continuing_resolution()
+        self._set_status_cache()
+        return bool(self.cr_depts)
 
     @property
-    def year_month_day(self) -> YearMonthDay:
-        return YearMonthDay(year=self.year, month=self.month, day=self.day)
+    def shutdown(self) -> bool:
+        """
+        Checks if *any* departments were/are shutdown on the date.
+
+        Returns
+        -------
+        True if the timestamp is during a shutdown, False otherwise.
+        """
+        self._set_status_cache()
+        return bool(self.shutdown_depts)
 
     @property
-    def timestamp(self) -> int:
+    def approps_gap(self) -> bool:
         """
-        Overrides the pandas Timestamp.timestamp() method. Returns the number of seconds since the Unix epoch (1970-01-01 00:00:00 UTC) as an integer
-        normalized to midnight (vice pandas' return of a float).
+        Checks if the date was/is during an appropriations gap for *any* departments.
 
-        :raises TypeError: _description_
-        :return: _description_
-        :rtype: int
+        Returns
+        -------
+        True if the date is during an appropriations gap, False otherwise.
         """
-        date_obj = date(year=self.year, month=self.month, day=self.day)
-        return _pydate_to_posix(pydate=date_obj)
+        self._set_status_cache()
+        return bool(self.gapped_depts)
+
+    @property
+    def funding_gap(self) -> bool:
+        """
+        Checks if any departments were/are either subject to a gap in appropriations or shutdown on the date.
+
+        Returns
+        -------
+        True if the date is during a funding gap.
+        """
+        self._set_status_cache()
+        return bool(self.gapped_depts | self.shutdown_depts)
+
+    @property
+    def full_op_depts(self) -> "StatusDictType" | None:
+        """
+        Retrieves departments that were/are fully operational (i.e. had full-year appropriations) on the date.
+
+        Returns
+        -------
+        A StatusDictType dictionary representing departments that are fully operational.
+        """
+        self._set_status_cache()
+        return self.get_departments_by_status(status_key="DEFAULT_STATUS")
+
+    @property
+    def full_or_cr_depts(self) -> "StatusDictType" | None:
+        """
+        Retrieves departments that were/are either fully operational or under a continuing resolution on the date.
+
+        Returns
+        -------
+        A StatusDictType dictionary representing departments that are either fully operational or under a continuing resolution.
+        """
+        return self.get_departments_by_status(
+            status_key="DEFAULT_STATUS"
+        ) | self.get_departments_by_status(status_key="CR_STATUS")
+
+    @property
+    def cr_depts(self) -> "StatusDictType" | None:
+        """
+        Retrieves departments that were/are under a continuing resolution on the date.
+
+        Returns
+        -------
+        A StatusDictType dictionary representing departments that are under a continuing resolution.
+        """
+        return self.get_departments_by_status(status_key="CR_STATUS")
+
+    @property
+    def gapped_depts(self) -> "StatusDictType" | None:
+        """
+        Retrieves departments that were/are under an appropriations gap on the date (but not shutdown).
+
+        Returns
+        -------
+        A StatusDictType dictionary representing departments that are in an appropriations gap.
+        """
+        return self.get_departments_by_status(status_key="GAP_STATUS")
+
+    @property
+    def shutdown_depts(self) -> "StatusDictType" | None:
+        """
+        Retrieves departments that were/are shut down for the date.
+
+        Returns
+        -------
+        A StatusDictType dictionary representing departments that are shut down.
+        """
+        return self.get_departments_by_status(status_key="SHUTDOWN_STATUS")
+
+    @property
+    def unfunded_depts(self) -> "StatusDictType" | None:
+        """
+        Retrieves departments that were/are unfunded for the date
+        (either under an appropriations gap or fully shutdown).
+
+        Returns
+        -------
+        A StatusDictType dictionary representing departments that are unfunded.
+        """
+        return self.get_departments_by_status(
+            status_key="SHUTDOWN_STATUS"
+        ) | self.get_departments_by_status(status_key="GAP_STATUS")
 
 
 class FedDateIndex(DatetimeIndex):
     def __new__(cls, data, *args, **kwargs) -> Self:
         instance: Self = super().__new__(cls, data, *args, **kwargs)
-        instance = to_datestamp(instance)
+        instance = to_feddateindex(instance)
         return instance
 
-    @property
-    def fy(self) -> int:
-        for date in self.datetimeindex:
-            return FedFiscalYear.get_fiscal_year(date=date)
+    def set_self_date_range(self) -> None:
+        self.start: Timestamp = self.start or self.min()
+        self.end: Timestamp = self.end or self.max()
+
+    def _get_mil_cache(self) -> None:
+        self.set_self_date_range()
+        return MilPayPassRange(start=self.start, end=self.end)
+
+    def _set_mil_cache(self) -> None:
+        self._mil_cache: MilPayPassRange = self._mil_cache or self._get_mil_cache()
+
+    def _set_status_gen(self) -> None:
+        """
+        Set the status generator if not already set.
+        """
+        self._status_gen: "StatusGeneratorType" = (
+            self._status_gen or self._get_status_gen()
+        )
+
+    def _get_status_gen(self) -> "StatusGeneratorType":
+        """
+        Retrieve the status generator from DepartmentState.
+
+        Returns
+        -------
+        The status generator for the range, mapping departments to their statuses.
+        """
+        self.set_self_date_range()
+        self.states = DepartmentState()
+        return DepartmentState.get_state_for_range_generator(
+            start=self.start, end=self.end
+        )
+
+    def _set_status_cache(self) -> None:
+        self._set_status_gen()
+        self._status_cache: "StatusCacheType" = (
+            self._status_cache or self._generate_status_cache()
+        )
+
+    def _generate_status_cache(self) -> "StatusCacheType":
+        gen: "StatusGeneratorType" = self._status_gen or self._set_status_gen()
+        return dict(gen)
+
+    def to_fedtimestamp(self) -> int:
+        """
+        Convert the dates in the index to POSIX timestamps normalized to midnight.
+
+        Returns
+        -------
+        Pandas Series of integer POSIX timestamps.
+        """
+
+        return (
+            (self.normalize() - Timestamp(ts_input="1970-01-01"))
+            .total_seconds()
+            .astype(dtype=int)
+        )
+
+    def depts_to_bool(self) -> DataFrame:
+        """
+        Converts the department information into a boolean DataFrame.
+
+        Returns
+        -------
+        DataFrame: A DataFrame where each column represents a department,
+        and values are booleans indicating the department's presence.
+        """
+        # TODO: This isn't what's needed; we need to account for any of the departments retrieval scenarios and seamlessly convert to bool for serious analysis work
+        # Initialize a DataFrame with False values
+        depts: list[str] = [dept.SHORT for dept in EXECUTIVE_DEPARTMENTS_SET]
+        bool_df = DataFrame(data=False, index=self, columns=depts)
+
+        for date, dept_string in self.departments["Departments"].iteritems():
+            depts_present = dept_string.split(", ")
+            bool_df.loc[date, depts_present] = True
+
+        return bool_df
 
     @property
-    def fiscal_quarter(self) -> int:
-        for date in self.datetimeindex:
-            return FedFiscalQuarter.get_fiscal_quarter(date=date)
+    def business_days(self) -> "Series":
+        next_business_days = self + FedBusDay.fed_business_days
+        return self == next_business_days
 
     @property
-    def holidays(self) -> bool:
-        for date in self.datetimeindex:
-            return FedHolidays.is_holiday(date=date)
+    def holidays(self) -> Series:
+        next_holidays: DatetimeIndex = self + FedHolidays.holidays
+        return self == next_holidays
 
     @property
-    def likely_Christmas_Eve_holiday(self) -> bool:
-        for date in self.datetimeindex:
-            return FedHolidays.likely_Christmas_Eve_holiday(date=date)
+    def proclaimed_holidays(self) -> "ndarray":
+        """
+        Check if the dates in the index are proclaimed federal
+        holidays.
+
+        Returns
+        -------
+        Pandas Series of boolean values indicating proclaimed holidays.
+        """
+
+        return self.isin(values=DatetimeIndex(data=FedHolidays.proclaimed_holidays))
 
     @property
-    def business_day(self) -> bool:
+    def possible_proclamation_holidays(self) -> "ndarray":
         """
-        Returns True if the datetimeindex is a business day, False otherwise.
+        Guesses if the dates in the index are possible *future* proclamation
+        federal holidays.
+
+        Returns
+        -------
+        Pandas Series of boolean values indicating possible proclamation
+        holidays.
+
+        Notes
+        -----
+        See notes to FedDateStamp.possible_proclamation_holiday.
         """
-        for date in self.datetimeindex:
-            return FedBusDay.is_bday(date=date)
+        return FedHolidays.guess_proclamation_holidays(datetimeindex=self)
 
     @property
-    def shutdown(self) -> bool:
-        """
-        Returns True if the datetimeindex is a shutdown date, False otherwise.
-        """
-        return self.datetimeindex.is_shutdown()
+    def probable_mil_passdays(self) -> "Series":
+        self._set_mil_cache()
+        return self._mil_cache.get_milpass_series()
 
     @property
-    def appropriations_gap(self) -> bool:
-        """
-        Returns True if the datetimeindex is an appropriations gap date, False otherwise.
-        """
-        return self.datetimeindex.is_appropriations_gap()
+    def mil_paydays(self) -> "Series":
+        self._set_mil_cache()
+        return self._mil_cache.get_milpay_series()
 
     @property
-    def cr(self) -> bool:
-        """
-        Returns True if the datetimeindex is a continuing resolution date, False otherwise.
-        """
-        return self.datetimeindex.is_continuing_resolution()
+    def civ_paydays(self) -> "Series":
+        self.set_self_date_range()
+        return FedPayDay.get_paydays_as_series(start=self.start, end=self.end)
+
+    @property
+    def fys(self) -> "Series":
+        return FedFiscalYear.get_fiscal_years(datetimeindex=self)
+
+    @property
+    def fiscal_quarters(self) -> "Series":
+        return FedFiscalQuarter.get_fiscal_quarters(datetimeindex=self)
+
+    @property
+    def departments(self) -> DataFrame:
+        all_depts: list[str] = ", ".join(
+            [dept.SHORT for dept in EXECUTIVE_DEPARTMENTS_SET]
+        )
+        pre_dhs_depts: list[str] = ", ".join(
+            [
+                dept.SHORT
+                for dept in EXECUTIVE_DEPARTMENTS_SET.difference(
+                    EXECUTIVE_DEPARTMENT.DHS
+                )
+            ]
+        )
+
+        dept_df: DataFrame = self.to_frame(name="Departments")
+        dept_df["Departments"] = dept_df.index.map(
+            mapper=lambda date: all_depts if date >= DHS_FORMED else pre_dhs_depts
+        )
+        return dept_df
+
+    @property
+    def departments_bool(self) -> DataFrame:
+        dept_columns = [dept.SHORT for dept in EXECUTIVE_DEPARTMENT]
+        df: DataFrame = DataFrame(index=self, columns=dept_columns).fillna(True)
+
+        # Adjust for DHS
+        dhs_start_date = Timestamp("2003-11-25")
+        df.loc[df.index < dhs_start_date, "DHS"] = False
+
+        return df
+
+    @property
+    def all_depts_status(self) -> DataFrame:
+        self._set_status_cache()
+        data_for_df: dict = {}
+        for date, dept_statuses in self._status_cache.items():
+            for dept, fed_dept in dept_statuses.items():
+                if dept not in data_for_df:
+                    data_for_df[dept] = {}
+                data_for_df[dept][date] = str(fed_dept)
+
+        df = DataFrame(data=data_for_df)
+        df.index = (
+            df.index if df.index.dtype == "datetime64[ns]" else to_datestamp(df.index)
+        )
+        return df
 
     def contains(self, date: Timestamp) -> Any:
         """
@@ -172,10 +880,12 @@ class FedDateIndex(DatetimeIndex):
             Any: True if the date is within the range, False otherwise.
         """
         if date is not isinstance(date, Timestamp):
-            date = stamp_date(date=date)
+            date = to_datestamp(date=date)
         return self.start <= date <= self.end
 
-    def overlaps(self, other: Timestamp | Any) -> Any:
+    def overlaps(
+        self, other: "Timestamp" | FedDateStamp | "FedDateStampConvertibleTypes"
+    ) -> Any:
         """
         Checks if the range overlaps with another range.
 
@@ -194,8 +904,9 @@ class FedDateIndex(DatetimeIndex):
 def _return_datestamp(date_input: FedDateStamp) -> FedDateStamp:
     """
     We handle stray non-conversions by returning them.
-    This function lives here away from its friends in time_utils to avoid
-    circular import issues.
+    This function and its companion below are lonely refugees from the parent
+    function in .time_utils, here to avoid circular import issues until we can
+    implement a more permanent fix.
     """
     return date_input
 

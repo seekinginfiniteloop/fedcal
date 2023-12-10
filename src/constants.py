@@ -1,10 +1,17 @@
 # constants.py
+from __future__ import annotations
+
 from enum import Enum, unique
-from typing import Tuple
+from typing import TYPE_CHECKING
 
 from pandas import Timestamp
 
-from _typing import AppropriationsGapsMapType, CRMapType, StatusMapType
+if TYPE_CHECKING:
+    from ._typing import (
+        AppropriationsGapsMapType,
+        CRMapType,
+        StatusMapType,
+    )
 
 """
 The constants data here primarily concern historical appropriations data to
@@ -179,7 +186,7 @@ objects. Data currently omit judiciary and legislative budgets (federal courts a
 DHS_FORMED: int = 1038200400
 """DHS_FORMED: POSIX date of DHS formation (2003-11-25)"""
 
-STATUS_MAP: StatusMapType = {
+STATUS_MAP: "StatusMapType" = {
     "DEFAULT_STATUS": (FUNDING_STATUS.FULLY_APPROPRIATED, OPERATIONAL_STATUS.OPEN),
     "CR_STATUS": (
         FUNDING_STATUS.TEMPORARILY_APPROPRIATED,
@@ -194,35 +201,9 @@ STATUS_MAP: StatusMapType = {
     "FUTURE_STATUS": (FUNDING_STATUS.FUTURE, OPERATIONAL_STATUS.FUTURE),
 }
 
-DEFAULT_STATUS: Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] = (
-    FUNDING_STATUS.FULLY_APPROPRIATED,
-    OPERATIONAL_STATUS.OPEN,
-)
-"""DEFAULT_STATUS: Default funding and operating status for executive
-departments. We handle the exceptions to this state."""
-
-CR_DATA_CUTOFF_DEFAULT_STATUS: Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] = (
-    FUNDING_STATUS.FULLY_OR_TEMPORARILY_APPROPRIATED,
-    OPERATIONAL_STATUS.OPEN_OR_OPEN_WITH_LIMITATIONS,
-)
-
-"""CR_DATA_CUTOFF_DEFAULT_STATUS: Default funding and operating status for
-executive departments within our CR data cutoff; currently before FY99"""
-
-CR_DATA_CUTOFF_DATE: int = 883630800
-
-GAP_STATUS: Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] = (
-    FUNDING_STATUS.NO_APPROPRIATIONS,
-    OPERATIONAL_STATUS.MINIMALLY_OPEN,
-)
-"""GAP_STATUS: Status for departments subject to an appropriations gap without
-a shutdown."""
-
-SHUTDOWN_STATUS: Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] = (
-    FUNDING_STATUS.NO_APPROPRIATIONS,
-    OPERATIONAL_STATUS.SHUTDOWN,
-)
-"""SHUTDOWN_STATUS: Status for departments subject to a shutdown"""
+"""
+STATUS_MAP: We map possible FUNDING_STATUS, OPERATIONAL_STATUS combinations to string descriptions so we can simplify manipulations _dept_status.py.
+"""
 
 
 class SHUTDOWN_FLAG(Enum):
@@ -233,7 +214,7 @@ class SHUTDOWN_FLAG(Enum):
     SHUTDOWN = 1
 
 
-APPROPRIATIONS_GAPS: AppropriationsGapsMapType = {
+APPROPRIATIONS_GAPS: "AppropriationsGapsMapType" = {
     (212990400, 213768000): ({DEPT.HHS, DEPT.DOL, DEPT.ED}, SHUTDOWN_FLAG.NO_SHUTDOWN),
     (244526400, 245476800): ({DEPT.HHS, DEPT.DOL, DEPT.ED}, SHUTDOWN_FLAG.NO_SHUTDOWN),
     (247986000, 249627600): ({DEPT.HHS, DEPT.DOL, DEPT.ED}, SHUTDOWN_FLAG.NO_SHUTDOWN),
@@ -245,7 +226,6 @@ APPROPRIATIONS_GAPS: AppropriationsGapsMapType = {
         EXECUTIVE_DEPARTMENTS_SET.difference({DEPT.DHS}),
         SHUTDOWN_FLAG.NO_SHUTDOWN,
     ),
-    # (326001600, 326001600): ({"Federal Trade Commission"}, SHUTDOWN_FLAG.SHUTDOWN), for now, we omit FTC since it is not a Department-level entity; agency-level data is on the to-do list
     (375166800, 375166800): (
         EXECUTIVE_DEPARTMENTS_SET.difference({DEPT.DHS}),
         SHUTDOWN_FLAG.SHUTDOWN,
@@ -306,7 +286,9 @@ APPROPRIATIONS_GAPS: AppropriationsGapsMapType = {
         SHUTDOWN_FLAG.SHUTDOWN,
     ),
 }
-
+# (326001600, 326001600): ({"Federal Trade Commission"}, SHUTDOWN_FLAG.
+# SHUTDOWN), for now, we omit FTC since it is not a Department-level entity;
+# agency-level data is on the to-do list
 """
 APPROPRIATIONS_GAPS:
 A mapping of federal appropriations gaps. Each key is a tuple of the for
@@ -317,17 +299,17 @@ objects)
 Two 2020 appropriations gaps are not included because they lasted less than a
 day and had no substantial impact on government operations.
 """
-CR_STATUS: Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] = (
-    FUNDING_STATUS.TEMPORARILY_APPROPRIATED,
-    OPERATIONAL_STATUS.OPEN_WITH_LIMITATIONS,
-)
+
+
+CR_DATA_CUTOFF_DATE: int = 883630800
 
 """
-CR_STATUS: We use this variable to set the status in the interval tree for
-CR_DEPARTMENTS
+CR_DATA_CUTOFF_DATE: POSIX date of the beginning of the data cutoff period.
+Current cutoff is 1 October 1998, CR data is not currently in fedcal for
+any time before this.
 """
 
-CR_DEPARTMENTS: CRMapType = {
+CR_DEPARTMENTS: "CRMapType" = {
     (907214400, 907732800): set(),
     (907819200, 908596800): {DEPT.DOE},
     (908683200, 908942400): {DEPT.DOD, DEPT.DOE},
