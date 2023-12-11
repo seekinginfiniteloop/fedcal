@@ -9,7 +9,7 @@ if TYPE_CHECKING:
         EXECUTIVE_DEPARTMENT,
         FUNDING_STATUS,
         OPERATIONAL_STATUS,
-        STATUS_MAP,
+        READABLE_STATUS_MAP,
     )
     from ._typing import StatusDictType, StatusTupleType, StatusMapType
 
@@ -73,23 +73,9 @@ class FedDepartment:
 
         Returns
         -------
-        A string representation of the department's status.
+        A human-readable string representation of the department's status.
         """
-        status: "StatusTupleType" = self.to_status_tuple()
-        s_map: "StatusMapType" = STATUS_MAP
-        s_keys: list[str] = sorted(list(s_map.keys()))
-        str_list: list[str] = [
-            "open, full year approps",
-            "open with limits, continuing resolution",
-            "unknown open, either CR or full approps",
-            "minimally open, no approps",
-            "closed, shutdown",
-            "future unknown",
-        ]
-        statuses = zip(s_keys, str_list)
-        for k, v in statuses:
-            if s_map[k] == status:
-                return v
+        return READABLE_STATUS_MAP[self.to_status_tuple()]
 
     def to_dict(self) -> "StatusDictType":
         """
