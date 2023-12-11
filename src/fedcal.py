@@ -1,22 +1,29 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
+    KeysView,
     List,
     Self,
+    Tuple,
 )
+from numpy import datetime_as_string
 
-from pandas import DatetimeIndex, Timestamp, Index
+from pandas import DatetimeIndex, DataFrame, MultiIndex, Timestamp, Index
 
-from ._dept_status import DepartmentState
+from ._dept_status import DepartmentState, DepartmentStatus
 from .civpay import FedPayDay
 from .constants import (
     CR_DATA_CUTOFF_DATE,
     DHS_FORMED,
+    EXECUTIVE_DEPARTMENT,
     EXECUTIVE_DEPARTMENTS_SET,
     STATUS_MAP,
+    READABLE_STATUS_MAP
+    EXECUTIVE_DEPARTMENT
 )
 from .date_attributes import FedBusDay, FedFiscalQuarter, FedFiscalYear, FedHolidays
 from .depts import FedDepartment
@@ -24,7 +31,7 @@ from .mil import MilitaryPayDay, MilPayPassRange, ProbableMilitaryPassDay
 from .time_utils import YearMonthDay, _pydate_to_posix, to_datestamp, to_feddateindex
 
 if TYPE_CHECKING:
-    from pandas import Series, DataFrame
+    from pandas import Series
     from numpy import ndarray
     from ._dept_status import FedDepartment
     from ._typing import (
@@ -34,7 +41,6 @@ if TYPE_CHECKING:
         StatusGeneratorType,
         StatusCacheType,
     )
-    from .constants import EXECUTIVE_DEPARTMENT, FUNDING_STATUS, OPERATIONAL_STATUS
 
 
 class FedDateStamp(Timestamp):
@@ -200,7 +206,9 @@ class FedDateStamp(Timestamp):
 
         Parameters
         ----------
-        status_dict : A dictionary mapping departments to their statuses from a dictionary structure (StatusDictType) supplied by most of FedDateStamp's status-related property methods.
+        status_dict : A dictionary mapping departments to their statuses from
+        a dictionary structure (StatusDictType) supplied by most of
+        FedDateStamp's status-related property methods.
 
         Returns
         -------
@@ -292,7 +300,8 @@ class FedDateStamp(Timestamp):
 
         Returns
         -------
-        A dictionary of departments and their status, filtered by the specified status key.
+        A dictionary of departments and their status, filtered by the
+        specified status key.
         """
         self._set_status_cache()
         cache: "StatusDictType" | None = self.status_cache
@@ -303,7 +312,8 @@ class FedDateStamp(Timestamp):
         }:
             status_key = "CR_DATA_CUTOFF_DEFAULT_STATUS"
 
-        target_status: "StatusTupleType" | None = STATUS_MAP.get(status_key)
+        target_status: "StatusTupleType" | None = STATUS_MAP.get(
+            status_key)
 
         if cache is None or target_status is None:
             return {}
@@ -375,7 +385,9 @@ class FedDateStamp(Timestamp):
     @property
     def proclamation_holiday(self) -> bool:
         """
-        Checks if the date was an out-of-cycle holiday proclaimed by executive order. Data available from FY74 to present (no known instances before that time).
+        Checks if the date was an out-of-cycle holiday proclaimed by executive
+        order. Data available from FY74 to present (no known instances before
+        that time).
 
         Returns
         -------
@@ -561,7 +573,8 @@ class FedDateStamp(Timestamp):
     @property
     def cr(self) -> bool:
         """
-        Returns True if the timestamp is a continuing resolution date, False otherwise.
+        Returns True if the timestamp is a continuing resolution date, False
+        otherwise.
         """
         self._set_status_cache()
         return bool(self.cr_depts)
@@ -581,7 +594,8 @@ class FedDateStamp(Timestamp):
     @property
     def approps_gap(self) -> bool:
         """
-        Checks if the date was/is during an appropriations gap for *any* departments.
+        Checks if the date was/is during an appropriations gap for *any*
+        departments.
 
         Returns
         -------
@@ -593,7 +607,8 @@ class FedDateStamp(Timestamp):
     @property
     def funding_gap(self) -> bool:
         """
-        Checks if any departments were/are either subject to a gap in appropriations or shutdown on the date.
+        Checks if any departments were/are either subject to a gap in
+        appropriations or shutdown on the date.
 
         Returns
         -------
@@ -605,11 +620,13 @@ class FedDateStamp(Timestamp):
     @property
     def full_op_depts(self) -> "StatusDictType" | None:
         """
-        Retrieves departments that were/are fully operational (i.e. had full-year appropriations) on the date.
+        Retrieves departments that were/are fully operational (i.e. had
+        full-year appropriations) on the date.
 
         Returns
         -------
-        A StatusDictType dictionary representing departments that are fully operational.
+        A StatusDictType dictionary representing departments that are fully
+        operational.
         """
         self._set_status_cache()
         return self.get_departments_by_status(status_key="DEFAULT_STATUS")
@@ -617,11 +634,13 @@ class FedDateStamp(Timestamp):
     @property
     def full_or_cr_depts(self) -> "StatusDictType" | None:
         """
-        Retrieves departments that were/are either fully operational or under a continuing resolution on the date.
+        Retrieves departments that were/are either fully operational or under
+        a continuing resolution on the date.
 
         Returns
         -------
-        A StatusDictType dictionary representing departments that are either fully operational or under a continuing resolution.
+        A StatusDictType dictionary representing departments that are either
+        fully operational or under a continuing resolution.
         """
         return self.get_departments_by_status(
             status_key="DEFAULT_STATUS"
@@ -630,22 +649,26 @@ class FedDateStamp(Timestamp):
     @property
     def cr_depts(self) -> "StatusDictType" | None:
         """
-        Retrieves departments that were/are under a continuing resolution on the date.
+        Retrieves departments that were/are under a continuing resolution on
+        the date.
 
         Returns
         -------
-        A StatusDictType dictionary representing departments that are under a continuing resolution.
+        A StatusDictType dictionary representing departments that are under a
+        continuing resolution.
         """
         return self.get_departments_by_status(status_key="CR_STATUS")
 
     @property
     def gapped_depts(self) -> "StatusDictType" | None:
         """
-        Retrieves departments that were/are under an appropriations gap on the date (but not shutdown).
+        Retrieves departments that were/are under an appropriations gap on the
+        date (but not shutdown).
 
         Returns
         -------
-        A StatusDictType dictionary representing departments that are in an appropriations gap.
+        A StatusDictType dictionary representing departments that are in an
+        appropriations gap.
         """
         return self.get_departments_by_status(status_key="GAP_STATUS")
 
@@ -656,7 +679,8 @@ class FedDateStamp(Timestamp):
 
         Returns
         -------
-        A StatusDictType dictionary representing departments that are shut down.
+        A StatusDictType dictionary representing departments that are shut
+        down.
         """
         return self.get_departments_by_status(status_key="SHUTDOWN_STATUS")
 
@@ -674,12 +698,15 @@ class FedDateStamp(Timestamp):
             status_key="SHUTDOWN_STATUS"
         ) | self.get_departments_by_status(status_key="GAP_STATUS")
 
-
 class FedDateIndex(DatetimeIndex):
     def __new__(cls, data, *args, **kwargs) -> Self:
         instance: Self = super().__new__(cls, data, *args, **kwargs)
         instance = to_feddateindex(instance)
         return instance
+
+    @staticmethod
+    def _reverse_human_readable_status(status_str: str) -> "StatusTupleType":
+        return READABLE_STATUS_MAP.inv[status_str]
 
     def set_self_date_range(self) -> None:
         self.start: Timestamp = self.start or self.min()
@@ -739,25 +766,68 @@ class FedDateIndex(DatetimeIndex):
             .astype(dtype=int)
         )
 
-    def depts_to_bool(self) -> DataFrame:
-        """
-        Converts the department information into a boolean DataFrame.
+    def _extract_status_data(self, statuses=None, department_filter=None) -> list[Tuple[Timestamp, EXECUTIVE_DEPARTMENT, FedDepartment]]:
+        self._set_status_gen()
+        data_input: StatusCacheType | StatusGeneratorType = self._status_cache or self._status_gen
 
-        Returns
-        -------
-        DataFrame: A DataFrame where each column represents a department,
-        and values are booleans indicating the department's presence.
-        """
-        # TODO: This isn't what's needed; we need to account for any of the departments retrieval scenarios and seamlessly convert to bool for serious analysis work
-        # Initialize a DataFrame with False values
-        depts: list[str] = [dept.SHORT for dept in EXECUTIVE_DEPARTMENTS_SET]
-        bool_df = DataFrame(data=False, index=self, columns=depts)
+        if statuses == ["all"]:
+            statuses = set(STATUS_MAP.keys())
+        if department_filter is None:
+            department_filter: set[EXECUTIVE_DEPARTMENT] = EXECUTIVE_DEPARTMENTS_SET
 
-        for date, dept_string in self.departments["Departments"].iteritems():
-            depts_present = dept_string.split(", ")
-            bool_df.loc[date, depts_present] = True
+        extracted_data: list[Any] = []
+        for date, department_statuses in data_input:
+            extracted_data.extend(
+                (date, department, fed_department_instance)
+                for department, fed_department_instance in department_statuses.items()
+                if department in department_filter
+            )
+        return extracted_data
 
-        return bool_df
+    def construct_status_dataframe(self, statuses=None, department_filter=None) -> DataFrame:
+        extracted_data: list[Any] = self._extract_status_data(statuses=statuses, department_filter=department_filter)
+        rows: list[Any] = []
+        for date, department, fed_department_instance in extracted_data:
+            row: dict[str, Any] = {
+                "Date": date,
+                "Department": department.SHORT,
+                "Status": fed_department_instance.status
+            }
+            rows.append(row)
+        return DataFrame(data=rows)
+
+    def status_df_to_multiindex(self, df: DataFrame) -> DataFrame:
+        multiindex_data: list[Any] = []
+        for _, row in df.iterrows():
+            date = row['Date']
+            department_short: str = row['Department']
+            human_readable_status: str = row['Status']
+
+            department_enum: EXECUTIVE_DEPARTMENT = EXECUTIVE_DEPARTMENT.from_short_name(short_name=department_short)
+            funding_status, operational_status = self._reverse_human_readable_status(status_str=human_readable_status)
+
+            multiindex_data.append((date, department_enum, funding_status, operational_status))
+
+        multiindex: MultiIndex = MultiIndex.from_tuples(tuples=multiindex_data, names=["Date", "Department", "FundingStatus", "OperationalStatus"])
+        return DataFrame(index=multiindex).reset_index()
+
+    def status_df_to_all_bool(self, df: DataFrame) -> DataFrame:
+
+        unique_departments: "ndarray"[str] = df['Department'].unique()
+        unique_statuses: "ndarray"[str] = df['Status'].unique()
+
+        columns: list[str] = [f"{dept}-{status}" for dept in unique_departments for status in unique_statuses]
+        bool_df: DataFrame = DataFrame(index=df.index, columns=columns).fillna(value=False)
+
+        for index, row in df.iterrows():
+            date = row['Date']
+            department_short: str = row['Department']
+            human_readable_status: str = row['Status']
+
+            col_name: str = f"{department_short}-{human_readable_status}"
+            bool_df.at[index, col_name] = True
+
+        return bool_df.reset_index(drop=True)
 
     @property
     def business_days(self) -> "Series":
@@ -844,11 +914,11 @@ class FedDateIndex(DatetimeIndex):
 
     @property
     def departments_bool(self) -> DataFrame:
-        dept_columns = [dept.SHORT for dept in EXECUTIVE_DEPARTMENT]
-        df: DataFrame = DataFrame(index=self, columns=dept_columns).fillna(True)
+        dept_columns: list[str] = [dept.SHORT for dept in EXECUTIVE_DEPARTMENT]
+        df: DataFrame = DataFrame(index=self, columns=dept_columns).fillna(value=True)
 
         # Adjust for DHS
-        dhs_start_date = Timestamp("2003-11-25")
+        dhs_start_date: FedDateStamp | None = to_datestamp(date=DHS_FORMED)
         df.loc[df.index < dhs_start_date, "DHS"] = False
 
         return df
@@ -861,13 +931,65 @@ class FedDateIndex(DatetimeIndex):
             for dept, fed_dept in dept_statuses.items():
                 if dept not in data_for_df:
                     data_for_df[dept] = {}
-                data_for_df[dept][date] = str(fed_dept)
+                data_for_df[dept][date] = str(object=fed_dept)
 
         df = DataFrame(data=data_for_df)
         df.index = (
             df.index if df.index.dtype == "datetime64[ns]" else to_datestamp(df.index)
         )
         return df
+
+    @property
+    def all_depts_full_approps(self) -> bool:
+
+
+    @property
+    def all_depts_cr(self) -> bool:
+
+    @property
+    def all_depts_cr_or_full_approps(self) -> bool:
+
+
+    @property
+    def all_unfunded(self) -> bool:
+
+
+    @property
+    def cr(self) -> bool:
+
+
+    @property
+    def shutdown(self) -> bool:
+
+
+    @property
+    def approps_gap(self) -> bool:
+
+
+    @property
+    def funding_gap(self) -> bool:
+
+    @property
+    def full_op_depts(self) -> "StatusDictType" | None:
+
+
+    @property
+    def full_or_cr_depts(self) -> "StatusDictType" | None:
+
+    @property
+    def cr_depts(self) -> "StatusDictType" | None:
+
+    @property
+
+
+    @property
+    def shutdown_depts(self) -> "StatusDictType" | None:
+
+
+    @property
+    def unfunded_depts(self) -> "StatusDictType" | None:
+
+
 
     def contains(self, date: Timestamp) -> Any:
         """

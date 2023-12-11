@@ -4,6 +4,7 @@ from __future__ import annotations
 from enum import Enum, unique
 from typing import TYPE_CHECKING
 
+from bidict import bidict
 from pandas import Timestamp
 
 if TYPE_CHECKING:
@@ -11,6 +12,7 @@ if TYPE_CHECKING:
         AppropriationsGapsMapType,
         CRMapType,
         StatusMapType,
+        StatusTupleType
     )
 
 """
@@ -70,6 +72,26 @@ class EXECUTIVE_DEPARTMENT(Enum):
     USDT = ("USDT", "Department of the Treasury", "Treasury")
     VA = ("VA", "Department of Veterans Affairs", "Veterans Affairs")
 
+    @classmethod
+    def from_short_name(cls, short_name: str) -> EXECUTIVE_DEPARTMENT:
+        for dept in cls:
+            if dept.SHORT == short_name:
+                return dept
+        raise ValueError(f"Department with short name {short_name} not found")
+
+    @classmethod
+    def from_long_name(cls, long_name: str) -> EXECUTIVE_DEPARTMENT:
+        for dept in cls:
+            if dept.FULL == long_name:
+                return dept
+        raise ValueError(f"Department with long name {long_name} not found")
+
+    @classmethod
+    def from_abbreviation(cls, abbreviation: str) -> EXECUTIVE_DEPARTMENT:
+        for dept in cls:
+            if dept.ABBREV == abbreviation:
+                return dept
+        raise ValueError(f"Department with abbreviation {abbreviation} not found")
 
 DEPT = EXECUTIVE_DEPARTMENT
 """We shorten EXECUTIVE_DEPARTMENT for brevity."""
@@ -203,6 +225,28 @@ STATUS_MAP: "StatusMapType" = {
 
 """
 STATUS_MAP: We map possible FUNDING_STATUS, OPERATIONAL_STATUS combinations to string descriptions so we can simplify manipulations _dept_status.py.
+"""
+READABLE_STATUSES: list[str] = [
+            "open, full year approps",
+            "open with limits, continuing resolution",
+            "unknown open, either CR or full approps",
+            "minimally open, no approps",
+            "closed, shutdown",
+            "future unknown",
+        ]
+
+"""
+READABLE_STATUSES: Simplified human-readable statuses for the default
+FedDateIndex behavior of outputing human-readable status.
+"""
+
+READABLE_STATUS_MAP: bidict["StatusTupleType", str] = bidict(value for value in STATUS_MAP.values(), item for item in READABLE_STATUSES)
+
+"""
+READABLE_STATUS_MAP: A bidict mapping human-readable statuses to their enum
+status tuples (FUNDING_STATUS, OPERATIONAL_STATUS). We use this for
+FedDepartments' .status property and for converting FedDateIndex
+human-readable statuses to more detailed output for power users.
 """
 
 

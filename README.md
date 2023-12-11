@@ -10,12 +10,12 @@ fedcal is a simple calendar library with **_one big goal big goal_:** **enable n
 
 The U.S. Government is massive. Over two million civilian and military employees. 1.7 _trillion_ dollars in FY23 spending. Even tiny and short-lived changes and shifts in the government workforce and spending can have far-reaching impacts _over time_.
 
-Time is at the heart of those impacts. I'm a federal manager, and I started writing fedcal because I wanted to understand how shifts in personnel availability, seasonality, and budgetary factors impacted productivity to help me plan and drive better results. For example, I know first hand how devastating the continuing resolution cycle can be on productivity and outcomes, but didn't know _precisely how devastating_ those impacts could be (or how subtle and unexpected). **I was shocked to find there weren't off-the-shelf solutions for understanding the basic rhythyms and routines of the massive U.S. Government machine**
+Time is at the heart of those impacts. I'm a federal manager, and I started writing fedcal because I wanted to understand how shifts in personnel availability, seasonality, and budgetary factors impacted productivity to help me plan and drive better results. For example, I know first hand how devastating the continuing resolution cycle can be on productivity and outcomes, but didn't know _precisely how devastating_ those impacts could be (or how subtle and unexpected). **I was shocked to find there weren't off-the-shelf solutions for understanding the basic rhythms and routines of the massive U.S. Government machine**
 
 ### fedcal is about answering big and small questions, improving predictions, and understanding the U.S. Government, its effect on society and the world
 
 > [!NOTE]
-> As I started thinking deeply on this problem, I was surprised by how **binary** federal _time_ was. **Two million people are mostly at work... or they aren't** because of holidays, weekends, military passdays, or government shutdowns. Shutdowns are especially ripe for meaningful causal analysis -- they're a control group -- one minute the government is 'on', and the next it is 'off'. Of course, it's more complicated than that -- sometimes only half, a third, or 90% of the government is impacted, which offers opportunities for even richer differential analysis (and one fedcal hopes to enable). But it's not just shutdowns -- a continuing resolution instead of a full year appropriation is another kind of binary relationship, or even whether a holiday falls on a Monday or Tuesday. fedcal aims to give you the tools to explore these relationships.
+> The Federal Government is a big control group (of sorts) if you think about it. **Two million people are mostly at work... or they aren't** because of holidays, weekends, military passdays, or government shutdowns. One minute the government is 'on', and the next it is 'off'. Of course, it's more complicated than that -- sometimes only half, a third, or 90% of the government is impacted, which offers opportunities for even richer differential analysis (and one fedcal hopes to enable). But it's not just shutdowns -- a continuing resolution instead of a full year appropriation is another kind of binary relationship, or even whether a holiday falls on a Monday or Tuesday. fedcal aims to give you the tools to explore these relationships and their significance (...or insignificance).
 
 #### A few example questions fedcal can help answer:
 
@@ -61,7 +61,8 @@ Of course, as a calendar library, fedcal can help you streamline more developmen
 
 2. `FedDateIndex` a companion class that adds similar functionality to [pandas' DatetimeIndex class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DatetimeIndex.html#pandas-datetimeindex)
 
-> [!IMPORTANT] > `FedDateStamp` and `FedDateIndex` **retain all functionality** of pandas `Timestamp` and `DatetimeIndex`. (... or they should, pending testing and refinement and your issue submissions...)
+> [!IMPORTANT]
+> `FedDateStamp` and `FedDateIndex` **retain all functionality** of pandas `Timestamp` and `DatetimeIndex`. (... or they should, pending testing and refinement and your issue submissions...)
 
 ### Core Enhancements to Timestamp and DatetimeIndex
 
@@ -71,8 +72,8 @@ Of course, as a calendar library, fedcal can help you streamline more developmen
 
    - **Federal Holidays, including historical holidays by Presidential proclamation** (also back to FY75).
    - **Federal businessdays** (1970 to indefinite future - why 1970? I use POSIX time as a reasonable floor; no other reason.)
-   - **Federal fiscal years and fiscal quarters** (1970 to wheneve)
-   - Fedcal can even take a very rough guess of whether a future President will declare a given Christmas Eve a holiday
+   - **Federal fiscal years and fiscal quarters** (1970 to whenever)
+   - fedcal can even take a very rough guess of whether a future President will declare a given Christmas Eve a holiday
 
 3. Federal **civilian biweekly paydays**
 
@@ -83,7 +84,7 @@ Of course, as a calendar library, fedcal can help you streamline more developmen
 6. Suggestions?
 
 ### what's next?
-
+- complete implementation of FedDateIndex
 - Lots of bug fixes before initial beta
 - error handling
 - thorough test coverage
