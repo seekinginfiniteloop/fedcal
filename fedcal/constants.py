@@ -208,6 +208,8 @@ objects. Data currently omit judiciary and legislative budgets (federal courts a
 DHS_FORMED: int = 1038200400
 """DHS_FORMED: POSIX date of DHS formation (2003-11-25)"""
 
+
+
 STATUS_MAP: "StatusMapType" = {
     "DEFAULT_STATUS": (FUNDING_STATUS.FULLY_APPROPRIATED, OPERATIONAL_STATUS.OPEN),
     "CR_STATUS": (

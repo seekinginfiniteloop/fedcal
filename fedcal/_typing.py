@@ -14,7 +14,8 @@ if TYPE_CHECKING:
         OPERATIONAL_STATUS,
         SHUTDOWN_FLAG,
     )
-    from .fedcal import FedDateStamp, FedDepartment
+    from .depts import FedDepartment
+    from .fedcal import FedDateStamp
     from .time_utils import YearMonthDay
 
 FedDateStampConvertibleTypes = Union[
@@ -61,3 +62,5 @@ StatusDictType = Dict["EXECUTIVE_DEPARTMENT", "FedDepartment"]
 StatusGeneratorType = Generator[Tuple[str, StatusDictType], None, None]
 
 StatusCacheType = Dict[str, StatusDictType]
+
+ExtractedStatusDataGeneratorType = Generator[Tuple["FedDateStamp", "FedDepartment"]]

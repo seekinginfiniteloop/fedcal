@@ -1,20 +1,16 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from enum import Enum
 from typing import (
     TYPE_CHECKING,
     Any,
     KeysView,
     List,
     Self,
-    Tuple,
 )
-from numpy import datetime_as_string
-
 from pandas import DatetimeIndex, DataFrame, MultiIndex, Timestamp, Index
 
-from ._dept_status import DepartmentState, DepartmentStatus
+from ._dept_status import DepartmentState
 from .civpay import FedPayDay
 from .constants import (
     CR_DATA_CUTOFF_DATE,
@@ -36,6 +32,7 @@ if TYPE_CHECKING:
     from ._dept_status import FedDepartment
     from ._typing import (
         FedDateStampConvertibleTypes,
+        ExtractedStatusDataGeneratorType,
         StatusDictType,
         StatusTupleType,
         StatusGeneratorType,
@@ -702,6 +699,7 @@ class FedDateIndex(DatetimeIndex):
     def __new__(cls, data, *args, **kwargs) -> Self:
         instance: Self = super().__new__(cls, data, *args, **kwargs)
         instance = to_feddateindex(instance)
+        instance.set_self_date_range()
         return instance
 
     @staticmethod
@@ -709,8 +707,8 @@ class FedDateIndex(DatetimeIndex):
         return READABLE_STATUS_MAP.inv[status_str]
 
     def set_self_date_range(self) -> None:
-        self.start: Timestamp = self.start or self.min()
-        self.end: Timestamp = self.end or self.max()
+        self.start: FedDateStamp = to_datestamp(self.start or self.min())
+        self.end: FedDateStamp = to_datestamp(self.end or self.max())
 
     def _get_mil_cache(self) -> None:
         self.set_self_date_range()
@@ -751,7 +749,7 @@ class FedDateIndex(DatetimeIndex):
         gen: "StatusGeneratorType" = self._status_gen or self._set_status_gen()
         return dict(gen)
 
-    def to_fedtimestamp(self) -> int:
+    def to_fedtimestamp(self) -> "Series":
         """
         Convert the dates in the index to POSIX timestamps normalized to midnight.
 
@@ -766,31 +764,35 @@ class FedDateIndex(DatetimeIndex):
             .astype(dtype=int)
         )
 
-    def _extract_status_data(self, statuses=None, department_filter=None) -> list[Tuple[Timestamp, EXECUTIVE_DEPARTMENT, FedDepartment]]:
+    def _extract_status_data(self, statuses: set[str] | None = None, department_filter: set[EXECUTIVE_DEPARTMENT] | None = None) -> "ExtractedStatusDataGeneratorType":
         self._set_status_gen()
-        data_input: StatusCacheType | StatusGeneratorType = self._status_cache or self._status_gen
+        data_input: "StatusCacheType" | "StatusGeneratorType" = self._status_cache or self._status_gen
 
-        if statuses == ["all"]:
-            statuses = set(STATUS_MAP.keys())
-        if department_filter is None:
-            department_filter: set[EXECUTIVE_DEPARTMENT] = EXECUTIVE_DEPARTMENTS_SET
+        statuses: set[str] | KeysView[str] = statuses or STATUS_MAP.keys()
+        department_filter = department_filter or EXECUTIVE_DEPARTMENTS_SET
 
-        extracted_data: list[Any] = []
-        for date, department_statuses in data_input:
-            extracted_data.extend(
-                (date, department, fed_department_instance)
-                for department, fed_department_instance in department_statuses.items()
-                if department in department_filter
-            )
-        return extracted_data
+        data_check_statuses: set[str] = {"DEFAULT_STATUS", "CR_STATUS"}
 
-    def construct_status_dataframe(self, statuses=None, department_filter=None) -> DataFrame:
-        extracted_data: list[Any] = self._extract_status_data(statuses=statuses, department_filter=department_filter)
+        for date, department_statuses in (data_input.items() if isinstance(data_input, dict) else data_input):
+
+            if to_datestamp(date).fedtimestamp < CR_DATA_CUTOFF_DATE and any(status in statuses for status in data_check_statuses):
+            adjusted_statuses: set["StatusTupleType"] = {STATUS_MAP[key] for key in statuses if key not in data_check_statuses} | {STATUS_MAP["CR_DATA_CUTOFF_DEFAULT_STATUS"]}
+            else:
+                adjusted_statuses: set["StatusTupleType"] = {STATUS_MAP[key] for key in statuses}
+
+            for department, fed_department_instance in department_statuses.items():
+                status_tuple: StatusTupleType = fed_department_instance.to_status_tuple()
+                if department in department_filter and status_tuple in adjusted_statuses:
+                    yield (to_datestamp(date), fed_department_instance)
+
+
+    def construct_status_dataframe(self, statuses: set[str] | None = None, department_filter: set[EXECUTIVE_DEPARTMENT] | None = None) -> DataFrame:
+        extracted_data: "ExtractedStatusDataGeneratorType" = self._extract_status_data(statuses=statuses, department_filter=department_filter)
         rows: list[Any] = []
-        for date, department, fed_department_instance in extracted_data:
+        for date, fed_department_instance in extracted_data:
             row: dict[str, Any] = {
                 "Date": date,
-                "Department": department.SHORT,
+                "Department": fed_department_instance.name.SHORT,
                 "Status": fed_department_instance.status
             }
             rows.append(row)
@@ -799,7 +801,7 @@ class FedDateIndex(DatetimeIndex):
     def status_df_to_multiindex(self, df: DataFrame) -> DataFrame:
         multiindex_data: list[Any] = []
         for _, row in df.iterrows():
-            date = row['Date']
+            date: FedDateStamp = row['Date']
             department_short: str = row['Department']
             human_readable_status: str = row['Status']
 
@@ -831,7 +833,7 @@ class FedDateIndex(DatetimeIndex):
 
     @property
     def business_days(self) -> "Series":
-        next_business_days = self + FedBusDay.fed_business_days
+        next_business_days  = self + FedBusDay.fed_business_days
         return self == next_business_days
 
     @property
@@ -940,26 +942,28 @@ class FedDateIndex(DatetimeIndex):
         return df
 
     @property
-    def all_depts_full_approps(self) -> bool:
+    def all_depts_full_approps(self) -> "Series"[bool]:
+        return self.construct_status_dataframe(statuses={"DEFAULT_STATUS"})["Departments"] == self.departments
 
 
     @property
-    def all_depts_cr(self) -> bool:
-
-    @property
-    def all_depts_cr_or_full_approps(self) -> bool:
+    def all_depts_cr(self) -> "Series"[bool] | None:
 
 
     @property
-    def all_unfunded(self) -> bool:
+    def all_depts_cr_or_full_approps(self) -> "Series"[bool] | None:
 
 
     @property
-    def cr(self) -> bool:
+    def all_unfunded(self) -> "Series"[bool] | None:
 
 
     @property
-    def shutdown(self) -> bool:
+    def cr(self) -> DataFrame | None:
+
+
+    @property
+    def shutdown(self) -> DataFrame:
 
 
     @property
