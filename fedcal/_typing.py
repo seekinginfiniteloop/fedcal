@@ -15,7 +15,7 @@ if TYPE_CHECKING:
         SHUTDOWN_FLAG,
     )
     from .depts import FedDepartment
-    from .fedcal import FedDateStamp
+    from .feddatestamp import FedDateStamp
     from .time_utils import YearMonthDay
 
 FedDateStampConvertibleTypes = Union[

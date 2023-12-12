@@ -15,7 +15,8 @@ if TYPE_CHECKING:
     from pytz.tzinfo import DstTzInfo
 
     from ._typing import FedDateIndexConvertibleTypes, FedDateStampConvertibleTypes
-    from .fedcal import FedDateIndex, FedDateStamp
+    from .feddatestamp import FedDateStamp
+    from .feddateindex import FedDateIndex
 
 
 def _pydate_to_posix(pydate: date) -> int:
@@ -126,7 +127,7 @@ class YearMonthDay:
         -------
         A FedDateStamp object.
         """
-        from .fedcal import FedDateStamp
+        from .feddatestamp import FedDateStamp
 
         return FedDateStamp(self.to_pdtimestamp())
 
@@ -324,7 +325,7 @@ def _stamp_date(timestamp: Timestamp) -> "FedDateStamp":
     -------
     A FedDateStamp object.
     """
-    from .fedcal import FedDateStamp
+    from .feddatestamp import FedDateStamp
 
     if timestamp.tzinfo is None:
         return FedDateStamp(timestamp)
@@ -409,7 +410,7 @@ def _from_tuple(input_dates) -> "FedDateIndex":
 @to_feddateindex.register(cls=DatetimeIndex)
 def _from_datetimeindex(input_dates) -> "FedDateIndex":
     """We subclass and return a DatetimeIndex"""
-    from .fedcal import FedDateIndex
+    from .feddateindex import FedDateIndex
 
     return FedDateIndex(input_dates)
 
@@ -428,7 +429,7 @@ def _from_array_like(input_dates) -> "FedDateIndex":
     """
     try:
         datetimeindex = DatetimeIndex(input_dates)
-        from .fedcal import FedDateIndex
+        from .feddateindex import FedDateIndex
 
         return FedDateIndex(datetimeindex)
     except:
@@ -453,7 +454,8 @@ def _get_feddateindex(
     --------
     A FedDateIndex object.
     """
-    from .fedcal import FedDateIndex, FedDateStamp
+    from .feddateindex import FedDateIndex
+    from .feddatestamp import FedDateStamp
 
     start = start if isinstance(start, FedDateStamp) else to_datestamp(start)
     end = end if isinstance(end, FedDateStamp) else to_datestamp(end)

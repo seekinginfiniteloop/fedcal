@@ -5,12 +5,14 @@ from pandas import DataFrame, Series, Timestamp, Timedelta, date_range
 
 from attrs import define, field
 
-from .date_attributes import FedBusDay, FedHolidays
+from ._date_attributes import FedBusDay, FedHolidays
 from .time_utils import to_datestamp, to_feddateindex
 
 if TYPE_CHECKING:
     from pandas import DatetimeIndex
-    from .fedcal import FedDateIndex, FedDateStamp
+
+    from .feddatestamp import FedDateStamp
+    from .feddateindex import FedDateIndex
 
 
 @define(order=True)

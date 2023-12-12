@@ -11,7 +11,7 @@ if TYPE_CHECKING:
         OPERATIONAL_STATUS,
         READABLE_STATUS_MAP,
     )
-    from ._typing import StatusDictType, StatusTupleType, StatusMapType
+    from ._typing import StatusDictType, StatusTupleType
 
 
 @frozen(order=True)
@@ -25,6 +25,8 @@ class FedDepartment:
     name : The name of the executive department.
     funding_status : The funding status of the department.
     operational_status : The operational status of the department.
+
+    status : A simplified string representation of the department's status.
 
     Methods
     -------
@@ -43,7 +45,7 @@ class FedDepartment:
         """We override attrs default to provide a meaningful string representation"""
         return f"{self.name.ABBREV}: funding: {self.funding_status}, operational: {self.operational_status}"
 
-    def to_tuple(
+    def attributes_to_tuple(
         self,
     ) -> Tuple["EXECUTIVE_DEPARTMENT", "FUNDING_STATUS", "OPERATIONAL_STATUS"]:
         """

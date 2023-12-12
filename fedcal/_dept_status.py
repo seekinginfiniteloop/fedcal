@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from itertools import product
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 
 from attrs import define, field
 from intervaltree import IntervalTree
@@ -19,7 +19,7 @@ from .time_utils import get_today_in_posix, to_datestamp
 
 if TYPE_CHECKING:
     from pandas import Timestamp
-    from .fedcal import FedDateStamp
+    from .feddatestamp import FedDateStamp
 
     from ._typing import (
         FedDateStampConvertibleTypes,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Self, Tuple
 
-from attrs import define, field, frozen
+from attrs import define, field
 from intervaltree import IntervalTree
 
 from .constants import (
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
         CRMapType,
         FedDateStampConvertibleTypes,
     )
-    from .fedcal import FedDateStamp
+    from .feddatestamp import FedDateStamp
 
 
 def _get_date_interval(
