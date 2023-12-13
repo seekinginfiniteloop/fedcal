@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 @frozen(order=True)
 class FedDepartment:
+
     """
     Represents a federal department with a specific funding and operational
     status.
@@ -35,6 +36,7 @@ class FedDepartment:
     dept_dict()
         Returns a dictionary representation of the department's name and
         statuses.
+
     """
 
     name: "EXECUTIVE_DEPARTMENT" = field()
@@ -65,6 +67,7 @@ class FedDepartment:
         Returns
         -------
         A StatusTupleType for the instance.
+
         """
         return self.funding_status, self.operational_status
 
@@ -76,6 +79,7 @@ class FedDepartment:
         Returns
         -------
         A human-readable string representation of the department's status.
+
         """
         return READABLE_STATUS_MAP[self.to_status_tuple()]
 
@@ -86,5 +90,6 @@ class FedDepartment:
         Returns
         -------
         A dictionary of FedDepartment attributes.
+
         """
         return {self.name: self.to_status_tuple()}

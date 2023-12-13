@@ -12,7 +12,7 @@ if TYPE_CHECKING:
         AppropriationsGapsMapType,
         CRMapType,
         StatusMapType,
-        StatusTupleType
+        StatusTupleType,
     )
 
 """
@@ -92,6 +92,7 @@ class EXECUTIVE_DEPARTMENT(Enum):
             if dept.ABBREV == abbreviation:
                 return dept
         raise ValueError(f"Department with abbreviation {abbreviation} not found")
+
 
 DEPT = EXECUTIVE_DEPARTMENT
 """We shorten EXECUTIVE_DEPARTMENT for brevity."""
@@ -209,7 +210,6 @@ DHS_FORMED: int = 1038200400
 """DHS_FORMED: POSIX date of DHS formation (2003-11-25)"""
 
 
-
 STATUS_MAP: "StatusMapType" = {
     "DEFAULT_STATUS": (FUNDING_STATUS.FULLY_APPROPRIATED, OPERATIONAL_STATUS.OPEN),
     "CR_STATUS": (
@@ -229,20 +229,22 @@ STATUS_MAP: "StatusMapType" = {
 STATUS_MAP: We map possible FUNDING_STATUS, OPERATIONAL_STATUS combinations to string descriptions so we can simplify manipulations _dept_status.py.
 """
 READABLE_STATUSES: list[str] = [
-            "open, full year approps",
-            "open with limits, continuing resolution",
-            "unknown open, either CR or full approps",
-            "minimally open, no approps",
-            "closed, shutdown",
-            "future unknown",
-        ]
+    "open, full year approps",
+    "open with limits, continuing resolution",
+    "unknown open, either CR or full approps",
+    "minimally open, no approps",
+    "closed, shutdown",
+    "future unknown",
+]
 
 """
 READABLE_STATUSES: Simplified human-readable statuses for the default
 FedDateIndex behavior of outputing human-readable status.
 """
 
-READABLE_STATUS_MAP: bidict["StatusTupleType", str] = bidict(value for value in STATUS_MAP.values(), item for item in READABLE_STATUSES)
+READABLE_STATUS_MAP: bidict["StatusTupleType", str] = bidict(
+    (value for value in STATUS_MAP.values()), (item for item in READABLE_STATUSES)
+)
 
 """
 READABLE_STATUS_MAP: A bidict mapping human-readable statuses to their enum

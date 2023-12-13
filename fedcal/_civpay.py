@@ -9,11 +9,13 @@ from .constants import FEDPAYDAY_REFERENCE_DATE
 from .time_utils import to_datestamp
 
 if TYPE_CHECKING:
-    from .fedcal import FedDateIndex, FedDateStamp
+    from .feddatestamp import FedDateStamp
+    from .feddateindex import FedDateIndex
 
 
 @define(order=True)
 class FedPayDay:
+
     """
     Represents federal paydays, providing functionalities to generate, check,
     and retrieve paydays within a specified range.
@@ -41,6 +43,7 @@ class FedPayDay:
     get_paydays_as_series(start=None, end=None)
         Returns a pandas Series of federal paydays between the start and end
         dates.
+
     """
 
     reference_date: Timestamp | "FedDateStamp" = field(
@@ -65,6 +68,7 @@ class FedPayDay:
         Returns
         -------
         DatetimeIndex of generated paydays.
+
         """
         if end_date > self.reference_date:
             return date_range(start=self.reference_date, end=end_date, freq="2W-FRI")
@@ -82,6 +86,7 @@ class FedPayDay:
         Returns
         -------
         Boolean indicating whether the date is a federal payday.
+
         """
         if date is None:
             date = self.end_date
@@ -105,6 +110,7 @@ class FedPayDay:
         Returns
         -------
         FedDateIndex of paydays within the specified range.
+
         """
         if end and ((self.paydays.ceil(freq="D") < end) or (not self.paydays)):
             self.paydays = self.generate_paydays(date=end)
@@ -131,6 +137,7 @@ class FedPayDay:
         Returns
         -------
         List of paydays within the specified range.
+
         """
         return self.get_paydays_as_index(
             start=start or self.reference_date, end=end or self.end_date
@@ -152,6 +159,7 @@ class FedPayDay:
         Returns
         -------
         List of paydays within the specified range.
+
         """
         return self.get_paydays_as_index(
             start=start or self.reference_date, end=end or self.end_date

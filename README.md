@@ -79,11 +79,12 @@ Of course, as a calendar library, fedcal can help you streamline more developmen
 
 4. **Military paydays and estimated holiday passdays**
 
-5. Supporting time utilities
+5. Supporting time utilities like `to_datestamp` and `to_feddateindex`
 
 6. Suggestions?
 
 ### what's next?
+
 - Lots of bug fixes before initial alpha
 - error handling
 - thorough test coverage

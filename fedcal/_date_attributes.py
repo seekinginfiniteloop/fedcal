@@ -15,11 +15,12 @@ if TYPE_CHECKING:
     from numpy import ndarray
     from pandas import Index, Series
 
-    from .fedcal import FedDateStamp
+    from .feddatestamp import FedDateStamp
 
 
 @define(order=True)
 class FedBusDay:
+
     """
     Class representing federal business days, excluding federal holidays.
 
@@ -31,6 +32,7 @@ class FedBusDay:
     -------
     is_bday(date) -> bool
         Determine if a given date is a federal business day.
+
     """
 
     fed_business_days: CustomBusinessDay = field(
@@ -50,6 +52,7 @@ class FedBusDay:
         -------
         is_bday(date)
             Determine if a given date is a federal business day.
+
         """
         next_business_day: Timestamp = (
             date - Timedelta(days=1)
@@ -58,6 +61,7 @@ class FedBusDay:
 
 
 class GuessChristmasEveHoliday(Enum):
+
     """
     A simple enum class for setting preferences on FedHolidays. If YES,
     FedHoliday generates Christmas Eve days that *may*  be made a holiday
@@ -74,14 +78,17 @@ class GuessChristmasEveHoliday(Enum):
 
 @define(order=True)
 class FedHolidays:
+
     """
-    Class representing federal holidays, including historically proclaimed holidays and optionally guessed Christmas Eve holidays.
+    Class representing federal holidays, including historically proclaimed
+    holidays and optionally guessed Christmas Eve holidays.
 
     Attributes
     ----------
     proclaimed_holidays : List of holidays proclaimed by executive orders.
     holidays : Combined list of regular and proclaimed federal holidays.
-    guess_christmas_eve_holiday : Enum to indicate if we should guess if future Presidents will proclaim a given Christmas Eve a holiday.
+    guess_christmas_eve_holiday : Enum to indicate if we should guess if
+    future Presidents will proclaim a given Christmas Eve a holiday.
 
     Methods
     -------
@@ -96,8 +103,9 @@ class FedHolidays:
     guess_proclamation_holidays(datetimeindex) -> Series
         Guess if any Christmas Eves in a datetimeindex may be a holiday based
         on Christmas day
-    add_poss_Christmas_Eve_holidays() -> DatetimeIndex
+    add_poss_christmas_eve_holidays() -> DatetimeIndex
         Add possible Christmas Eve holidays to the holiday list.
+
     """
 
     proclaimed_holidays: list[Timestamp] = field(
@@ -114,7 +122,7 @@ class FedHolidays:
         If you decide to roll the dice and guess on Presidential proclamations, then we add these to self.holidays
         """
         self.holidays = concat(
-            [proclaimed_holidays, USFederalHolidayCalendar().holidays()]
+            [self.proclaimed_holidays, USFederalHolidayCalendar().holidays()]
         ).drop_duplicates()
         if self.guess_christmas_eve_holiday == GuessChristmasEveHoliday.YES:
             self.holidays = self.add_poss_Christmas_Eve_holidays()
@@ -130,6 +138,7 @@ class FedHolidays:
         Returns
         -------
         True if the date is a federal holiday, False otherwise.
+
         """
         return date in self.holidays
 
@@ -144,6 +153,7 @@ class FedHolidays:
         Returns
         -------
         True if the date was a proclaimed holiday, False otherwise.
+
         """
         return date in self.proclaimed_holidays
 
@@ -161,6 +171,7 @@ class FedHolidays:
         Returns
         -------
         True if Christmas Eve is likely to be a holiday, False otherwise.
+
         """
 
         christmas: Timestamp = Timestamp(year=date.year, month=12, day=25)
@@ -182,6 +193,7 @@ class FedHolidays:
         -------
         Pandas Series of boolean values indicating whether each date is likely
         a proclaimed holiday.
+
         """
         christmas_series: DatetimeIndex = to_datetime(
             arg=datetimeindex.year.astype(dtype=str) + "-12-25"
@@ -195,7 +207,7 @@ class FedHolidays:
             (filtered_index.month == 12) & (filtered_index.day == 24)
         )
 
-    def add_poss_Christmas_Eve_holidays(self) -> DatetimeIndex:
+    def add_poss_christmas_eve_holidays(self) -> DatetimeIndex:
         """
         Add possible Christmas Eve holidays using the
         guess_proclamation_holidays method.
@@ -204,6 +216,7 @@ class FedHolidays:
         -------
         A DatetimeIndex including the original holidays and any guessed
         Christmas Eve holidays.
+
         """
         christmas_eves: DatetimeIndex = self.holidays[
             self.guess_proclamation_holidays(datetimeindex=self.holidays)
@@ -229,6 +242,7 @@ class FedFiscalYear:
         Get the fiscal year for a given date.
     is_fiscal_year(year_to_check, date=None)
         Check if a given year matches the fiscal year of a date.
+
     """
 
     date: Timestamp = field(converter=to_datestamp)
@@ -245,6 +259,7 @@ class FedFiscalYear:
         Returns
         -------
         Pandas Series of integers representing the fiscal year for each date.
+
         """
         year_offset: int = (datetimeindex.month >= 10).astype(dtype=int)
         return datetimeindex.year + year_offset
@@ -260,6 +275,7 @@ class FedFiscalYear:
         Returns
         -------
         The fiscal year.
+
         """
         if date is None:
             date = self.date
@@ -279,7 +295,9 @@ class FedFiscalYear:
 
         Returns
         -------
-        True if the provided year matches the fiscal year of the date, False otherwise.
+        True if the provided year matches the fiscal year of the date, False
+        otherwise.
+
         """
         if date is None:
             date = self.date
@@ -288,6 +306,7 @@ class FedFiscalYear:
 
 @define(order=True)
 class FedFiscalQuarter:
+
     """
     Class representing federal fiscal quarter calculations.
 
@@ -305,6 +324,7 @@ class FedFiscalQuarter:
 
     is_fiscal_quarter(quarter_to_check, date=None)
         Check if a given quarter matches the fiscal quarter of a date.
+
     """
 
     date: Timestamp = field(converter=to_datestamp)
@@ -320,7 +340,9 @@ class FedFiscalQuarter:
 
         Returns
         -------
-        Pandas Series of integers representing the fiscal quarter for each date.
+        Pandas Series of integers representing the fiscal quarter for each
+        date.
+
         """
         adjusted_month: Series = (datetimeindex.month + 2) % 12 + 1
         return ((adjusted_month - 1) // 3) + 1
@@ -338,6 +360,7 @@ class FedFiscalQuarter:
         -------
         True if the provided quarter matches the fiscal quarter of the
             date, False otherwise.
+
         """
 
         if date is None:
@@ -360,6 +383,7 @@ class FedFiscalQuarter:
         -------
         True if the provided quarter matches the fiscal quarter of the
             date, False otherwise.
+
         """
         if date is None:
             date = self.date

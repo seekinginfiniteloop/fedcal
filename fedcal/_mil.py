@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 @define(order=True)
 class MilitaryPayDay:
+
     """
     Handles the calculation and verification of military paydays.
 
@@ -39,7 +40,9 @@ class MilitaryPayDay:
             Generates a range of dates around a payday for further processing.
 
         _is_next_bday_in_range(date, payday_range)
-            Checks if the next business day falls within the provided range of dates.
+            Checks if the next business day falls within the provided range of
+            dates.
+
     """
 
     date: "FedDateStamp" = field(converter=to_datestamp)
@@ -57,6 +60,7 @@ class MilitaryPayDay:
         Returns
         -------
         Boolean indicating whether the date is a military payday.
+
         """
         if date is None:
             date: "FedDateStamp" = self.date
@@ -87,11 +91,13 @@ class MilitaryPayDay:
         Parameters
         ----------
         date : date from which to calculate the next payday.
-        next_month : boolean indicating whether to calculate for the next month.
+        next_month : boolean indicating whether to calculate for the next
+        month.
 
         Returns
         -------
         FedDateStamp of the next military payday.
+
         """
         if next_month:
             if date.month == 12:
@@ -122,6 +128,7 @@ class MilitaryPayDay:
         Returns
         -------
         DatetimeIndex of dates around the payday.
+
         """
         return date_range(
             start=payday - Timedelta(days=3), end=payday - Timedelta(days=1)
@@ -141,6 +148,7 @@ class MilitaryPayDay:
         Returns
         -------
         Boolean indicating if the next business day is in the range.
+
         """
         return next(
             (day == date for day in payday_range[::-1] if FedBusDay.is_bday(date=day)),
@@ -150,6 +158,7 @@ class MilitaryPayDay:
 
 @define(order=True)
 class ProbableMilitaryPassDay:
+
     """
     Assesses the likelihood of a given date being a military pass day.
 
@@ -166,7 +175,8 @@ class ProbableMilitaryPassDay:
     -----
     While technically military passes extend through non-business days, passes
     falling on non-business days don't meaningfully affect available personnel.
-    Since our goal is enabling useful data analysis, we do not account for passes falling on non-business days.
+    Since our goal is enabling useful data analysis, we do not account for
+    passes falling on non-business days.
 
     Military passdays are highly variable. When they are granted can vary
     even within major commands or at a single location based on commanders'
@@ -193,7 +203,8 @@ class ProbableMilitaryPassDay:
             Retrieves holidays within a specified range around a date.
 
         _likely_passday(date, holidays_in_offset)
-            Determines if the given date is likely a pass day based on surrounding holidays.
+            Determines if the given date is likely a pass day based on
+            surrounding holidays.
 
     """
 
@@ -210,10 +221,11 @@ class ProbableMilitaryPassDay:
         Returns
         -------
         Boolean indicating whether the date is likely a pass day.
+
         """
         if date is None:
             date = self.date
-        elif not FedBusinessDay.is_bday(date=date):
+        elif not FedBusDay.is_bday(date=date):
             return False
 
         holidays_in_offset: list["FedDateStamp"] | None = self._get_holidays_in_range(
@@ -252,7 +264,8 @@ class ProbableMilitaryPassDay:
         date: "FedDateStamp", holidays_in_offset: list["FedDateStamp"]
     ) -> bool:
         """
-        Determines if the given date is likely a pass day based on surrounding holidays.
+        Determines if the given date is likely a pass day based on surrounding
+        holidays.
 
         Parameters
         ----------
@@ -280,6 +293,7 @@ class ProbableMilitaryPassDay:
 
 @unique
 class MilDay(Enum):
+
     """
     Enum for military payday types.
     """
@@ -291,6 +305,7 @@ class MilDay(Enum):
 
 @define(order=True)
 class MilPayPassRange:
+
     """
     A class for generating a range of military paydays and pass days.
 
@@ -323,6 +338,7 @@ class MilPayPassRange:
 
     get_mil_dates_dataframe() -> DataFrame
         Returns a DataFrame of military pay and pass days.
+
     """
 
     start: "FedDateStamp" = field(
@@ -335,7 +351,8 @@ class MilPayPassRange:
 
     def __attrs_post_init__(self) -> None:
         """
-        Finishes initializing the instance, generating daterange and attributes paydays and passdays (see above.)
+        Finishes initializing the instance, generating daterange and
+        attributes paydays and passdays (see above.)
         """
         self.daterange: "FedDateIndex" = to_feddateindex((self.start, self.end))
         self.paydays, self.passdays = self.get_mil_dates()
@@ -346,11 +363,13 @@ class MilPayPassRange:
         """
         Retrieves military pay and pass days within the specified range.
         The range is determined by the start and end dates of the instance.
-        Populates the paydays and passdays lists based on the selected MilDay type.
+        Populates the paydays and passdays lists based on the selected MilDay
+        type.
 
         Returns
         -------
         A tuple containing two lists: (paydays, passdays).
+
         """
         paydays: list = []
         passdays: list = []
@@ -380,6 +399,7 @@ class MilPayPassRange:
         ------
         AttributeError
             If no military paydays are available.
+
         """
         if not self.paydays:
             raise AttributeError("No military paydays available.")
@@ -392,6 +412,7 @@ class MilPayPassRange:
         Returns
         -------
         A list containing all military paydays within the specified range.
+
         """
         return self.get_milpay_series().tolist()
 
@@ -408,6 +429,7 @@ class MilPayPassRange:
         ------
         AttributeError
             If no military pass days are available.
+
         """
         if not self.passdays:
             raise AttributeError("No military pass days available.")
@@ -421,6 +443,7 @@ class MilPayPassRange:
         -------
         A list containing all probable military pass days within the specified
         range.
+
         """
         return self.get_milpass_series().tolist()
 
@@ -432,6 +455,7 @@ class MilPayPassRange:
         -------
         A pandas DataFrame with two columns: 'PayDays' and 'PassDays', each
         containing the respective dates within the specified range.
+
         """
         data: dict[str, list["FedDateStamp" | None]] = {
             "PayDays": self.paydays,

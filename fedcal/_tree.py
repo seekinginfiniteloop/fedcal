@@ -44,6 +44,7 @@ def _get_date_interval(
     Returns
     -------
         A tuple of POSIX timestamps representing the start and end dates.
+
     """
     start: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
     end: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
@@ -55,7 +56,8 @@ def _get_date_interval(
         end_datestamp: "FedDateStamp" = to_datestamp(end)
         end: "FedDateStamp" = end_datestamp.fedtimestamp()
     if start == end:
-        # we add a day because intervaltree's end intervals are exclusive, and our calendar otherwise uses inclusive dates.
+        # we add a day because intervaltree's end intervals are exclusive, and
+        # our calendar otherwise uses inclusive dates.
         end = end + 86400
     return start, end
 
@@ -69,7 +71,8 @@ def _get_overlap_interval(
     | None = None,
 ) -> Tuple[int, int] | None:
     """
-    Returns the overlap interval between the given start and end dates and the date range.
+    Returns the overlap interval between the given start and end dates and the
+    date range.
 
     Parameters
     ----------
@@ -81,6 +84,7 @@ def _get_overlap_interval(
     -------
     The overlap interval as a tuple of start and end dates. If there
     is no overlap, returns None.
+
     """
 
     if not date_range:
@@ -105,6 +109,7 @@ def _get_overlap_interval(
 
 @define(order=True)
 class CRTreeGrower:
+
     """
     Class responsible for growing a CR (Continuing Resolution) IntervalTree
     enables efficient time-based queries. This class
@@ -127,7 +132,9 @@ class CRTreeGrower:
     -----
     *Private Methods*:
     _filter_cr_department_sets(departments) -> set[EXECUTIVE_DEPARTMENT]
-        Filters input sets from constants.py to produce actual set of EXECUTIVE_DEPARTMENT objects for our IntervalTree.
+        Filters input sets from constants.py to produce actual set of
+        EXECUTIVE_DEPARTMENT objects for our IntervalTree.
+
     """
 
     executive_departments_set: set[EXECUTIVE_DEPARTMENT] = field(
@@ -147,15 +154,18 @@ class CRTreeGrower:
         departments: set[EXECUTIVE_DEPARTMENT] | set[None],
     ) -> set[EXECUTIVE_DEPARTMENT]:
         """
-        Filters input sets from constants.py to produce actual set of EXECUTIVE_DEPARTMENT objects for our IntervalTree.
+        Filters input sets from constants.py to produce actual set of
+        EXECUTIVE_DEPARTMENT objects for our IntervalTree.
 
         Parameters
         ----------
-        departments : A set of EXECUTIVE_DEPARTMENT objects, intended for internal use from constants.py.
+        departments : A set of EXECUTIVE_DEPARTMENT objects, intended for
+        internal use from constants.py.
 
         Returns
         -------
         final set of EXECUTIVE_DEPARTMENT objects for our IntervalTree
+
         """
         return EXECUTIVE_DEPARTMENTS_SET.difference(departments)
 
@@ -179,6 +189,7 @@ class CRTreeGrower:
         Returns
         -------
         The populated interval tree.
+
         """
         cr_departments = (
             cr_departments if cr_departments is not None else self.cr_departments
@@ -219,11 +230,13 @@ class AppropriationsGapsTreeGrower:
     objects and shutdown information from constants.py.
 
     date : Optionally limit the date range of the generated tree, by
-    default all dates from FY75 to present are included. Accepts any date-like object
+    default all dates from FY75 to present are included. Accepts any date-like
+    object
 
     Methods
     -------
-    grow_appropriation_gaps_tree(self, appropriations_gaps, dates) -> IntervalTree
+    grow_appropriation_gaps_tree(self, appropriations_gaps, dates) ->
+    IntervalTree
         Grows an interval tree based on the provided data for appropriations
         gaps (from constants.py).
     """
@@ -251,15 +264,19 @@ class AppropriationsGapsTreeGrower:
         gaps (from constants).
 
         appropriations_gaps
-            A dictionary mapping time intervals to departments and shutdown information.
+            A dictionary mapping time intervals to departments and shutdown
+            information.
 
         dates
             Optional dates for restricting the dates of the produced
-            tree. By default produces a tree for all dates there are data (FY75 - Present). Accepts any FedDateStamp or FedDateStampConvertibleTypes.
+            tree. By default produces a tree for all dates there are data
+            (FY75 - Present). Accepts any FedDateStamp or
+            FedDateStampConvertibleTypes.
 
         Returns
         --------
         The populated interval tree with appropriations gaps information.
+
         """
 
         appropriations_gaps = (
@@ -291,6 +308,7 @@ class AppropriationsGapsTreeGrower:
 
 
 class Tree:
+
     """
     Class representing a combined interval tree with CR and appropriations
     gaps data.
@@ -338,6 +356,7 @@ class Tree:
         Initializes the CR tree.
     _initialize_gap_tree() -> IntervalTree
         Initializes the gap tree.
+
     """
 
     _instance = None
@@ -391,6 +410,7 @@ class Tree:
         Returns
         -------
         CRTreeGrower.tree : The CR tree.
+
         """
         crtree = CRTreeGrower()
         return crtree.tree
@@ -403,6 +423,7 @@ class Tree:
         Returns
         -------
         AppropriationsGapsTreeGrower.tree : The appropriations gaps tree.
+
         """
         gaptree = AppropriationsGapsTreeGrower()
         return gaptree.tree
