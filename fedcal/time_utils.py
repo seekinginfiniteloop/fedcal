@@ -5,23 +5,28 @@ from datetime import date, datetime
 from functools import singledispatch, wraps
 from typing import TYPE_CHECKING, Any, Tuple
 
+import pandas as pd
 import pytz
 from attrs import astuple, define, field
 from numpy import datetime64, int64, ndarray
-from pandas import DatetimeIndex, Index, Series, Timestamp, date_range
+
 from pandas.tseries.frequencies import to_offset
+
+import .feddatestamp as fedstamp
+import .feddateindex as fedindex
 
 if TYPE_CHECKING:
     from pytz.tzinfo import DstTzInfo
 
     from ._typing import FedDateIndexConvertibleTypes, FedDateStampConvertibleTypes
-    from .feddatestamp import FedDateStamp
     from .feddateindex import FedDateIndex
+    from .feddatestamp import FedDateStamp
 
 
 def _pydate_to_posix(pydate: date) -> int:
     """
-    A simple utility function to convert Python datetime.date objects to POSIX timestamps in integer form. This keeps our numbers at reasonable precision.
+    A simple utility function to convert Python datetime.date objects to POSIX
+    timestamps in integer form. This keeps our numbers at reasonable precision.
 
     Parameters
     ----------
@@ -59,7 +64,8 @@ class YearMonthDay:
     Do we *need* YearMonthDay? No, but it does provide clear typing and ensure
     smooth functioning for the most common form of programmatic date input
     (i.e. year, month, day). We need it in the same sense that an
-    average person needs a remote controlled drone... they don't, but it beats climbing on a roof. Doesn't YearMonthDay look so much nicer in a type
+    average person needs a remote controlled drone... they don't, but it beats
+    climbing on a roof. Doesn't YearMonthDay look so much nicer in a type
     hint than Tuple[int, int, int]? I think so. Could we use Python date
     instead? Also yes.
 
@@ -71,8 +77,9 @@ class YearMonthDay:
 
     Methods
     -------
-    from_timestamp(date: Timestamp | FedDateStamp) -> YearMonthDay
-        Convert a pandas Timestamp or FedDateStamp object into a YearMonthDay object.
+    from_timestamp(date: pd.Timestamp | FedDateStamp) -> YearMonthDay
+        Convert a pandas pd.Timestamp or FedDateStamp object into a YearMonthDay
+        object.
 
     to_posix_timestamp(self) -> int
         Converts a YearMonthDay object to a POSIX integer timestamp.
@@ -80,8 +87,8 @@ class YearMonthDay:
     to_datestamp(self) -> FedDateStamp
         Converts YearMonthDay to FedDateStamp.
 
-    to_pdtimestamp(self) -> Timestamp
-        Converts YearMonthDay to pandas Timestamp.
+    to_pdtimestamp(self) -> pd.Timestamp
+        Converts YearMonthDay to pandas pd.Timestamp.
 
     to_pydate(self) -> date
         Converts YearMonthDay to Python date object (datetime.date)
@@ -96,9 +103,9 @@ class YearMonthDay:
     day: int = field(converter=int)
 
     @staticmethod
-    def from_timestamp(date: Timestamp | "FedDateStamp") -> "YearMonthDay":
+    def from_timestamp(date: pd.Timestamp | "FedDateStamp") -> "YearMonthDay":
         """
-        Convert a pandas Timestamp or FedDateStamp object into a YearMonthDay object.
+        Convert a pandas pd.Timestamp or FedDateStamp object into a YearMonthDay object.
 
         Parameters
         ----------
@@ -136,16 +143,16 @@ class YearMonthDay:
 
         return FedDateStamp(self.to_pdtimestamp())
 
-    def to_pdtimestamp(self) -> Timestamp:
+    def to_pdtimestamp(self) -> pd.Timestamp:
         """
-        Converts YearMonthDay to pandas Timestamp.
+        Converts YearMonthDay to pandas pd.Timestamp.
 
         Returns
         -------
-        A pandas Timestamp object.
+        A pandas pd.Timestamp object.
 
         """
-        return Timestamp(year=self.year, month=self.month, day=self.day)
+        return pd.Timestamp(year=self.year, month=self.month, day=self.day)
 
     def to_pydate(self) -> date:
         """
@@ -200,8 +207,8 @@ def to_datestamp(date_input: "FedDateStampConvertibleTypes") -> "FedDateStamp" |
     )
 
 
-@to_datestamp.register(cls=Timestamp)
-def _timestamp_to_datestamp(date_input: Timestamp) -> "FedDateStamp":
+@to_datestamp.register(cls=pd.Timestamp)
+def _timestamp_to_datestamp(date_input: pd.Timestamp) -> "FedDateStamp":
     """Conversion for pandas Timestamps"""
     return _stamp_date(timestamp=date_input)
 
@@ -281,6 +288,14 @@ def _timetuple_to_datestamp(date_input: Tuple) -> "FedDateStamp":
     return YearMonthDay(year=year, month=month, day=day).to_datestamp()
 
 
+@to_datestamp.register(cls=fedstamp.FedDateStamp)
+def _return_datestamp(date_input: "FedDateStamp") -> "FedDateStamp":
+    """
+    We handle stray non-conversions by returning them.
+    """
+    return date_input
+
+
 def check_timestamp(
     func,
 ):
@@ -290,7 +305,7 @@ def check_timestamp(
     conversions to Timestamps in most of our to_datestamp converters, we
     instead wrap/decorate _stamp_date to intercept and convert any
     non-Timestamps to Timestamps once to_datestamp gets them in a format
-    Timestamp will accept.
+    pd.Timestamp will accept.
 
     Parameters
     ----------
@@ -298,30 +313,30 @@ def check_timestamp(
 
     Returns
     -------
-    A wrapper around func that converts non-Timestamp input to Timestamps.
+    A wrapper around func that converts non-pd.Timestamp input to Timestamps.
 
     """
 
     @wraps(wrapped=func)
-    def wrapper(arg) -> Timestamp | "FedDateStamp" | Any | None:
-        """Our Timestamp handling wrapper."""
-        if isinstance(arg, Timestamp):
+    def wrapper(arg) -> pd.Timestamp | "FedDateStamp" | Any | None:
+        """Our pd.Timestamp handling wrapper."""
+        if isinstance(arg, pd.Timestamp):
             return func(arg)
         elif isinstance(arg, FedDateStamp):
             return
         elif arg is None:
             raise ValueError(
                 f"""provided argument, {arg} is None; we're not mind readers
-                here. Please provide a Timestamp for _stamp_date."""
+                here. Please provide a pd.Timestamp for _stamp_date."""
             )
         else:
             try:
-                return func(Timestamp(ts_input=arg))
+                return func(pd.Timestamp(ts_input=arg))
             except TypeError as e:
                 raise TypeError(
-                    f"""input {arg} could not be converted to a Timestamp. Our
+                    f"""input {arg} could not be converted to a pd.Timestamp. Our
                     _stamp_date function needs pandas Timestamps or a
-                    Timestamp convertible date-like object (e.g. Python date)
+                    pd.Timestamp convertible date-like object (e.g. Python date)
                     """
                 ) from e
 
@@ -329,14 +344,14 @@ def check_timestamp(
 
 
 @check_timestamp
-def _stamp_date(timestamp: Timestamp) -> "FedDateStamp":
+def _stamp_date(timestamp: pd.Timestamp) -> "FedDateStamp":
     """
     If incoming Timestamps have timezone information, we normalize them to
     U.S. Eastern -- because Washington D.C. We then make them FedDateStamps.
 
     Parameters
     ----------
-    timestamp : A pandas Timestamp for conversion (through subclassing) to a
+    timestamp : A pandas pd.Timestamp for conversion (through subclassing) to a
     FedDateStamp.
 
     Returns
@@ -394,13 +409,13 @@ def to_feddateindex(
     A singledispatch function for handling date conversions to FedDateIndex.
     Most types are pushed into tuples by wrap_tuple and funneled to our
     to_datetime functions for conversion. We also add support for array_like
-    objects, such as pandas Index and Series, and numpy ndarrays. And, of
-    course, DatetimeIndex itself.
+    objects, such as pandas pd.Index and pd.Series, and numpy ndarrays. And, of
+    course, pd.DatetimeIndex itself.
 
     Parameters
     ----------
     input_dates : Any FedDateIndexConvertibleTypes (i.e. any
-    FedDateStampConvertibleType, FedDateStamp, Timestamp).
+    FedDateStampConvertibleType, FedDateStamp, pd.Timestamp).
 
     Returns
     -------
@@ -429,20 +444,20 @@ def _from_tuple(input_dates) -> "FedDateIndex":
     return _get_feddateindex(start, end)
 
 
-@to_feddateindex.register(cls=DatetimeIndex)
+@to_feddateindex.register(cls=pd.DatetimeIndex)
 def _from_datetimeindex(input_dates) -> "FedDateIndex":
-    """We subclass and return a DatetimeIndex"""
+    """We subclass and return a pd.DatetimeIndex"""
     from .feddateindex import FedDateIndex
 
     return FedDateIndex(input_dates)
 
 
-@to_feddateindex.register(cls=Series)
-@to_feddateindex.register(cls=Index)
+@to_feddateindex.register(cls=pd.Series)
+@to_feddateindex.register(cls=pd.Index)
 @to_feddateindex.register(cls=ndarray)
 def _from_array_like(input_dates) -> "FedDateIndex":
     """
-    We try to convert array-like objects to DatetimeIndex
+    We try to convert array-like objects to pd.DatetimeIndex
 
     Raises
     ------
@@ -452,16 +467,24 @@ def _from_array_like(input_dates) -> "FedDateIndex":
 
     """
     try:
-        datetimeindex = DatetimeIndex(input_dates)
+        datetimeindex = pd.DatetimeIndex(input_dates)
         from .feddateindex import FedDateIndex
 
         return FedDateIndex(datetimeindex)
     except ValueError as e:
         raise ValueError(
-            f"""Failed to convert input to DatetimeIndex. Must contain inputs
-            compatible with a pandas DatetimeIndex. You provided: \n
+            f"""Failed to convert input to pd.DatetimeIndex. Must contain
+            inputs compatible with a pandas pd.DatetimeIndex. You provided: \n
             {input_dates}"""
         ) from e
+
+
+@to_feddateindex.register(cls=fedindex.FedDateIndex)
+def _from_feddateindex(input_dates: "FedDateIndex") -> "FedDateIndex":
+    """
+    We catch and return stray FedDateIndex objects that happen into our net.
+    """
+    return input_dates
 
 
 def _get_feddateindex(
@@ -487,7 +510,7 @@ def _get_feddateindex(
     start = start if isinstance(start, FedDateStamp) else to_datestamp(start)
     end = end if isinstance(end, FedDateStamp) else to_datestamp(end)
 
-    daterange: DatetimeIndex = date_range(
+    daterange: pd.DatetimeIndex = pd.date_range(
         start=start, end=end, freq=to_offset(freq="D"), inclusive="both"
     )
     return FedDateIndex(daterange)

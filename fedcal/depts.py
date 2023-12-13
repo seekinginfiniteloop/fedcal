@@ -6,9 +6,9 @@ from attrs import field, frozen, astuple
 
 if TYPE_CHECKING:
     from .constants import (
-        EXECUTIVE_DEPARTMENT,
-        FUNDING_STATUS,
-        OPERATIONAL_STATUS,
+        Dept,
+        AppropsStatus,
+        OpsStatus,
         READABLE_STATUS_MAP,
     )
     from ._typing import StatusDictType, StatusTupleType
@@ -39,9 +39,9 @@ class FedDepartment:
 
     """
 
-    name: "EXECUTIVE_DEPARTMENT" = field()
-    funding_status: "FUNDING_STATUS" = field()
-    operational_status: "OPERATIONAL_STATUS" = field()
+    name: "Dept" = field()
+    funding_status: "AppropsStatus" = field()
+    operational_status: "OpsStatus" = field()
 
     def __str__(self) -> str:
         """We override attrs default to provide a meaningful string representation"""
@@ -49,7 +49,7 @@ class FedDepartment:
 
     def attributes_to_tuple(
         self,
-    ) -> Tuple["EXECUTIVE_DEPARTMENT", "FUNDING_STATUS", "OPERATIONAL_STATUS"]:
+    ) -> Tuple["Dept", "AppropsStatus", "OpsStatus"]:
         """
         Return a tuple of FedDepartment attributes.
         Returns
@@ -62,7 +62,7 @@ class FedDepartment:
 
     def to_status_tuple(self) -> "StatusTupleType":
         """
-        Returns a StatusTupleType (Tuple[FUNDING_STATUS, OPERATIONAL_STATUS] for the FedDepartment instance
+        Returns a StatusTupleType (Tuple[AppropsStatus, OpsStatus] for the FedDepartment instance
 
         Returns
         -------

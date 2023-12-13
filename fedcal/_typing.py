@@ -5,21 +5,21 @@ from typing import TYPE_CHECKING, Dict, Generator, Mapping, Tuple, Union
 if TYPE_CHECKING:
     from datetime import date, datetime
 
+    import pandas as pd
     from numpy import datetime64, int64, ndarray
-    from pandas import DatetimeIndex, Index, Series, Timestamp
 
     from .constants import (
-        EXECUTIVE_DEPARTMENT,
-        FUNDING_STATUS,
-        OPERATIONAL_STATUS,
-        SHUTDOWN_FLAG,
+        Dept,
+        AppropsStatus,
+        OpsStatus,
+        ShutdownFlag,
     )
     from .depts import FedDepartment
     from .feddatestamp import FedDateStamp
     from .time_utils import YearMonthDay
 
 FedDateStampConvertibleTypes = Union[
-    "Timestamp",
+    "pd.Timestamp",
     int,
     "int64",
     "datetime64",
@@ -36,28 +36,26 @@ FedDateIndexConvertibleTypes = Union[
     Tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes],
     Tuple["FedDateStamp", "FedDateStamp"],
     "ndarray",
-    "Series",
-    "DatetimeIndex",
-    "Index",
+    "pd.Series",
+    "pd.DatetimeIndex",
+    "pd.Index",
 ]
 
-AppropriationsGapsMapType = Mapping[
-    tuple[int, int], Tuple[set["EXECUTIVE_DEPARTMENT"], "SHUTDOWN_FLAG"]
-]
+AppropriationsGapsMapType = Mapping[tuple[int, int], Tuple[set["Dept"], "ShutdownFlag"]]
 
-CRMapType = Mapping[Tuple[int, int], set["EXECUTIVE_DEPARTMENT"]]
+CRMapType = Mapping[Tuple[int, int], set["Dept"]]
 
-StatusTupleType = Tuple["FUNDING_STATUS", "OPERATIONAL_STATUS"]
+StatusTupleType = Tuple["AppropsStatus", "OpsStatus"]
 
-AssembledBudgetIntervalType = Tuple[set["EXECUTIVE_DEPARTMENT"], StatusTupleType]
+AssembledBudgetIntervalType = Tuple[set["Dept"], StatusTupleType]
 
-DateStampStatusMapType = Mapping["EXECUTIVE_DEPARTMENT", StatusTupleType]
+DateStampStatusMapType = Mapping["Dept", StatusTupleType]
 
 StatusMapType = Mapping[str, StatusTupleType]
 
-StatusPoolType = Mapping[Tuple["EXECUTIVE_DEPARTMENT", str], "FedDepartment"]
+StatusPoolType = Mapping[Tuple["Dept", str], "FedDepartment"]
 
-StatusDictType = Dict["EXECUTIVE_DEPARTMENT", "FedDepartment"]
+StatusDictType = Dict["Dept", "FedDepartment"]
 
 StatusGeneratorType = Generator[Tuple[str, StatusDictType], None, None]
 

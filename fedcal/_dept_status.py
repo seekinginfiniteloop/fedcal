@@ -6,30 +6,19 @@ from typing import TYPE_CHECKING
 from attrs import define, field
 from intervaltree import IntervalTree
 
-from ._tree import Tree
-from .constants import (
-    CR_DATA_CUTOFF_DATE,
-    DEPT,
-    DHS_FORMED,
-    EXECUTIVE_DEPARTMENTS_SET,
-    STATUS_MAP,
-)
-from .depts import FedDepartment
-from .time_utils import get_today_in_posix, to_datestamp
+import ._tree
+import .constants
+import .time_utils
+from . import Dept, STATUS_MAP, FedDepartment
 
 if TYPE_CHECKING:
     from pandas import Timestamp
-    from .feddatestamp import FedDateStamp
 
-    from ._typing import (
-        FedDateStampConvertibleTypes,
-        StatusDictType,
-        StatusMapType,
-        StatusPoolType,
-        StatusTupleType,
-        StatusGeneratorType,
-    )
-    from .constants import EXECUTIVE_DEPARTMENT
+    from . import FedDateStamp
+    from ._typing import (FedDateStampConvertibleTypes, StatusDictType,
+                          StatusGeneratorType, StatusMapType, StatusPoolType,
+                          StatusTupleType)
+    from .constants import Dept
 
 
 @define(order=True)
@@ -41,7 +30,7 @@ class DepartmentStatus:
 
     Attributes
     ----------
-    departments : Dict[EXECUTIVE_DEPARTMENT, FedDepartment]
+    departments : Dict[Dept, FedDepartment]
         A dictionary mapping each executive department to its current
         FedDepartment instance.
     status_map : StatusMapType
@@ -104,9 +93,9 @@ class DepartmentStatus:
                 operational_status=cls.status_map[status_key][1],
             )
             for dept, status_key in product(
-                EXECUTIVE_DEPARTMENTS_SET, cls.status_map.keys()
+                constants.DEPTS_SET, cls.status_map.keys()
             )
-            if dept != DEPT.DHS and status_key == "CR_DATA_CUTOFF_DEFAULT_STATUS"
+            if dept != Dept.DHS and status_key == "CR_DATA_CUTOFF_DEFAULT_STATUS"
         }
         return _status_pool
 
@@ -178,19 +167,19 @@ class DepartmentState:
         An interval tree representing department status changes over time.
 
         """
-        interval_tree = Tree()
+        interval_tree = _tree.Tree()
         return interval_tree.tree.copy()
 
     @staticmethod
     def get_executive_departments_set_at_time(
         date: "FedDateStamp" | "Timestamp" | int,
-    ) -> set["EXECUTIVE_DEPARTMENT"]:
+    ) -> set["Dept"]:
         if not isinstance(date, int):
             date = to_datestamp(date).fedtimestamp()
-        if date >= DHS_FORMED:
-            return EXECUTIVE_DEPARTMENTS_SET
+        if date >= constants.DHS_FORMED:
+            return constants.DEPTS_SET
         else:
-            return EXECUTIVE_DEPARTMENTS_SET.difference({DEPT.DHS})
+            return constants.DEPTS_SET.difference({Dept.DHS})
 
     def _get_tree_ceiling(self) -> int:
         """
@@ -214,7 +203,7 @@ class DepartmentState:
 
         """
         tree_ceiling: int = self.tree.end() if self.tree else 0
-        today: int = get_today_in_posix()
+        today: int = time_utils.get_today_in_posix()
         return max(tree_ceiling, today)
 
     def get_state(
@@ -241,10 +230,10 @@ class DepartmentState:
         date.
 
         """
-        posix_date: int = to_datestamp(date).fedtimestamp()
+        posix_date: int = time_utils.to_datestamp(date).fedtimestamp()
 
         executive_department_set: set[
-            "EXECUTIVE_DEPARTMENT"
+            "Dept"
         ] = self.get_executive_departments_set_at_time(date=date)
 
         status_dict: "StatusDictType" = {
@@ -252,7 +241,7 @@ class DepartmentState:
                 (
                     dept,
                     "CR_DATA_CUTOFF_DEFAULT_STATUS"
-                    if posix_date < CR_DATA_CUTOFF_DATE
+                    if posix_date < constants.CR_DATA_CUTOFF_DATE
                     else "FUTURE_STATUS"
                     if posix_date > self.max_default_date
                     else "DEFAULT_STATUS",
@@ -302,13 +291,13 @@ class DepartmentState:
         for pandas to translate.
 
         """
-        start_posix: int = to_datestamp(start).fedtimestamp()
-        end_posix: int = to_datestamp(end).fedtimestamp()
+        start_posix: int = time_utils.to_datestamp(start).fedtimestamp()
+        end_posix: int = time_utils.to_datestamp(end).fedtimestamp()
 
         for interval in self.tree[start_posix:end_posix]:
             for key_date in {interval.begin, interval.end, start_posix, end_posix}:
                 department_set: set[
-                    "EXECUTIVE_DEPARTMENT"
+                    "Dept"
                 ] = self.get_executive_departments_set_at_time(date=key_date)
                 if start_posix <= key_date <= end_posix:
                     default_status_key: str = self._determine_default_status_key(
@@ -343,7 +332,7 @@ class DepartmentState:
         Returns the default key for STATUS_MAP based on the date.
 
         """
-        if posix_date < CR_DATA_CUTOFF_DATE:
+        if posix_date < constants.CR_DATA_CUTOFF_DATE:
             return "CR_DATA_CUTOFF_DEFAULT_STATUS"
         elif posix_date > self.max_default_date:
             return "FUTURE_STATUS"
