@@ -30,6 +30,7 @@ def _pydate_to_posix(pydate: date) -> int:
     Returns
     -------
     A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
+
     """
     return int(time.mktime(pydate))
 
@@ -42,6 +43,7 @@ def get_today_in_posix() -> int:
     -------
     int
         The current date in POSIX format.
+
     """
     today: datetime = datetime.now()
     return int(time.mktime(today.timetuple()))
@@ -105,6 +107,7 @@ class YearMonthDay:
         Returns
         -------
         YearMonthDay object
+
         """
         return YearMonthDay(year=date.year, month=date.month, day=date.day)
 
@@ -115,6 +118,7 @@ class YearMonthDay:
         Returns
         -------
         A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
+
         """
         pydate: date = self.to_pydate()
         return _pydate_to_posix(pydate=pydate)
@@ -126,6 +130,7 @@ class YearMonthDay:
         Returns
         -------
         A FedDateStamp object.
+
         """
         from .feddatestamp import FedDateStamp
 
@@ -138,6 +143,7 @@ class YearMonthDay:
         Returns
         -------
         A pandas Timestamp object.
+
         """
         return Timestamp(year=self.year, month=self.month, day=self.day)
 
@@ -148,6 +154,7 @@ class YearMonthDay:
         Returns
         -------
         A Python date object.
+
         """
 
         return date(year=self.year, month=self.month, day=self.day)
@@ -160,6 +167,7 @@ class YearMonthDay:
         Returns
         -------
         A tuple of YearMonthDay attributes.
+
         """
         return astuple(inst=self)
 
@@ -185,6 +193,7 @@ def to_datestamp(date_input: "FedDateStampConvertibleTypes") -> "FedDateStamp" |
     ------
     TypeError
         Raises a type error if it encounters unsupported date types.
+
     """
     raise TypeError(
         f"Unsupported date format. You provided type: {type(date_input)}. Supported types are FedDateStampConvertibleTypes"
@@ -220,6 +229,7 @@ def _str_to_datestamp(date_input: str) -> "FedDateStamp":
     ------
     ValueError
         raises a ValueError if it cannot parse a provided string.
+
     """
     try:
         return _stamp_date(timestamp=date.fromisoformat(date_input))
@@ -231,7 +241,9 @@ def _str_to_datestamp(date_input: str) -> "FedDateStamp":
             except ValueError:
                 continue
         raise ValueError(
-            f"Date string '{date_input}' is not in a recognized format. All reasonable attempts to parse it failed. Are you trying to use an alien date format? Please use an ISO 8601 format"
+            f"""Date string '{date_input}' is not in a recognized format. All
+            reasonable attempts to parse it failed. Are you trying to use an
+            alien date format? Please use an ISO 8601 format"""
         ) from e
 
 
@@ -287,6 +299,7 @@ def check_timestamp(
     Returns
     -------
     A wrapper around func that converts non-Timestamp input to Timestamps.
+
     """
 
     @wraps(wrapped=func)
@@ -298,14 +311,18 @@ def check_timestamp(
             return
         elif arg is None:
             raise ValueError(
-                f"provided argument, {arg} is None; we're not mind readers here. Please provide a Timestamp for _stamp_date."
+                f"""provided argument, {arg} is None; we're not mind readers
+                here. Please provide a Timestamp for _stamp_date."""
             )
         else:
             try:
                 return func(Timestamp(ts_input=arg))
             except TypeError as e:
                 raise TypeError(
-                    f"input {arg} could not be converted to a Timestamp. Our _stamp_date function needs pandas Timestamps or a Timestamp convertible date-like object (e.g. Python date)"
+                    f"""input {arg} could not be converted to a Timestamp. Our
+                    _stamp_date function needs pandas Timestamps or a
+                    Timestamp convertible date-like object (e.g. Python date)
+                    """
                 ) from e
 
     return wrapper
@@ -319,11 +336,13 @@ def _stamp_date(timestamp: Timestamp) -> "FedDateStamp":
 
     Parameters
     ----------
-    timestamp : A pandas Timestamp for conversion (through subclassing) to a FedDateStamp.
+    timestamp : A pandas Timestamp for conversion (through subclassing) to a
+    FedDateStamp.
 
     Returns
     -------
     A FedDateStamp object.
+
     """
     from .feddatestamp import FedDateStamp
 
@@ -355,6 +374,7 @@ def wrap_tuple(
     Returns
     -------
     A wrapper around func that converts multi-argument dates to a tuple.
+
     """
 
     @wraps(wrapped=func)
@@ -379,7 +399,8 @@ def to_feddateindex(
 
     Parameters
     ----------
-    input_dates : Any FedDateIndexConvertibleTypes (i.e. any FedDateStampConvertibleType, FedDateStamp, Timestamp).
+    input_dates : Any FedDateIndexConvertibleTypes (i.e. any
+    FedDateStampConvertibleType, FedDateStamp, Timestamp).
 
     Returns
     -------
@@ -389,6 +410,7 @@ def to_feddateindex(
     ------
     TypeError
         If supplies with an unsupported type.
+
     """
 
     raise TypeError(
@@ -425,17 +447,21 @@ def _from_array_like(input_dates) -> "FedDateIndex":
     Raises
     ------
     ValueError
-        If the conversion fails, likely because the array does not contain datetimes.
+        If the conversion fails, likely because the array does not contain
+        datetimes.
+
     """
     try:
         datetimeindex = DatetimeIndex(input_dates)
         from .feddateindex import FedDateIndex
 
         return FedDateIndex(datetimeindex)
-    except:
+    except ValueError as e:
         raise ValueError(
-            f"Failed to convert input to DatetimeIndex. Must contain inputs compatible with a pandas DatetimeIndex. You provided: \n {input_dates}"
-        )
+            f"""Failed to convert input to DatetimeIndex. Must contain inputs
+            compatible with a pandas DatetimeIndex. You provided: \n
+            {input_dates}"""
+        ) from e
 
 
 def _get_feddateindex(
@@ -453,6 +479,7 @@ def _get_feddateindex(
     Returns
     --------
     A FedDateIndex object.
+
     """
     from .feddateindex import FedDateIndex
     from .feddatestamp import FedDateStamp

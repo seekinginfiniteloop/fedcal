@@ -34,6 +34,7 @@ if TYPE_CHECKING:
 
 @define(order=True)
 class DepartmentStatus:
+
     """
     Manages the statuses of various departments, using a flyweight pattern
     for efficiency.
@@ -57,6 +58,7 @@ class DepartmentStatus:
         Sets the status of a given department based on a status key.
     get_department_status(department)
         Retrieves the current status of a given department.
+
     """
 
     status_map: "StatusMapType" = field(default=STATUS_MAP)
@@ -111,8 +113,10 @@ class DepartmentStatus:
 
 @define(order=True)
 class DepartmentState:
+
     """
-    Represents the state of departments at different times, based on an interval tree structure.
+    Represents the state of departments at different times, based on an
+    interval tree structure.
 
     Attributes
     ----------
@@ -138,6 +142,7 @@ class DepartmentState:
     _process_interval(interval, last_known_status, start_posix, end_posix)
         Processes a given interval, updating department statuses as needed.
         Helper function for get_state_for_range_generator().
+
     """
 
     tree: IntervalTree = field(init=False)
@@ -171,6 +176,7 @@ class DepartmentState:
         Returns
         -------
         An interval tree representing department status changes over time.
+
         """
         interval_tree = Tree()
         return interval_tree.tree.copy()
@@ -193,6 +199,7 @@ class DepartmentState:
         Returns
         -------
         The rightmost date of the tree (the latest date in the tree).
+
         """
         return self.tree.end() if self.tree else 0
 
@@ -204,6 +211,7 @@ class DepartmentState:
         -------
         The maximum default date, any date after will be handled with
         FUTURE_STATUS.
+
         """
         tree_ceiling: int = self.tree.end() if self.tree else 0
         today: int = get_today_in_posix()
@@ -231,6 +239,7 @@ class DepartmentState:
         -------
         A dictionary mapping each department to its status on the specified
         date.
+
         """
         posix_date: int = to_datestamp(date).fedtimestamp()
 
@@ -319,6 +328,21 @@ class DepartmentState:
                     yield (str(key_date), last_known_status)
 
     def _determine_default_status_key(self, posix_date: int) -> str:
+        """
+        Simple private helper function to determine default department status
+        based on date, setting "CR_DATA_CUTOFF_DEFAULT_STATUS" if before the
+        CR data cutoff date, and FUTURE_STATUS if after the max_default_date.
+
+        Parameters
+        ----------
+        posix_date
+            date of the point of interest in POSIX time.
+
+        Returns
+        -------
+        Returns the default key for STATUS_MAP based on the date.
+
+        """
         if posix_date < CR_DATA_CUTOFF_DATE:
             return "CR_DATA_CUTOFF_DEFAULT_STATUS"
         elif posix_date > self.max_default_date:
