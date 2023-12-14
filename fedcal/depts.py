@@ -45,7 +45,7 @@ class FedDepartment:
 
     def __str__(self) -> str:
         """We override attrs default to provide a meaningful string representation"""
-        return f"{self.name.ABBREV}: funding: {self.funding_status}, operational: {self.operational_status}"
+        return f"{self.name.abbrev}: funding: {self.funding_status}, operational: {self.operational_status}"
 
     def attributes_to_tuple(
         self,

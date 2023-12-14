@@ -592,7 +592,7 @@ class FedDateIndex(pd.DatetimeIndex):
         for date, fed_department_instance in extracted_data:
             row: dict[str, Any] = {
                 "Date": date,
-                "Department": fed_department_instance.name.SHORT,
+                "Department": fed_department_instance.name.short,
                 "Status": fed_department_instance.status,
             }
             rows.append(row)
@@ -896,11 +896,11 @@ class FedDateIndex(pd.DatetimeIndex):
         """
 
         all_depts: list[str] = ", ".join(
-            [dept.SHORT for dept in constants.DEPTS_SET]
+            [dept.short for dept in constants.DEPTS_SET]
         )
         pre_dhs_depts: list[str] = ", ".join(
             [
-                dept.SHORT
+                dept.short
                 for dept in constants.DEPTS_SET.difference(
                     constants.Dept.DHS
                 )
@@ -931,7 +931,7 @@ class FedDateIndex(pd.DatetimeIndex):
             date, except for DHS before its formation date, which is False.
         """
 
-        dept_columns: list[str] = [dept.SHORT for dept in constants.Dept]
+        dept_columns: list[str] = [dept.short for dept in constants.Dept]
         df: pd.DataFrame = pd.DataFrame(index=self, columns=dept_columns).fillna(value=True)
 
         # Adjust for DHS

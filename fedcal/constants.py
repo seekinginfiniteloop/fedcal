@@ -32,6 +32,28 @@ publicly available dataset with this information precompiled; so I made one.
 
 @unique
 class Dept(Enum):
+    """
+    Dept enums represent federal departments and are used throughout fedcal to
+    represent departments
+
+    Attributes
+    ----------
+    self.abbrev
+
+    Methods
+    -------
+
+    from_shortname : converts shortform string of the enum object back to
+        an enum object
+
+    from_longname : converts longform string of the enum object back to
+        an enum object
+
+    from_abbrev : converts abbreviated string of the enum object back to
+        an enum object
+
+    """
+
     def __init__(self, abbreviation: str, full_name: str, short_name: str) -> None:
         """
         Initializes an instance of Dept, an enum for storing
@@ -42,9 +64,9 @@ class Dept(Enum):
             full_name (str): The full name of the department in mixed case.
             short_name (str): The shortened name of the department in mix case.
         """
-        self.ABBREV: str = abbreviation  # mixed case abbreviation
-        self.FULL: str = full_name  # full name in mixed case
-        self.SHORT: str = short_name  # shortened name in mixed case
+        self.abbrev: str = abbreviation  # mixed case abbreviation
+        self.full: str = full_name  # full name in mixed case
+        self.short: str = short_name  # shortened name in mixed case
 
     DHS = ("DHS", "Department of Homeland Security", "Homeland Security")
     DOC = ("DoC", "Department of Commerce", "Commerce")
@@ -74,22 +96,81 @@ class Dept(Enum):
 
     @classmethod
     def from_short_name(cls, short_name: str) -> Dept:
+        """
+        Converts a short name of a department to an enum object.
+        Raises a ValueError if the department is not found.
+
+        Parameters
+        ----------
+            short_name (str): The short name of the department.
+
+        Returns
+        -------
+            Dept: The enum object representing the department.
+
+        Raises
+        ------
+            ValueError: If the department is not found.
+
+        Example
+        -------
+            >>> from fedcal.constants import Dept
+            >>> Dept.from_short_name("Homeland Security")
+            Dept.DHS
+
+        """
         for dept in cls:
-            if dept.SHORT == short_name:
+            if dept.short == short_name:
                 return dept
         raise ValueError(f"Department with short name {short_name} not found")
 
     @classmethod
     def from_long_name(cls, long_name: str) -> Dept:
+        """
+            Converts a long name of a department to an enum object.
+            Raises a ValueError if the department is not found.
+
+            Returns
+            -------
+                Dept: The enum object representing the department.
+
+            Raises
+            ------
+            ValueError : if the department is not found.
+
+            Example
+            -------
+        >>> from fedcal.constants import Dept
+        >>> Dept.from_long_name("Department of the Interior")
+            Dept.DOI
+        """
         for dept in cls:
-            if dept.FULL == long_name:
+            if dept.full == long_name:
                 return dept
         raise ValueError(f"Department with long name {long_name} not found")
 
     @classmethod
     def from_abbreviation(cls, abbreviation: str) -> Dept:
+        """
+        Converts an abbreviation of a department to an enum object.
+        Raises a ValueError if the department is not found.
+
+        Returns
+        -------
+            Dept: The enum object representing the department.
+
+        Raises
+        ------
+        ValueError : if the department is not found.
+
+        Example
+        -------
+        >>> from fedcal.constants import Dept
+        >>> Dept.from_abbreviation("DoI")
+        Dept.DOI
+        """
         for dept in cls:
-            if dept.ABBREV == abbreviation:
+            if dept.abbrev == abbreviation:
                 return dept
         raise ValueError(f"Department with abbreviation {abbreviation} not found")
 
