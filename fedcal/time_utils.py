@@ -3,17 +3,18 @@ from __future__ import annotations
 import time
 from datetime import date, datetime
 from functools import singledispatch, wraps
+from types import ModuleType
 from typing import TYPE_CHECKING, Any, Tuple
 
+import numpy as np
 import pandas as pd
 import pytz
 from attrs import astuple, define, field
-from numpy import datetime64, int64, ndarray
-
 from pandas.tseries.frequencies import to_offset
 
-import .feddatestamp as fedstamp
-import .feddateindex as fedindex
+from ._load import LoadOrchestrator
+
+_importer = LoadOrchestrator()
 
 if TYPE_CHECKING:
     from pytz.tzinfo import DstTzInfo
@@ -21,6 +22,9 @@ if TYPE_CHECKING:
     from ._typing import FedDateIndexConvertibleTypes, FedDateStampConvertibleTypes
     from .feddateindex import FedDateIndex
     from .feddatestamp import FedDateStamp
+
+_importer.register(module_name="feddatestamp", package_name=".")
+_importer.register(module_name="feddateindex", package_name=".")
 
 
 def _pydate_to_posix(pydate: date) -> int:
@@ -137,8 +141,8 @@ class YearMonthDay:
         Returns
         -------
         A FedDateStamp object.
-
         """
+
         from .feddatestamp import FedDateStamp
 
         return FedDateStamp(self.to_pdtimestamp())
@@ -214,9 +218,9 @@ def _timestamp_to_datestamp(date_input: pd.Timestamp) -> "FedDateStamp":
 
 
 @to_datestamp.register(cls=int)
-@to_datestamp.register(cls=int64)
+@to_datestamp.register(cls=np.int64)
 @to_datestamp.register(cls=float)
-def _posix_to_datestamp(date_input: int | int64 | float) -> "FedDateStamp":
+def _posix_to_datestamp(date_input: int | np.int64 | float) -> "FedDateStamp":
     """
     Conversion for POSIX timestamps; we assume isolated integers or floats are POSIX time.
     """
@@ -256,8 +260,8 @@ def _str_to_datestamp(date_input: str) -> "FedDateStamp":
 
 @to_datestamp.register(cls=date)
 @to_datestamp.register(cls=datetime)
-@to_datestamp.register(cls=datetime64)
-def _date_to_datestamp(date_input: date | datetime | datetime64) -> "FedDateStamp":
+@to_datestamp.register(cls=np.datetime64)
+def _date_to_datestamp(date_input: date | datetime | np.datetime64) -> "FedDateStamp":
     """Conversions for Python date and datetime objects."""
     return _stamp_date(timestamp=date_input)
 
@@ -288,7 +292,7 @@ def _timetuple_to_datestamp(date_input: Tuple) -> "FedDateStamp":
     return YearMonthDay(year=year, month=month, day=day).to_datestamp()
 
 
-@to_datestamp.register(cls=fedstamp.FedDateStamp)
+@to_datestamp.register(cls=_importer.feddatestamp.FedDateStamp)
 def _return_datestamp(date_input: "FedDateStamp") -> "FedDateStamp":
     """
     We handle stray non-conversions by returning them.
@@ -320,9 +324,10 @@ def check_timestamp(
     @wraps(wrapped=func)
     def wrapper(arg) -> pd.Timestamp | "FedDateStamp" | Any | None:
         """Our pd.Timestamp handling wrapper."""
+        feddatestamp: ModuleType = _importer.feddatestamp
         if isinstance(arg, pd.Timestamp):
             return func(arg)
-        elif isinstance(arg, FedDateStamp):
+        elif isinstance(arg, feddatestamp.FedDateStamp):
             return
         elif arg is None:
             raise ValueError(
@@ -359,12 +364,12 @@ def _stamp_date(timestamp: pd.Timestamp) -> "FedDateStamp":
     A FedDateStamp object.
 
     """
-    from .feddatestamp import FedDateStamp
-
     if timestamp.tzinfo is None:
-        return FedDateStamp(timestamp)
+        feddatestamp: ModuleType = _importer.feddatestamp
+
+        return feddatestamp.FedDateStamp(timestamp)
     eastern: "DstTzInfo" = pytz.timezone(zone="US/Eastern")
-    return FedDateStamp(timestamp.tz_convert(tz=eastern))
+    return feddatestamp.FedDateStamp(timestamp.tz_convert(tz=eastern))
 
 
 def wrap_tuple(
@@ -447,14 +452,13 @@ def _from_tuple(input_dates) -> "FedDateIndex":
 @to_feddateindex.register(cls=pd.DatetimeIndex)
 def _from_datetimeindex(input_dates) -> "FedDateIndex":
     """We subclass and return a pd.DatetimeIndex"""
-    from .feddateindex import FedDateIndex
-
-    return FedDateIndex(input_dates)
+    feddateindex: ModuleType = _importer.feddateindex
+    return feddateindex.FedDateIndex(input_dates)
 
 
 @to_feddateindex.register(cls=pd.Series)
 @to_feddateindex.register(cls=pd.Index)
-@to_feddateindex.register(cls=ndarray)
+@to_feddateindex.register(cls=np.ndarray)
 def _from_array_like(input_dates) -> "FedDateIndex":
     """
     We try to convert array-like objects to pd.DatetimeIndex
@@ -468,9 +472,9 @@ def _from_array_like(input_dates) -> "FedDateIndex":
     """
     try:
         datetimeindex = pd.DatetimeIndex(input_dates)
-        from .feddateindex import FedDateIndex
+        feddateindex: ModuleType = _importer.feddateindex
 
-        return FedDateIndex(datetimeindex)
+        return feddateindex.FedDateIndex(datetimeindex)
     except ValueError as e:
         raise ValueError(
             f"""Failed to convert input to pd.DatetimeIndex. Must contain
@@ -479,7 +483,7 @@ def _from_array_like(input_dates) -> "FedDateIndex":
         ) from e
 
 
-@to_feddateindex.register(cls=fedindex.FedDateIndex)
+@to_feddateindex.register(cls=_importer.feddateindex.FedDateIndex)
 def _from_feddateindex(input_dates: "FedDateIndex") -> "FedDateIndex":
     """
     We catch and return stray FedDateIndex objects that happen into our net.
@@ -504,13 +508,17 @@ def _get_feddateindex(
     A FedDateIndex object.
 
     """
-    from .feddateindex import FedDateIndex
-    from .feddatestamp import FedDateStamp
+    feddatestamp: ModuleType = _importer.feddatestamp
+    feddateindex: ModuleType = _importer.feddateindex
+    _importer.feddateindex.FedDateIndex
+    _importer.feddatestamp.FedDateStamp
 
-    start = start if isinstance(start, FedDateStamp) else to_datestamp(start)
-    end = end if isinstance(end, FedDateStamp) else to_datestamp(end)
+    start = (
+        start if isinstance(start, feddatestamp.FedDateStamp) else to_datestamp(start)
+    )
+    end = end if isinstance(end, feddatestamp.FedDateStamp) else to_datestamp(end)
 
     daterange: pd.DatetimeIndex = pd.date_range(
         start=start, end=end, freq=to_offset(freq="D"), inclusive="both"
     )
-    return FedDateIndex(daterange)
+    return feddateindex.FedDateIndex(daterange)

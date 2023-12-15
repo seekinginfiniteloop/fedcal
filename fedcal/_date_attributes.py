@@ -8,14 +8,18 @@ from attrs import define, field
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
-import .constants
-import .time_utils
+from ._load import LoadOrchestrator
+
+_importer = LoadOrchestrator()
 
 if TYPE_CHECKING:
     from numpy import ndarray
     from pandas import Index, Series
 
     from .feddatestamp import FedDateStamp
+
+_importer.register(module_name="constants", package_name=".")
+_importer.register(module_name="time_utils", package_name=".")
 
 
 @define(order=True)
@@ -109,7 +113,7 @@ class FedHolidays:
     """
 
     proclaimed_holidays: list[pd.Timestamp] = field(
-        default=constants.HISTORICAL_HOLIDAYS_BY_PROCLAMATION
+        default=_importer.constants.HISTORICAL_HOLIDAYS_BY_PROCLAMATION
     )
     holidays: pd.DatetimeIndex = field(init=False)
 
@@ -245,7 +249,7 @@ class FedFiscalYear:
 
     """
 
-    date: pd.Timestamp = field(converter=time_utils.to_datestamp)
+    date: pd.Timestamp = field(converter=_importer.time_utils.to_datestamp)
 
     @staticmethod
     def get_fiscal_years(datetimeindex: pd.DatetimeIndex) -> "Series":
@@ -327,7 +331,7 @@ class FedFiscalQuarter:
 
     """
 
-    date: pd.Timestamp = field(converter=time_utils.to_datestamp)
+    date: pd.Timestamp = field(converter=_importer.time_utils.to_datestamp)
 
     @staticmethod
     def get_fiscal_quarters(datetimeindex: pd.DatetimeIndex) -> "Series":

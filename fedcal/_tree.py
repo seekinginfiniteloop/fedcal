@@ -5,16 +5,32 @@ from typing import TYPE_CHECKING, Any, Self, Tuple
 from attrs import define, field
 from intervaltree import IntervalTree
 
-import .time_utils
-from .constants import (APPROPRIATIONS_GAPS, CR_DEPARTMENTS,
-                        Dept, DEPTS_SET,
-                        ShutdownFlag, STATUS_MAP)
+from ._load import LoadOrchestrator
+
+_importer = LoadOrchestrator()
+
+# Because _tree is only loaded if _dept_status' classes are called, we don't
+# need to make these lazy
+from .constants import (
+    APPROPRIATIONS_GAPS,
+    CR_DEPARTMENTS,
+    Dept,
+    DEPTS_SET,
+    ShutdownFlag,
+    STATUS_MAP,
+)
 
 if TYPE_CHECKING:
-    from ._typing import (AppropriationsGapsMapType,
-                          AssembledBudgetIntervalType, CRMapType,
-                          FedDateStampConvertibleTypes)
+    from ._typing import (
+        AppropriationsGapsMapType,
+        AssembledBudgetIntervalType,
+        CRMapType,
+        FedDateStampConvertibleTypes,
+    )
     from .feddatestamp import FedDateStamp
+    from .time_utils import YearMonthDay
+
+_importer.register(module_name="time_utils", package_name=".")
 
 
 def _get_date_interval(
@@ -42,10 +58,10 @@ def _get_date_interval(
     end: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
     start, end = dates
     if start is not isinstance(start, int):
-        start_datestamp: "FedDateStamp" = time_utils.to_datestamp(start)
+        start_datestamp: "FedDateStamp" = _importer.time_utils.to_datestamp(start)
         start = start_datestamp.fedtimestamp()
     if end is not isinstance(end, int):
-        end_datestamp: "FedDateStamp" = time_utils.to_datestamp(end)
+        end_datestamp: "FedDateStamp" = _importer.time_utils.to_datestamp(end)
         end: "FedDateStamp" = end_datestamp.fedtimestamp()
     if start == end:
         # we add a day because intervaltree's end intervals are exclusive, and
@@ -83,12 +99,12 @@ def _get_overlap_interval(
         return start, end
     start_range, end_range = date_range
     start_range: int = (
-        (time_utils.to_datestamp(start_range).fedtimestamp())
+        (_importer.time_utils.to_datestamp(start_range).fedtimestamp())
         if start_range is not isinstance(start_range, int)
         else start_range
     )
     end_range: int = (
-        (time_utils.to_datestamp(end_range).fedtimestamp())
+        (_importer.time_utils.to_datestamp(end_range).fedtimestamp())
         if end_range is not isinstance(end_range, int)
         else end_range
     )
@@ -129,9 +145,7 @@ class CRTreeGrower:
 
     """
 
-    executive_departments_set: set[Dept] = field(
-        default=DEPTS_SET
-    )
+    executive_departments_set: set[Dept] = field(default=DEPTS_SET)
     cr_departments: "CRMapType" = field(default=CR_DEPARTMENTS)
     tree: IntervalTree = field(factory=IntervalTree)
 
@@ -164,7 +178,7 @@ class CRTreeGrower:
     def grow_cr_tree(
         self,
         cr_departments: "CRMapType" | None = None,
-        dates: Tuple[time_utils.YearMonthDay, time_utils.YearMonthDay] | None = None,
+        dates: Tuple["YearMonthDay", "YearMonthDay"] | None = None,
     ) -> IntervalTree:
         """
         Grows an interval tree based on the provided CR intervals and affected
@@ -195,9 +209,9 @@ class CRTreeGrower:
             if overlap := _get_overlap_interval(
                 start=start, end=end, date_range=date_range
             ):
-                generated_departments: set[
-                    Dept
-                ] = self._filter_cr_department_sets(departments=departments)
+                generated_departments: set[Dept] = self._filter_cr_department_sets(
+                    departments=departments
+                )
                 data: "AssembledBudgetIntervalType" = (
                     generated_departments,
                     STATUS_MAP["CR_STATUS"],

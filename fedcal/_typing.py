@@ -5,15 +5,10 @@ from typing import TYPE_CHECKING, Dict, Generator, Mapping, Tuple, Union
 if TYPE_CHECKING:
     from datetime import date, datetime
 
+    import numpy as np
     import pandas as pd
-    from numpy import datetime64, int64, ndarray
 
-    from .constants import (
-        Dept,
-        AppropsStatus,
-        OpsStatus,
-        ShutdownFlag,
-    )
+    from .constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
     from .depts import FedDepartment
     from .feddatestamp import FedDateStamp
     from .time_utils import YearMonthDay
@@ -21,8 +16,8 @@ if TYPE_CHECKING:
 FedDateStampConvertibleTypes = Union[
     "pd.Timestamp",
     int,
-    "int64",
-    "datetime64",
+    "np.int64",
+    "np.datetime64",
     float,
     "YearMonthDay",
     Tuple[int, int, int],
@@ -35,7 +30,7 @@ FedDateStampConvertibleTypes = Union[
 FedDateIndexConvertibleTypes = Union[
     Tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes],
     Tuple["FedDateStamp", "FedDateStamp"],
-    "ndarray",
+    "np.ndarray",
     "pd.Series",
     "pd.DatetimeIndex",
     "pd.Index",

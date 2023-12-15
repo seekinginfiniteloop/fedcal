@@ -1,19 +1,22 @@
 from __future__ import annotations
 
 from enum import Enum, unique
+from types import ModuleType
 from typing import TYPE_CHECKING
 
 import pandas as pd
 from attrs import define, field
 
-import ._date_attributes
-import .time_utils
+from ._load import LoadOrchestrator
+
+_importer = LoadOrchestrator()
 
 if TYPE_CHECKING:
-    from pandas import DatetimeIndex
-
     from .feddateindex import FedDateIndex
     from .feddatestamp import FedDateStamp
+
+_importer.register(module_name="_date_attributes", package_name=".")
+_importer.register(module_name="time_utils", package_name=".")
 
 
 @define(order=True)
@@ -46,7 +49,7 @@ class MilitaryPayDay:
 
     """
 
-    date: "FedDateStamp" = field(converter=time_utils.to_datestamp)
+    date: "FedDateStamp" = field(converter=_importer.time_utils.to_datestamp)
 
     def is_military_payday(
         self, date: pd.Timestamp | "FedDateStamp" | None = None
@@ -63,6 +66,7 @@ class MilitaryPayDay:
         Boolean indicating whether the date is a military payday.
 
         """
+        _date_attributes: ModuleType = _importer._date_attributes
         if date is None:
             date: "FedDateStamp" = self.date
 
@@ -74,7 +78,7 @@ class MilitaryPayDay:
             next_payday: pd.Timestamp = self._calculate_next_payday(
                 date=date, next_month=True
             )
-            payday_range: "DatetimeIndex" = self._generate_payday_range(
+            payday_range: "pd.DatetimeIndex" = self._generate_payday_range(
                 payday=next_payday
             )
         elif date.day < 15:
@@ -114,11 +118,13 @@ class MilitaryPayDay:
             month: int = date.month
             day: int = 15
 
-        return time_utils.to_datestamp(pd.Timestamp(year=year, month=month, day=day))
+        return _importer.time_utils.to_datestamp(
+            pd.Timestamp(year=year, month=month, day=day)
+        )
 
     def _generate_payday_range(
         self, payday: pd.Timestamp | "FedDateStamp"
-    ) -> "DatetimeIndex":
+    ) -> "pd.DatetimeIndex":
         """
         Generates a range of dates around a payday for further processing.
 
@@ -136,7 +142,7 @@ class MilitaryPayDay:
         )
 
     def _is_next_bday_in_range(
-        self, date: pd.Timestamp | "FedDateStamp", payday_range: "DatetimeIndex"
+        self, date: pd.Timestamp | "FedDateStamp", payday_range: "pd.DatetimeIndex"
     ) -> bool:
         """
         Checks if the next business day falls within the provided range of dates.
@@ -151,8 +157,13 @@ class MilitaryPayDay:
         Boolean indicating if the next business day is in the range.
 
         """
+        _date_attributes: ModuleType = _importer._date_attributes
         return next(
-            (day == date for day in payday_range[::-1] if _date_attributes.FedBusDay.is_bday(date=day)),
+            (
+                day == date
+                for day in payday_range[::-1]
+                if _date_attributes.FedBusDay.is_bday(date=day)
+            ),
             False,
         )
 
@@ -209,7 +220,7 @@ class ProbableMilitaryPassDay:
 
     """
 
-    date: "FedDateStamp" = field(converter=time_utils.to_datestamp)
+    date: "FedDateStamp" = field(converter=_importer.time_utils.to_datestamp)
 
     def is_likely_passday(self, date: "FedDateStamp" | None = None) -> bool:
         """
@@ -226,7 +237,7 @@ class ProbableMilitaryPassDay:
         """
         if date is None:
             date = self.date
-        elif not _date_attributes.FedBusDay.is_bday(date=date):
+        elif not _importer._date_attributes.FedBusDay.is_bday(date=date):
             return False
 
         holidays_in_offset: list["FedDateStamp"] | None = self._get_holidays_in_range(
@@ -252,11 +263,14 @@ class ProbableMilitaryPassDay:
         -------
         List of holidays within the specified range.
         """
-        offset_range: "DatetimeIndex" = pd.date_range(
+        _date_attributes: ModuleType = _importer._date_attributes
+        offset_range: "pd.DatetimeIndex" = pd.date_range(
             start=date - pd.Timedelta(days=3), end=date + pd.Timedelta(days=3)
         )
         if holidays_in_offset := [
-            day for day in offset_range if _date_attributes.FedHolidays.is_holiday(date=day)
+            day
+            for day in offset_range
+            if _date_attributes.FedHolidays.is_holiday(date=day)
         ]:
             return holidays_in_offset
 
@@ -343,10 +357,12 @@ class MilPayPassRange:
     """
 
     start: "FedDateStamp" = field(
-        default=pd.Timestamp(year=1970, month=1, day=1), converter=time_utils.to_datestamp
+        default=pd.Timestamp(year=1970, month=1, day=1),
+        converter=_importer.time_utils.to_datestamp,
     )
     end: "FedDateStamp" = field(
-        default=pd.Timestamp(year=2040, month=9, day=30), converter=time_utils.to_datestamp
+        default=pd.Timestamp(year=2040, month=9, day=30),
+        converter=_importer.time_utils.to_datestamp,
     )
     milday: MilDay = field(default=MilDay.PAY_AND_PASS)
 
@@ -355,7 +371,9 @@ class MilPayPassRange:
         Finishes initializing the instance, generating daterange and
         attributes paydays and passdays (see above.)
         """
-        self.daterange: "FedDateIndex" = time_utils.to_feddateindex((self.start, self.end))
+        self.daterange: "FedDateIndex" = _importer.time_utils.to_feddateindex(
+            (self.start, self.end)
+        )
         self.paydays, self.passdays = self.get_mil_dates()
 
     def get_mil_dates(

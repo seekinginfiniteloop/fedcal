@@ -5,12 +5,16 @@ from typing import TYPE_CHECKING
 import pandas as pd
 from attrs import define, field
 
-import .constants
-import .time_utils
+from ._load import LoadOrchestrator
+
+_importer = LoadOrchestrator()
 
 if TYPE_CHECKING:
     from .feddateindex import FedDateIndex
     from .feddatestamp import FedDateStamp
+
+_importer.register(module_name="constants", package_name=".")
+_importer.register(module_name="time_utils", package_name=".")
 
 
 @define(order=True)
@@ -47,10 +51,12 @@ class FedPayDay:
     """
 
     reference_date: pd.Timestamp | "FedDateStamp" = field(
-        default=constants.FEDPAYDAY_REFERENCE_DATE, converter=time_utils.to_datestamp
+        default=_importer.constants.FEDPAYDAY_REFERENCE_DATE,
+        converter=_importer.time_utils.to_datestamp,
     )
     end_date: pd.Timestamp | "FedDateStamp" = field(
-        default=pd.Timestamp(year=2040, month=9, day=30), converter=time_utils.to_datestamp
+        default=pd.Timestamp(year=2040, month=9, day=30),
+        converter=_importer.time_utils.to_datestamp,
     )
 
     def __attrs_post_init__(self) -> None:

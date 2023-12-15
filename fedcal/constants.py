@@ -5,7 +5,7 @@ from enum import Enum, unique
 from typing import TYPE_CHECKING
 
 import pandas as pd
-from bidict import bidict
+from bidict import frozenbidict
 
 if TYPE_CHECKING:
     from ._typing import (
@@ -319,13 +319,13 @@ READABLE_STATUSES: Simplified human-readable statuses for the default
 FedDateIndex behavior of outputing human-readable status.
 """
 
-READABLE_STATUS_MAP: bidict["StatusTupleType", str] = bidict(
-    (value for value in STATUS_MAP.values()), (item for item in READABLE_STATUSES)
+READABLE_STATUS_MAP: frozenbidict["StatusTupleType", str] = frozenbidict(
+    zip(STATUS_MAP.values(), iter(READABLE_STATUSES))
 )
 
 """
-READABLE_STATUS_MAP: A bidict mapping human-readable statuses to their enum
-status tuples (AppropsStatus, OpsStatus). We use this for
+READABLE_STATUS_MAP: An immutable bidict mapping human-readable statuses to
+their enum status tuples (AppropsStatus, OpsStatus). We use this for
 FedDepartments' .status property and for converting FedDateIndex
 human-readable statuses to more detailed output for power users.
 """
