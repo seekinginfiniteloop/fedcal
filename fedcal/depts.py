@@ -32,12 +32,13 @@ from typing import TYPE_CHECKING, Tuple
 
 from attrs import field, frozen, astuple
 
+from fedcal.constants import READABLE_STATUS_MAP
+
 if TYPE_CHECKING:
     from .constants import (
         Dept,
         AppropsStatus,
         OpsStatus,
-        READABLE_STATUS_MAP,
     )
     from ._typing import StatusDictType, StatusTupleType
 
@@ -72,8 +73,11 @@ class FedDepartment:
     operational_status: "OpsStatus" = field()
 
     def __str__(self) -> str:
-        """We override attrs default to provide a meaningful string representation"""
-        return f"{self.name.abbrev}: funding: {self.funding_status}, operational: {self.operational_status}"
+        """We override attrs default to provide a meaningful string
+        representation"""
+        return f"""{self.name.abbrev}:
+            funding: {self.funding_status},
+            operational: {self.operational_status}"""
 
     def attributes_to_tuple(
         self,

@@ -315,7 +315,8 @@ STATUS_MAP: "StatusMapType" = {
 }
 
 """
-STATUS_MAP: We map possible AppropsStatus, OpsStatus combinations to string descriptions so we can simplify manipulations _dept_status.py.
+STATUS_MAP: We map possible AppropsStatus, OpsStatus combinations to string
+descriptions so we can simplify manipulations _dept_status.py.
 """
 READABLE_STATUSES: list[str] = [
     "open, full year approps",

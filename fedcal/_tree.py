@@ -160,7 +160,7 @@ class CRTreeGrower:
 
     Attributes
     ----------
-    executive_departments_set: A set of Dept enum objects.
+    depts_set_set: A set of Dept enum objects.
     cr_departments : Dictionary mapping intervals (POSIX timestamps) for
         continuing resolutions (FY99-Present) to affected departments.
     tree : The interval tree to grow.
@@ -180,7 +180,7 @@ class CRTreeGrower:
 
     """
 
-    executive_departments_set: set[Dept] = field(default=DEPTS_SET)
+    depts_set_set: set[Dept] = field(default=DEPTS_SET)
     cr_departments: "CRMapType" = field(default=CR_DEPARTMENTS)
     tree: IntervalTree = field(factory=IntervalTree)
 
@@ -241,9 +241,7 @@ class CRTreeGrower:
         )
 
         for (start, end), departments in cr_departments.items():
-            if overlap := _get_overlap_interval(
-                start=start, end=end, date_range=date_range
-            ):
+            if _get_overlap_interval(start=start, end=end, date_range=date_range):
                 generated_departments: set[Dept] = self._filter_cr_department_sets(
                     departments=departments
                 )
@@ -331,9 +329,7 @@ class AppropriationsGapsTreeGrower:
         )
 
         for (start, end), (departments, shutdown) in appropriations_gaps.items():
-            if overlap := _get_overlap_interval(
-                start=start, end=end, date_range=date_range
-            ):
+            if _get_overlap_interval(start=start, end=end, date_range=date_range):
                 if shutdown == ShutdownFlag.SHUTDOWN:
                     data: "AssembledBudgetIntervalType" = (
                         departments,

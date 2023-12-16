@@ -180,6 +180,7 @@ class FedIndex(
         _generate_status_cache : Generates the status cache.
         _extract_status_data : Extracts status data based on filters.
         _check_dept_status : Checks department status against criteria.
+        _set_holidays : Sets the _holidays attribute once needed.
 
     TODO
     ----
@@ -211,26 +212,79 @@ class FedIndex(
         self._holidays = None
 
     def __getattr__(self, name: str) -> Any:
+        """
+        We delegate attribute access to `FedIndex`'s datetimeindex
+        attribute, which helps with the magic of making `FedIndex`
+        objects behave well with pandas.
+
+        Parameters
+        ----------
+        name
+            name of the attribute being fetched.
+
+        Returns
+        -------
+            attribute if found, either in `FedIndex`'s dict or
+            in pd.DatetimeIndex.
+
+        Raises
+        ------
+        AttributeError
+            if attribute can't be found
+        """
         if name in self.__class__.__dict__:
             return self.__class__.__dict__[name].__get__(self, self.__class__)
 
-        if hasattr(self.pdtimestamp, name):
-            return getattr(self.pdtimestamp, name)
-        else:
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
+        if hasattr(self.datetimeindex, name):
+            return getattr(self.datetimeindex, name)
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
 
     def __getattribute__(self, name: str) -> Any:
+        """
+        We manually set __getattribute__ to ensure `FedIndex`'s
+        attribute retrievals are handled properly and not overridden
+        by our metaclass or attribute delegation to `pd.DatetimeIndex`.
+
+        Parameters
+        ----------
+        name
+            name of attribute to get
+
+        Returns
+        -------
+            attribute if found
+        """
         return object.__getattribute__(self, name)
 
     # Methods for caching and other internal use to the class
     @staticmethod
     def _convert_input(time_input: FedIndexConvertibleTypes) -> pd.DatetimeIndex:
+        """
+        Routes input to converter methods in time_utils module for
+        conversion and normalization.
+
+        Parameters
+        ----------
+        time_input
+            any FedIndexConvertibleTypes date range input
+
+        Returns
+        -------
+            a pd.DatetimeIndex object for self.datetimeindex
+        """
         return time_utils.to_datetimeindex(time_input)
 
     @staticmethod
     def _set_default_index() -> pd.DatetimeIndex:
+        """
+        Sets the default index range if no date input is provided
+
+        Returns
+        -------
+            `pd.DatetimeIndex` with default range of FY99 to FY44.
+        """
         default_range: tuple["YearMonthDay", "YearMonthDay"] = (
             time_utils.YearMonthDay(year=1998, month=10, day=1),
             time_utils.YearMonthDay(year=2045, month=9, day=30),
@@ -416,7 +470,7 @@ class FedIndex(
             self._status_cache or self._status_gen
         )
 
-        statuses: set[str] | KeysView[str] = statuses or constants.keys()
+        statuses: set[str] | KeysView[str] = statuses or constants.STATUS_MAP.keys()
         department_filter = department_filter or constants.DEPTS_SET
 
         data_check_statuses: set[str] = {"DEFAULT_STATUS", "CR_STATUS"}
@@ -733,7 +787,7 @@ class FedIndex(
             human_readable_status: str = row["Status"]
 
             col_name: str = f"{department_short}-{human_readable_status}"
-            bool_df.at[index, col_name] = True
+            bool_df.at[index, date, col_name] = True
 
         return bool_df.reset_index(drop=True)
 
@@ -819,6 +873,9 @@ class FedIndex(
         return fqs.get_fiscal_quarters(datetimeindex=self.datetimeindex)
 
     def _set_holidays(self) -> None:
+        """
+        Sets the self._holidays attribute for FedHolidays retrievals.
+        """
         self._holidays = self._holidays or _date_attributes.FedHolidays()
 
     @property
@@ -925,7 +982,8 @@ class FedIndex(
         """
         Determine civilian payday dates within the index's date range.
 
-        This property calculates the dates that are civilian paydays based on the index's date range.
+        This property calculates the dates that are civilian paydays based on
+        the index's date range.
 
         Returns
         -------
@@ -992,7 +1050,7 @@ class FedIndex(
 
         # Adjust for DHS
         dhs_start_date: pd.Timestamp | None = time_utils.to_timestamp(
-            date=constants.DHS_FORMED
+            constants.DHS_FORMED
         )
         df.loc[df.index < dhs_start_date, "DHS"] = False
 

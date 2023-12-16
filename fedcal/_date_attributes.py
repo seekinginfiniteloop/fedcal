@@ -144,7 +144,8 @@ class FedHolidays:
 
     def __attrs_post_init__(self) -> None:
         """
-        If you decide to roll the dice and guess on Presidential proclamations, then we add these to self.holidays
+        If you decide to roll the dice and guess on Presidential
+        proclamations, then we add these to self.holidays
         """
         self.holidays = pd.concat(
             [

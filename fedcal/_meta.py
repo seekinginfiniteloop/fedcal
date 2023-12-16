@@ -40,7 +40,7 @@ class MagicDelegator(type):
     """
 
     def __new__(
-        cls,
+        mcs,
         name: str,
         bases: tuple[type, ...],
         dct: dict[str, Any],

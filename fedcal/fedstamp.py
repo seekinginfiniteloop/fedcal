@@ -20,7 +20,7 @@ integrating fedcal data into pandas analyses.
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -43,162 +43,173 @@ class FedStamp(
 ):
 
     """
-    A child class of pandas pd.Timestamp, extending functionality for
-    fedcal. Supports all functionalities of pandas' pd.Timestamp
-    objects, while adding specific features for the fedcal.
+        `FedStamp` extends `pd.Timestamp` for fedcal functionality.
+        Supports all functionalities of pandas' pd.Timestamp
+        objects, while adding specific features for the fedcal.
 
-    Attributes
-    ----------
-    pdtimestamp : the `pd.Timestamp` object that forms the backbone of the
-    instance. If a pdtimestamp is not provided at instantiations, the instance
-    will default to the current date (datetime.now()). Note: we use pdtimestamp
-    as an attribute name to avoid overwriting Timestamp.timestamp().
+        Attributes
+        ----------
+        pdtimestamp : the `pd.Timestamp` object that forms the backbone of the
+        instance. If a pdtimestamp is not provided at instantiations, the
+        instance will default to the current date (datetime.now()). Note: we
+        use pdtimestamp as an attribute name to avoid overwriting Timestamp.
+        timestamp().
 
-    _status_cache : A *private* lazy attribute that caches StatusDictType
-    dictionary (Dict[Dept, FedDepartment]) from _dept_status.
-    DepartmentState for the date for supplying status-related properties.
-    Provided by _get_status_cache() and _set_status_cache() private methods.
+        _status_cache : A *private* lazy attribute that caches StatusDictType
+        dictionary (Dict[Dept, FedDepartment]) from _dept_status.
+        DepartmentState for the date for supplying status-related properties.
+        Provided by _get_status_cache() and _set_status_cache() private
+        methods.
 
-    year_month_day
-        returns the FedStamp as a YearMonthDay object.
+        _holidays: A *private* lazy attribute that caches our FedHolidays
+    instance once called.
 
-    fedtimestamp
-        Returns the POSIX timestamp normalized to midnight.
+        year_month_day
+            returns the FedStamp as a YearMonthDay object.
 
-    business_day
-        Checks if the date is a business day.
+        fedtimestamp
+            Returns the POSIX timestamp normalized to midnight.
 
-    holiday
-        Checks if the date is a federal holiday.
+        business_day
+            Checks if the date is a business day.
 
-    proclamation_holiday
-        Checks if the date was a proclaimed holiday (i.e. a one-off holiday
-        proclaimed by executive order).
+        holiday
+            Checks if the date is a federal holiday.
 
-    possible_proclamation_holiday
-        Guesses (I take no further ownership of the result) if the date is
-        likely to be a proclaimed holiday.
+        proclamation_holiday
+            Checks if the date was a proclaimed holiday (i.e. a one-off holiday
+            proclaimed by executive order).
 
-    probable_military_passday
-        Estimates if the date is likely a military pass day. Actual passdays
-        vary across commands and locations, but this should return a result
-        that's correct in the majority of cases.
+        possible_proclamation_holiday
+            Guesses (I take no further ownership of the result) if the date is
+            likely to be a proclaimed holiday.
 
-    mil_payday
-        Checks if the date is a military payday.
+        probable_military_passday
+            Estimates if the date is likely a military pass day. Actual
+            passdays vary across commands and locations, but this should
+            return a result that's correct in the majority of cases.
 
-    civ_payday
-        Checks if the date is a civilian payday.
+        mil_payday
+            Checks if the date is a military payday.
 
-    fiscal_quarter
-        Retrieves the [Federal] fiscal quarter of the timestamp.
+        civ_payday
+            Checks if the date is a civilian payday.
 
-    fy
-        Retrieves the [Federal] fiscal year of the timestamp.
+        fiscal_quarter
+            Retrieves the [Federal] fiscal quarter of the timestamp.
 
-    departments
-        Retrieves the set of executive departments active on the date, as
-        Dept enum objects.
+        fy
+            Retrieves the [Federal] fiscal year of the timestamp.
 
-    all_depts_status
-        Retrieves the status of all departments as a dictionary on the date.
+        departments
+            Retrieves the set of executive departments active on the date, as
+            Dept enum objects.
 
-    all_depts_full_approps
-        Checks if all departments are fully appropriated on the date,
-        returning bool.
+        all_depts_status
+            Retrieves the status of all departments as a dictionary on the date.
 
-    all_depts_cr
-        Checks if all departments were/are under a continuing resolution on
-        the date, returning bool.
+        all_depts_full_approps
+            Checks if all departments are fully appropriated on the date,
+            returning bool.
 
-    all_depts_cr_or_full_approps
-        Checks if all departments were/are either fully appropriated or under
-        a continuing resolution on the date, returning bool.
+        all_depts_cr
+            Checks if all departments were/are under a continuing resolution on
+            the date, returning bool.
 
-    all_unfunded
-        Checks if all departments were/are unfunded on the date (either
-        shutdown or otherwise gapped), returning bool.
+        all_depts_cr_or_full_approps
+            Checks if all departments were/are either fully appropriated or
+            under a continuing resolution on the date, returning bool.
 
-    cr
-        Checks if the date was during a continuing resolution (can include
-        near-future dates since we know CR expiration dates at the time they
-        are passed), returning bool.
+        all_unfunded
+            Checks if all departments were/are unfunded on the date (either
+            shutdown or otherwise gapped), returning bool.
 
-    shutdown
-        Checks if the date was/is during a shutdown, returning bool.
+        cr
+            Checks if the date was during a continuing resolution (can include
+            near-future dates since we know CR expiration dates at the time
+            they are passed), returning bool.
 
-    approps_gap
-        Checks if the date was/is during an appropriations gap, returning bool.
+        shutdown
+            Checks if the date was/is during a shutdown, returning bool.
 
-    funding_gap
-        Check if the date was/is during a funding gap (appropriations gap or
-        shutdown), returning bool.
+        approps_gap
+            Checks if the date was/is during an appropriations gap, returning
+            bool.
 
-    full_op_depts
-        Retrieves departments that were fully operational (had a full-year
-        appropriation) on the date, returning a dict.
+        funding_gap
+            Check if the date was/is during a funding gap (appropriations gap
+            or shutdown), returning bool.
 
-    full_or_cr_depts
-        Retrieves departments that were/are either fully operational or under
-        a continuing resolution on the date, returning a dict.
+        full_op_depts
+            Retrieves departments that were fully operational (had a full-year
+            appropriation) on the date, returning a dict.
 
-    cr_depts
-        Retrieves departments that were/are under a continuing resolution on
-        the date, returning a dict. Current data are from FY99 to present. As
-        discussed above for cr, these can include near future dates.
+        full_or_cr_depts
+            Retrieves departments that were/are either fully operational or
+            under a continuing resolution on the date, returning a dict.
 
-    gapped_depts
-        Retrieves departments that were/are in an appropriations gap on the
-        date but not shutdown, returning a dict. Notably, these are isolated
-        to the 1970s and early 80s.
+        cr_depts
+            Retrieves departments that were/are under a continuing resolution
+            on the date, returning a dict. Current data are from FY99 to
+            present. As discussed above for cr, these can include near future
+            dates.
 
-    shutdown_depts
-        Retrieves departments that were/are shut down on the date. Data
-        available from FY75 to present.
+        gapped_depts
+            Retrieves departments that were/are in an appropriations gap on the
+            date but not shutdown, returning a dict. Notably, these are
+            isolated to the 1970s and early 80s.
 
-    unfunded_depts
-        Retrieves departments that were/are unfunded on the date (either
-        gapped or shutdown), returning a dict.
+        shutdown_depts
+            Retrieves departments that were/are shut down on the date. Data
+            available from FY75 to present.
 
-    Methods
-    -------
-    dict_to_dept_set(status_dict)
-        Converts a StatusDictType dictionary to a set of Dept
-        enum objects.
+        unfunded_depts
+            Retrieves departments that were/are unfunded on the date (either
+            gapped or shutdown), returning a dict.
 
-    dict_to_feddept_set(status_dict)
-        Converts a StatusDictType dictionary to a set of FedDepartment
+        Methods
+        -------
+        dict_to_dept_set(status_dict)
+            Converts a StatusDictType dictionary to a set of Dept
+            enum objects.
 
-    dict_to_dept_list(status_dict)
-        Utility method that converts a status dictionary (which most of the
-        status-related property methods return) to a sorted list of
-        Dept enum objects.
+        dict_to_feddept_set(status_dict)
+            Converts a StatusDictType dictionary to a set of FedDepartment
 
-    dict_to_feddept_list(status_dict)
-        Utility method that converts a status dictionary (which most of the
-        status-related property methods return) to a sorted list of
-        FedDepartment objects.
+        dict_to_dept_list(status_dict)
+            Utility method that converts a status dictionary (which most of the
+            status-related property methods return) to a sorted list of
+            Dept enum objects.
 
-    get_departments_by_status(status_key)
-        Retrieves departments matching a specific status, primary getter for
-        status-related property methods.
+        dict_to_feddept_list(status_dict)
+            Utility method that converts a status dictionary (which most of the
+            status-related property methods return) to a sorted list of
+            FedDepartment objects.
 
-
-    Notes
-    -----
-    *Private Methods*:
-    _get_status_cache()
-        Retrieves the status cache.
-
-    _set_status_cache()
-        Sets the status cache if not already set.
+        get_departments_by_status(status_key)
+            Retrieves departments matching a specific status, primary getter
+            for status-related property methods.
 
 
-    TODO
-    ----
-    Implement custom __setattr__, __setstate_cython__, __setstate__,
-    __delattr__, __init_subclass__, __hash__, __getstate__, __dir__,
-    __reduce__, __reduce_ex__, reduce_cython__, (__slots__?)
+        Notes
+        -----
+        *Private Methods*:
+        _get_status_cache()
+            Retrieves the status cache.
+
+        _set_status_cache()
+            Sets the status cache if not already set.
+
+        _set_holidays()
+            sets the _holidays attribute for the holiday, proclamation_holiday
+            and possible_proclamation_holiday properties.
+
+
+        TODO
+        ----
+        Implement custom __setattr__, __setstate_cython__, __setstate__,
+        __delattr__, __init_subclass__, __hash__, __getstate__, __dir__,
+        __reduce__, __reduce_ex__, reduce_cython__, (__slots__?)
     """
 
     def __init__(self, pdtimestamp: pd.Timestamp | None = None) -> None:
@@ -243,12 +254,24 @@ class FedStamp(
 
         if hasattr(self.pdtimestamp, name):
             return getattr(self.pdtimestamp, name)
-        else:
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{name}'"
+        )
 
     def __getattribute__(self, name: str) -> Any:
+        """
+        We set __getattribute__ manually to ensure it overrides
+        any delegation to pd.Timestamp from our metaclass.
+
+        Parameters
+        ----------
+        name
+            name of attribute
+
+        Returns
+        -------
+            attribute if found.
+        """
         return object.__getattribute__(self, name)
 
     # static utility methods
@@ -413,12 +436,7 @@ class FedStamp(
         Integer POSIX timestamp in seconds.
 
         """
-        date_obj: date = date(
-            year=self.pdtimestamp.year,
-            month=self.pdtimestamp.month,
-            day=self.pdtimestamp.day,
-        )
-        return time_utils._pydate_to_posix(pydate=date_obj)
+        return time_utils.pdtimestamp_to_posix_seconds(timestamp=self.pdtimestamp)
 
     # business day property
     @property
@@ -592,7 +610,7 @@ class FedStamp(
         A set of Dept enums.
 
         """
-        return _dept_status.DepartmentState.get_executive_departments_set_at_time(
+        return _dept_status.DepartmentState.get_depts_set_set_at_time(
             date=self.pdtimestamp
         )
 

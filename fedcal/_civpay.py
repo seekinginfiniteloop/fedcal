@@ -74,6 +74,8 @@ class FedPayDay:
         converter=time_utils.to_timestamp,
     )
 
+    paydays: pd.DatetimeIndex = field(init=False)
+
     def __attrs_post_init__(self) -> None:
         self.paydays: pd.DatetimeIndex = self._generate_paydays()
 
@@ -96,8 +98,7 @@ class FedPayDay:
         end_date: pd.Timestamp = end_date or self.end_date
         if end_date > self.reference_date:
             return pd.date_range(start=self.reference_date, end=end_date, freq="2W-FRI")
-        else:
-            raise ValueError("fedcal only supports dates after 1970-1-1.")
+        raise ValueError("fedcal only supports dates after 1970-1-1.")
 
     def is_fed_payday(self, date: pd.Timestamp | None = None) -> bool:
         """
@@ -115,7 +116,7 @@ class FedPayDay:
         if date is None:
             date = self.end_date
         if (not self.paydays) or (self.paydays.ceil(freq="D") < date):
-            self.paydays = self._generate_paydays(date=date)
+            self.paydays = self._generate_paydays(end_date=date)
         return date in self.paydays
 
     def get_paydays_as_index(
@@ -137,7 +138,7 @@ class FedPayDay:
 
         """
         if end and ((self.paydays.ceil(freq="D") < end) or (not self.paydays)):
-            self.paydays = self._generate_paydays(date=end)
+            self.paydays = self._generate_paydays(end_date=end)
         return self.paydays[
             (self.paydays >= start or self.reference_date)
             & (self.paydays <= end or self.end_date)

@@ -35,8 +35,7 @@ from enum import Enum, unique
 import pandas as pd
 from attrs import define, field
 
-from fedcal import _date_attributes
-from fedcal import time_utils
+from fedcal import _date_attributes, time_utils
 
 
 @define(order=True)
@@ -255,10 +254,9 @@ class ProbableMilitaryPassDay:
         )
         if holidays_in_offset is None:
             return False
-        elif self._likely_passday(date=date, holidays_in_offset=holidays_in_offset):
-            return True
-        else:
-            return False
+        return bool(
+            self._likely_passday(date=date, holidays_in_offset=holidays_in_offset)
+        )
 
     @staticmethod
     def _get_holidays_in_range(date: pd.Timestamp) -> list[pd.Timestamp] | None:
@@ -277,10 +275,7 @@ class ProbableMilitaryPassDay:
         offset_range: pd.DatetimeIndex = pd.date_range(
             start=date - pd.Timedelta(days=3), end=date + pd.Timedelta(days=3)
         )
-        if holidays_in_offset := [
-            day for day in offset_range if _holidays.is_holiday(date=day)
-        ]:
-            return holidays_in_offset
+        return [day for day in offset_range if _holidays.is_holiday(date=day)]
 
     @staticmethod
     def _likely_passday(
@@ -372,7 +367,13 @@ class MilPayPassRange:
         default=pd.Timestamp(year=2040, month=9, day=30),
         converter=time_utils.to_timestamp,
     )
+
     milday: MilDay = field(default=MilDay.PAY_AND_PASS)
+
+    # attributes for later initiation
+    daterange: pd.DatetimeIndex = field(default=None, init=False)
+    paydays: list[pd.Timestamp | None] = field(default=None, init=False)
+    passdays: list[pd.Timestamp | None] = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
@@ -404,12 +405,14 @@ class MilPayPassRange:
             if self.milday in [
                 MilDay.PAYDAY,
                 MilDay.PAY_AND_PASS,
-            ] and MilitaryPayDay.is_military_payday(date=day):
+            ] and MilitaryPayDay(
+                date=day
+            ).is_military_payday(date=day):
                 paydays.append(day)
             if self.milday in [
                 MilDay.LIKELY_PASS,
                 MilDay.PAY_AND_PASS,
-            ] and ProbableMilitaryPassDay.is_likely_passday(date=day):
+            ] and ProbableMilitaryPassDay(date=day).is_likely_passday(date=day):
                 passdays.append(day)
 
         return paydays, passdays

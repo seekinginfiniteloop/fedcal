@@ -17,7 +17,6 @@ time conversions in fedcal. We expose it publicly because they're probably
 generally useful for other things.
 
 It includes:
-- `_pydate_to_posix` a private converter for datetime conversion to POSIX integer seconds.
 - `get_today_in_posix` and `pdtimestamp_to_posix_seconds` for
 handling POSIX integer second retrieval for today and from pandas
 Timestamp objects respectively.
@@ -55,7 +54,7 @@ input to U.S. Eastern, as with `to_timestamp`.
 from __future__ import annotations
 
 import time
-from datetime import date, datetime
+import datetime
 from functools import singledispatch, wraps
 from typing import TYPE_CHECKING, Any
 
@@ -68,23 +67,6 @@ if TYPE_CHECKING:
     from ._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
 
 
-def _pydate_to_posix(pydate: date) -> int:
-    """
-    A simple utility function to convert Python datetime.date objects to POSIX
-    timestamps in integer form. This keeps our numbers at reasonable precision.
-
-    Parameters
-    ----------
-    pydate : A Python date object
-
-    Returns
-    -------
-    A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
-
-    """
-    return int(time.mktime(pydate))
-
-
 def get_today_in_posix() -> int:
     """
     Returns the current date in POSIX format.
@@ -95,7 +77,7 @@ def get_today_in_posix() -> int:
         The current date in POSIX format.
 
     """
-    today: datetime = datetime.now()
+    today: datetime.datetime = datetime.datetime.now()
     return int(time.mktime(today.timetuple()))
 
 
@@ -187,7 +169,7 @@ class YearMonthDay:
         A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
 
         """
-        pydate: date = self.to_pydate()
+        pydate: datetime.date = self.to_pydate()
         return _pydate_to_posix(pydate=pydate)
 
     def to_pdtimestamp(self) -> pd.Timestamp:
@@ -201,17 +183,17 @@ class YearMonthDay:
         """
         return pd.Timestamp(year=self.year, month=self.month, day=self.day)
 
-    def to_pydate(self) -> date:
+    def to_pydate(self) -> datetime.date:
         """
-        Converts YearMonthDay to Python date.
+        Converts YearMonthDay to Python datetime.date.
 
         Returns
         -------
-        A Python date object.
+        A Python datetime.date object.
 
         """
 
-        return date(year=self.year, month=self.month, day=self.day)
+        return datetime.date(year=self.year, month=self.month, day=self.day)
 
     @property
     def timetuple(self) -> tuple["YearMonthDay"]:
@@ -255,7 +237,8 @@ def to_timestamp(date_input: "FedStampConvertibleTypes") -> pd.Timestamp | None:
 
     """
     raise TypeError(
-        f"Unsupported date format. You provided type: {type(date_input)}. Supported types are FedStampConvertibleTypes"
+        f"""Unsupported date format. You provided type: {type(date_input)}.
+        Supported types are FedStampConvertibleTypes"""
     )
 
 
@@ -272,7 +255,7 @@ def _posix_to_timestamp(date_input: int | np.int64 | float) -> pd.Timestamp:
     """
     Conversion for POSIX timestamps; we assume isolated integers or floats are POSIX time.
     """
-    return _stamp_date(date.fromtimestamp(date_input))
+    return _stamp_date(datetime.date.fromtimestamp(date_input))
 
 
 @to_timestamp.register(cls=str)
@@ -291,11 +274,11 @@ def _str_to_timestamp(date_input: str) -> pd.Timestamp:
 
     """
     try:
-        return _stamp_date(date.fromisoformat(date_input))
+        return _stamp_date(datetime.date.fromisoformat(date_input))
     except ValueError as e:
         for fmt in ("%m/%d/%Y", "%m-%d-%Y", "%d/%m/%Y", "%d-%m-%Y"):
             try:
-                parsed_date = datetime.strptime(date_input, fmt).date()
+                parsed_date = datetime.datetime.strptime(date_input, fmt).date()
                 return _stamp_date(parsed_date)
             except ValueError:
                 continue
@@ -306,10 +289,12 @@ def _str_to_timestamp(date_input: str) -> pd.Timestamp:
         ) from e
 
 
-@to_timestamp.register(cls=date)
-@to_timestamp.register(cls=datetime)
+@to_timestamp.register(cls=datetime.date)
+@to_timestamp.register(cls=datetime.datetime)
 @to_timestamp.register(cls=np.datetime64)
-def _date_to_timestamp(date_input: date | datetime | np.datetime64) -> pd.Timestamp:
+def _date_to_timestamp(
+    date_input: datetime.date | datetime.datetime | np.datetime64,
+) -> pd.Timestamp:
     """Conversions for Python date and datetime objects."""
     return _stamp_date(date_input)
 
@@ -324,17 +309,19 @@ def _yearmonthday_to_timestamp(date_input: YearMonthDay) -> pd.Timestamp:
 def _timetuple_to_timestamp(date_input: tuple) -> pd.Timestamp:
     if len(date_input) != 3:
         raise ValueError(
-            "Timetuple input requires a tuple with four-digit year, month, day as integers or integer-convertible strings."
+            """Timetuple input requires a tuple with four-digit year, month,
+            day as integers or integer-convertible strings."""
         )
 
     try:
         year, month, day = (int(item) for item in date_input)
     except ValueError as e:
         raise ValueError(
-            "Year, month, and day must be integers or strings that can be converted to integers."
+            """Year, month, and day must be integers or strings that can be
+            converted to integers."""
         ) from e
 
-    if not (1970 <= year <= 9999):
+    if not 1970 <= year <= 9999:
         raise ValueError("Year must be a four-digit number, and not before 1970.")
 
     return _stamp_date(YearMonthDay(year=year, month=month, day=day).to_pdtimestamp())
@@ -366,22 +353,21 @@ def check_timestamp(
         if isinstance(arg, pd.Timestamp):
             return func(arg)
 
-        elif arg is None:
+        if arg is None:
             raise ValueError(
                 f"""provided argument, {arg} is None; we're not mind readers
                 here. Please provide a pd.Timestamp for _stamp_date."""
             )
-        else:
-            try:
-                return func(pd.Timestamp(ts_input=arg))
-            except TypeError as e:
-                raise TypeError(
-                    f"""input {arg} could not be converted to a pd.Timestamp.
+        try:
+            return func(pd.Timestamp(ts_input=arg))
+        except TypeError as e:
+            raise TypeError(
+                f"""input {arg} could not be converted to a pd.Timestamp.
                     Our _stamp_date function needs pandas Timestamps or a
                     pd.Timestamp convertible date-like object (e.g. Python
                     date)
                     """
-                ) from e
+            ) from e
 
     return wrapper
 
@@ -405,8 +391,7 @@ def _stamp_date(timestamp: pd.Timestamp = None) -> pd.Timestamp:
         raise ValueError
     if timestamp.tzinfo:
         return timestamp.tz_convert(tz="America/New_York")
-    else:
-        return timestamp
+    return timestamp
 
 
 def wrap_tuple(
@@ -562,5 +547,4 @@ def _normalize_datetimeindex(datetimeindex: pd.DatetimeIndex) -> pd.DatetimeInde
     """
     if datetimeindex.tz:
         return datetimeindex.tz_convert(tz="America/New_York")
-    else:
-        return datetimeindex
+    return datetimeindex

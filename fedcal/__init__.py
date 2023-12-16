@@ -14,7 +14,8 @@
 """
 Welcome to fedcal!
 
-fedcal's __init__.py. Nothing extraordinary here. We import and name the primary API modules, `FedIndex` and `FedStamp` and their helper functions,
+fedcal's __init__.py. Nothing extraordinary here. We import and name the
+primary API modules, `FedIndex` and `FedStamp` and their helper functions,
 `to_fedstamp` and `to_fedindex`. This makes them easy to import and use, like:
 
 ```python
@@ -23,7 +24,8 @@ dates = ((1999,10,1), (2040,9,30))
 index = to_fedindex(dates)
 ```
 
-We also import the `FedDepartment` class and the `Dept` enum, which are used to create a `FedDepartment` object. Which may be useful depending on what
+We also import the `FedDepartment` class and the `Dept` enum, which are used
+to create a `FedDepartment` object. Which may be useful depending on what
 kind of analysis you are doing.
 """
 

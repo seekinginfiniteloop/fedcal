@@ -69,7 +69,7 @@ class DepartmentStatus:
     status_map : StatusMapType
         Maps status keys to corresponding tuples of funding and operational
         statuses, from constants.py STATUS_MAP.
-    _status_pool : StatusPoolType
+    status_pool : StatusPoolType
         *class attribute*: A pool of FedDepartment instances for reuse,
         ensuring only one instance per status combination.
 
@@ -85,10 +85,10 @@ class DepartmentStatus:
     """
 
     status_map: "StatusMapType" = field(default=constants.STATUS_MAP)
-    _status_pool: "StatusPoolType" | None = None
+    status_pool: "StatusPoolType" | None = None
 
     def __attrs_post_init__(self) -> None:
-        self._status_pool: StatusPoolType = self.get_status_pool()
+        self.status_pool: StatusPoolType = self.get_status_pool()
 
     @classmethod
     def get_status_pool(cls) -> StatusPoolType:
@@ -102,9 +102,9 @@ class DepartmentStatus:
         status_pool : The singleton status pool containing FedDepartment
         instances for each status combination.
         """
-        if cls._status_pool is None:
-            cls._status_pool = cls._initialize_status_pool()
-        return cls._status_pool
+        if cls.status_pool is None:
+            cls.status_pool = cls._initialize_status_pool()
+        return cls.status_pool
 
     @classmethod
     def _initialize_status_pool(cls) -> StatusPoolType:
@@ -112,7 +112,7 @@ class DepartmentStatus:
         Initializes the status pool class attribute with FedDepartment
         instances.
 
-        This private method populates the _status_pool class attribute with
+        This private method populates the status_pool class attribute with
         FedDepartment instances, each corresponding to a unique combination of
         executive department and status key.
 
@@ -121,7 +121,7 @@ class DepartmentStatus:
         memory usage.
         """
 
-        _status_pool: "StatusPoolType" = {
+        status_pool: "StatusPoolType" = {
             (dept, status_key): FedDepartment(
                 name=dept,
                 funding_status=cls.status_map[status_key][0],
@@ -131,7 +131,7 @@ class DepartmentStatus:
             if dept != constants.Dept.DHS
             and status_key == "CR_DATA_CUTOFF_DEFAULT_STATUS"
         }
-        return _status_pool
+        return status_pool
 
 
 @define(order=True)
@@ -184,7 +184,7 @@ class DepartmentState:
         """
         self.tree: IntervalTree = self._initialize_tree()
         statuses = DepartmentStatus()
-        self.status_pool: "StatusPoolType" = statuses._status_pool
+        self.status_pool: "StatusPoolType" = statuses.status_pool
 
         self.max_default_date: int = self._set_max_default()
 
@@ -208,17 +208,24 @@ class DepartmentState:
         return interval_tree.tree.copy()
 
     @staticmethod
-    def get_executive_departments_set_at_time(
+    def get_depts_set_set_at_time(
         date: "pd.Timestamp" | int,
     ) -> set["Dept"]:
+        """
+        Retrieves set of Depts enum objects based on time input; a helper
+        method  for handling DHS's creation.
+
+        Returns
+        -------
+            The set of Depts objects.
+        """
         if not isinstance(date, int):
             date = time_utils.pdtimestamp_to_posix_seconds(
                 timestamp=time_utils.to_timestamp(date)
             )
         if date >= constants.DHS_FORMED:
             return constants.DEPTS_SET
-        else:
-            return constants.DEPTS_SET.difference({constants.Dept.DHS})
+        return constants.DEPTS_SET.difference({constants.Dept.DHS})
 
     def _get_tree_ceiling(self) -> int:
         """
@@ -273,9 +280,9 @@ class DepartmentState:
             timestamp=time_utils.to_timestamp(date)
         )
 
-        executive_department_set: set[
-            "Dept"
-        ] = self.get_executive_departments_set_at_time(date=date)
+        executive_department_set: set["Dept"] = self.get_depts_set_set_at_time(
+            date=date
+        )
 
         status_dict: "StatusDictType" = {
             dept: self.status_pool[
@@ -341,9 +348,9 @@ class DepartmentState:
 
         for interval in self.tree[start_posix:end_posix]:
             for key_date in {interval.begin, interval.end, start_posix, end_posix}:
-                department_set: set[
-                    "Dept"
-                ] = self.get_executive_departments_set_at_time(date=key_date)
+                department_set: set["Dept"] = self.get_depts_set_set_at_time(
+                    date=key_date
+                )
                 if start_posix <= key_date <= end_posix:
                     default_status_key: str = self._determine_default_status_key(
                         posix_date=key_date
@@ -379,7 +386,6 @@ class DepartmentState:
         """
         if posix_date < constants.CR_DATA_CUTOFF_DATE:
             return "CR_DATA_CUTOFF_DEFAULT_STATUS"
-        elif posix_date > self.max_default_date:
+        if posix_date > self.max_default_date:
             return "FUTURE_STATUS"
-        else:
-            return "DEFAULT_STATUS"
+        return "DEFAULT_STATUS"
