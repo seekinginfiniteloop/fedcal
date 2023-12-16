@@ -8,12 +8,8 @@ import pandas as pd
 from bidict import frozenbidict
 
 if TYPE_CHECKING:
-    from ._typing import (
-        AppropriationsGapsMapType,
-        CRMapType,
-        StatusMapType,
-        StatusTupleType,
-    )
+    from ._typing import (AppropriationsGapsMapType, CRMapType, StatusMapType,
+                          StatusTupleType)
 
 """
 The constants data here primarily concern historical appropriations data to

@@ -1,31 +1,24 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from types import ModuleType
-from typing import TYPE_CHECKING, List, Self
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-
-from ._load import LoadOrchestrator
-
-_importer = LoadOrchestrator()
-
+from fedcal import (_civpay, _date_attributes, _dept_status, _mil, constants,
+                    time_utils)
+from fedcal._meta import MagicDelegator
 
 if TYPE_CHECKING:
-    from .depts import FedDepartment
-    from .constants import Dept
-    from .time_utils import YearMonthDay
-    from ._typing import StatusDictType, StatusTupleType
-
-_importer.register(module_name="constants", package_name=".")
-_importer.register(module_name="_date_attributes", package_name=".")
-_importer.register(module_name="_dept_status", package_name=".")
-_importer.register(module_name="_mil", package_name=".")
-_importer.register(module_name="_civpay", package_name=".")
-_importer.register(module_name="time_utils", package_name=".")
+    from fedcal._typing import (FedDateStampConvertibleTypes, StatusDictType,
+                                StatusTupleType)
+    from fedcal.constants import Dept
+    from fedcal.depts import FedDepartment
+    from fedcal.time_utils import YearMonthDay
 
 
-class FedDateStamp(pd.Timestamp):
+class FedDateStamp(
+    metaclass=MagicDelegator, delegate_to="pdtimestamp", delegate_class=pd.Timestamp
+):
 
     """
     A child class of pandas pd.Timestamp, extending functionality for
@@ -34,8 +27,10 @@ class FedDateStamp(pd.Timestamp):
 
     Attributes
     ----------
-    No attributes at initialization except those inherited from pandas'
-    pd.Timestamp.
+    pdtimestamp : the `pd.Timestamp` object that forms the backbone of the
+    instance. If a pdtimestamp is not provided at instantiations, the instance
+    will default to the current date (datetime.now()). Note: we use pdtimestamp
+    as an attribute name to avoid overwriting Timestamp.timestamp().
 
     _status_cache : A *private* lazy attribute that caches StatusDictType
     dictionary (Dict[Dept, FedDepartment]) from _dept_status.
@@ -175,18 +170,63 @@ class FedDateStamp(pd.Timestamp):
 
     _set_status_cache()
         Sets the status cache if not already set.
+
+
+    TODO
+    ----
+    Implement custom __setattr__, __setstate_cython__, __setstate__,
+    __init_subclass__, __hash__, __getstate__, __dir__, (__slots__?)
     """
 
-    def __new__(cls, ts_input=None, *args, **kwargs) -> Self:
+    def __init__(self, pdtimestamp: pd.Timestamp | None = None) -> None:
         """
-        We ensure new instances mirror pd.Timestamp behavior and pass any args/
-        kwargs. Like pd.Timestamp, if you don't pass a date, FedDateStamp will
-        initialize for today.
-        """
-        if ts_input is None:
-            ts_input: pd.Timestamp = datetime.now()
+        Initializes instance and sets pdtimestamp to today if no pdtimestamp
+        provided at instantiation.
 
-        return super().__new__(cls, ts_input, *args, **kwargs)
+        Parameters
+        ----------
+        pdtimestamp
+            pd.Timestamp object to set as the pdtimestamp. If not provided, the
+            instance will default to the current date (datetime.now()).
+            All core functionality of the class is built from this attribute.
+        """
+        if isinstance(pdtimestamp, pd.Timestamp):
+            self.pdtimestamp = pdtimestamp
+        elif pdtimestamp is not None:
+            self.pdtimestamp = time_utils.to_timestamp(pdtimestamp)
+        else:
+            pd.Timestamp(ts_input=datetime.now())
+
+        self._status_cache: "StatusDictType" | None = None
+        self._holidays = None
+
+    def __getattr__(self, name: str) -> Any:
+        """
+        Delegates attribute access to the pdtimestamp attribute. This lets
+        FedDateStamp objects use any methods/attributes of Timestamp.
+
+        Parameters
+        ----------
+        name : The name of the attribute to retrieve.
+
+        Returns
+        -------
+        The value of the attribute.
+
+        """
+
+        if name in self.__class__.__dict__:
+            return self.__class__.__dict__[name].__get__(self, self.__class__)
+
+        if hasattr(self.pdtimestamp, name):
+            return getattr(self.pdtimestamp, name)
+        else:
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute '{name}'"
+            )
+
+    def __getattribute__(self, name: str) -> Any:
+        return object.__getattribute__(self, name)
 
     # static utility methods
     @staticmethod
@@ -214,7 +254,7 @@ class FedDateStamp(pd.Timestamp):
 
         Parameters
         ----------
-        status_dic
+        status_dict
             A dictionary mapping departments to their statuses.
 
         Returns
@@ -227,7 +267,7 @@ class FedDateStamp(pd.Timestamp):
     @staticmethod
     def dict_to_dept_list(
         status_dict: "StatusDictType",
-    ) -> List["Dept"]:
+    ) -> list["Dept"]:
         """
         Convert a status dictionary to a sorted list of executive departments.
 
@@ -270,16 +310,15 @@ class FedDateStamp(pd.Timestamp):
         The current status cache, mapping departments to their statuses.
 
         """
-        _dept_status: ModuleType = _importer._dept_status
-        self.state: "StatusDictType" = _dept_status.DepartmentState()
-        return _dept_status.DepartmentState.get_state(date=self)
+        _dept_status.DepartmentState()
+        return _dept_status.DepartmentState.get_state(date=self.pdtimestamp)
 
     def _set_status_cache(self) -> None:
         """
         Set the status cache if not already set.
         """
-        self.status_cache: "StatusDictType" = (
-            self.status_cache or self._get_status_cache()
+        self._status_cache: "StatusDictType" = (
+            self._status_cache or self._get_status_cache()
         )
 
     # getter methods for retrieving from cache by department and by status
@@ -300,11 +339,10 @@ class FedDateStamp(pd.Timestamp):
         specified status key.
 
         """
-        constants: ModuleType = _importer.constants
         self._set_status_cache()
-        cache: "StatusDictType" | None = self.status_cache
+        cache: "StatusDictType" | None = self._status_cache
 
-        if self.timestamp() < constants.CR_DATA_CUTOFF_DATE and status_key in {
+        if self.pdtimestamp() < constants.CR_DATA_CUTOFF_DATE and status_key in {
             "DEFAULT_STATUS",
             "CR_STATUS",
         }:
@@ -330,11 +368,14 @@ class FedDateStamp(pd.Timestamp):
         Returns
         -------
         A YearMonthDay object representing the year, month, and day of the
-        timestamp.
+        pdtimestamp.
 
         """
-        time_utils: ModuleType = _importer.time_utils
-        return time_utils.YearMonthDay(year=self.year, month=self.month, day=self.day)
+        return time_utils.YearMonthDay(
+            year=self.pdtimestamp.year,
+            month=self.pdtimestamp.month,
+            day=self.pdtimestamp.day,
+        )
 
     @property
     def fedtimestamp(self) -> int:
@@ -349,8 +390,11 @@ class FedDateStamp(pd.Timestamp):
         Integer POSIX timestamp in seconds.
 
         """
-        time_utils: ModuleType = _importer.time_utils
-        date_obj: date = date(year=self.year, month=self.month, day=self.day)
+        date_obj: date = date(
+            year=self.pdtimestamp.year,
+            month=self.pdtimestamp.month,
+            day=self.pdtimestamp.day,
+        )
         return time_utils._pydate_to_posix(pydate=date_obj)
 
     # business day property
@@ -364,10 +408,16 @@ class FedDateStamp(pd.Timestamp):
         True if the date is a business day, False otherwise.
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        return _date_attributes.FedBusDay.is_bday(date=self)
+        busday = _date_attributes.FedBusDay()
+        return busday.is_bday(date=self.pdtimestamp)
 
     # holiday properties
+    def _set_holidays(self) -> None:
+        """
+        Sets the holidays attribute.
+        """
+        self._holidays = _date_attributes.FedHolidays()
+
     @property
     def holiday(self) -> bool:
         """
@@ -384,8 +434,9 @@ class FedDateStamp(pd.Timestamp):
         from FY74 to present (no known examples before that year).
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        return _date_attributes.FedHolidays.is_holiday(date=self)
+        holidays = self._holidays or self._set_holidays()
+
+        return holidays.is_holiday(date=self.pdtimestamp)
 
     @property
     def proclamation_holiday(self) -> bool:
@@ -396,11 +447,11 @@ class FedDateStamp(pd.Timestamp):
 
         Returns
         -------
-        True if the timestamp was a proclaimed holiday, False otherwise.
+        True if the pdtimestamp was a proclaimed holiday, False otherwise.
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        return _date_attributes.FedHolidays.was_proclaimed_holiday(date=self)
+        holidays = self._holidays or self._set_holidays()
+        return holidays.was_proclaimed_holiday(date=self.pdtimestamp)
 
     @property
     def possible_proclamation_holiday(self) -> bool:
@@ -409,7 +460,7 @@ class FedDateStamp(pd.Timestamp):
 
         Returns
         -------
-        True if the timestamp is a proclaimed holiday, False otherwise.
+        True if the pdtimestamp is a proclaimed holiday, False otherwise.
 
         Notes
         -----
@@ -423,19 +474,17 @@ class FedDateStamp(pd.Timestamp):
         proclamations, and 73% occurred after the year 2000.
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        return _date_attributes.FedHolidays.guess_christmas_eve_proclamation_holiday(
-            date=self
-        )
+        holidays = self._holidays or self._set_holidays()
+        return holidays.guess_christmas_eve_proclamation_holiday(date=self.pdtimestamp)
 
     @property
     def probable_mil_passday(self) -> bool:
         """
-        Estimates if the timestamp is likely a military pass day.
+        Estimates if the pdtimestamp is likely a military pass day.
 
         Returns
         -------
-        True if the timestamp is likely a military pass day, False otherwise.
+        True if the pdtimestamp is likely a military pass day, False otherwise.
 
         Notes
         -----
@@ -448,8 +497,8 @@ class FedDateStamp(pd.Timestamp):
         for predictable gaps in military person-power.
 
         """
-        _mil: ModuleType = _importer._mil
-        return _mil.ProbableMilitaryPassDay.is_likely_passday(date=self)
+        passday = _mil.ProbableMilitaryPassDay(date=self.pdtimestamp)
+        return passday.is_likely_passday(date=self.pdtimestamp)
 
     # payday properties
     @property
@@ -459,11 +508,11 @@ class FedDateStamp(pd.Timestamp):
 
         Returns
         -------
-        True if the timestamp is a military payday, False otherwise.
+        True if the pdtimestamp is a military payday, False otherwise.
 
         """
-        _mil: ModuleType = _importer._mil
-        return _mil.MilitaryPayDay.is_military_payday(date=self)
+        milpay = _mil.MilitaryPayDay(date=self.pdtimestamp)
+        return milpay.is_military_payday(date=self.pdtimestamp)
 
     @property
     def civ_payday(self) -> bool:
@@ -480,8 +529,8 @@ class FedDateStamp(pd.Timestamp):
         *nearly* all, but **not all**, Federal employee.
 
         """
-        _civpay: ModuleType = _importer._civpay
-        return _civpay.FedPayDay.is_civ_payday(date=self)
+        payday = _civpay.FedPayDay(end_date=self.pdtimestamp + pd.Timedelta(days=1))
+        return payday.is_fed_payday(date=self.pdtimestamp)
 
     # FY/FQ properties
     @property
@@ -493,8 +542,8 @@ class FedDateStamp(pd.Timestamp):
         -------
         An integer representing the fiscal quarter (1-4).
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        return _date_attributes.FedFiscalQuarter.get_fiscal_quarter(date=self)
+        fqs = _date_attributes.FedFiscalQuarter(date=self.pdtimestamp)
+        return fqs.get_fiscal_quarter(date=self.pdtimestamp)
 
     @property
     def fy(self) -> int:
@@ -506,8 +555,8 @@ class FedDateStamp(pd.Timestamp):
         An integer representing the fiscal year (e.g. 23 for FY23).
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        return _date_attributes.FedFiscalYear.get_fiscal_year(date=self)
+        fys = _date_attributes.FedFiscalYear(date=self.pdtimestamp)
+        return fys.get_fiscal_year(date=self.pdtimestamp)
 
     # department and appropriations related status properties
     @property
@@ -520,9 +569,8 @@ class FedDateStamp(pd.Timestamp):
         A set of Dept enums.
 
         """
-        _dept_status: ModuleType = _importer._dept_status
         return _dept_status.DepartmentState.get_executive_departments_set_at_time(
-            date=self
+            date=self.pdtimestamp
         )
 
     @property
@@ -536,7 +584,7 @@ class FedDateStamp(pd.Timestamp):
 
         """
         self._set_status_cache()
-        return self.status_cache
+        return self._status_cache
 
     @property
     def all_depts_full_approps(self) -> bool:
@@ -610,7 +658,7 @@ class FedDateStamp(pd.Timestamp):
 
         Returns
         -------
-        True if the timestamp is during a continuing resolution, False
+        True if the pdtimestamp is during a continuing resolution, False
         otherwise.
 
 
@@ -625,7 +673,7 @@ class FedDateStamp(pd.Timestamp):
 
         Returns
         -------
-        True if the timestamp is during a shutdown, False otherwise.
+        True if the pdtimestamp is during a shutdown, False otherwise.
 
         """
         self._set_status_cache()
@@ -745,3 +793,21 @@ class FedDateStamp(pd.Timestamp):
         return self.get_departments_by_status(
             status_key="SHUTDOWN_STATUS"
         ) | self.get_departments_by_status(status_key="GAP_STATUS")
+
+
+def to_feddatestamp(date: "FedDateStampConvertibleTypes") -> FedDateStamp:
+    """
+    Converts a date to a FedDateStamp object.
+
+    Parameters
+    ----------
+    date : FedDateStampConvertibleTypes
+        The date to convert.
+
+    Returns
+    -------
+    FedDateStamp
+        The FedDateStamp object representing the date.
+
+    """
+    return FedDateStamp(pdtimestamp=time_utils.to_timestamp(date))

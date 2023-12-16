@@ -1,22 +1,12 @@
 from __future__ import annotations
 
 from enum import Enum, unique
-from types import ModuleType
-from typing import TYPE_CHECKING
 
 import pandas as pd
 from attrs import define, field
 
-from ._load import LoadOrchestrator
-
-_importer = LoadOrchestrator()
-
-if TYPE_CHECKING:
-    from .feddateindex import FedDateIndex
-    from .feddatestamp import FedDateStamp
-
-_importer.register(module_name="_date_attributes", package_name=".")
-_importer.register(module_name="time_utils", package_name=".")
+from fedcal import _date_attributes
+from fedcal import time_utils
 
 
 @define(order=True)
@@ -49,11 +39,9 @@ class MilitaryPayDay:
 
     """
 
-    date: "FedDateStamp" = field(converter=_importer.time_utils.to_datestamp)
+    date: pd.Timestamp = field(converter=time_utils.to_timestamp)
 
-    def is_military_payday(
-        self, date: pd.Timestamp | "FedDateStamp" | None = None
-    ) -> bool:
+    def is_military_payday(self, date: pd.Timestamp | None = None) -> bool:
         """
         Determines if the given date is a military payday.
 
@@ -66,11 +54,10 @@ class MilitaryPayDay:
         Boolean indicating whether the date is a military payday.
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
         if date is None:
-            date: "FedDateStamp" = self.date
-
-        if date.day in (1, 15) and _date_attributes.FedBusDay.is_bday(date=date):
+            date: pd.Timestamp = self.date
+        bizday = _date_attributes.FedBusDay()
+        if date.day in (1, 15) and bizday.is_bday(date=date):
             return True
 
         # Handle dates that are not the 1st or 15th
@@ -78,7 +65,7 @@ class MilitaryPayDay:
             next_payday: pd.Timestamp = self._calculate_next_payday(
                 date=date, next_month=True
             )
-            payday_range: "pd.DatetimeIndex" = self._generate_payday_range(
+            payday_range: pd.DatetimeIndex = self._generate_payday_range(
                 payday=next_payday
             )
         elif date.day < 15:
@@ -88,7 +75,7 @@ class MilitaryPayDay:
         return self._is_next_bday_in_range(date=date, payday_range=payday_range)
 
     def _calculate_next_payday(
-        self, date: pd.Timestamp | "FedDateStamp", next_month: bool
+        self, date: pd.Timestamp, next_month: bool
     ) -> pd.Timestamp:
         """
         Calculates the next military payday based on the given date.
@@ -118,13 +105,9 @@ class MilitaryPayDay:
             month: int = date.month
             day: int = 15
 
-        return _importer.time_utils.to_datestamp(
-            pd.Timestamp(year=year, month=month, day=day)
-        )
+        return time_utils.to_timestamp((year, month, day))
 
-    def _generate_payday_range(
-        self, payday: pd.Timestamp | "FedDateStamp"
-    ) -> "pd.DatetimeIndex":
+    def _generate_payday_range(self, payday: pd.Timestamp) -> pd.DatetimeIndex:
         """
         Generates a range of dates around a payday for further processing.
 
@@ -142,7 +125,7 @@ class MilitaryPayDay:
         )
 
     def _is_next_bday_in_range(
-        self, date: pd.Timestamp | "FedDateStamp", payday_range: "pd.DatetimeIndex"
+        self, date: pd.Timestamp, payday_range: pd.DatetimeIndex
     ) -> bool:
         """
         Checks if the next business day falls within the provided range of dates.
@@ -157,13 +140,9 @@ class MilitaryPayDay:
         Boolean indicating if the next business day is in the range.
 
         """
-        _date_attributes: ModuleType = _importer._date_attributes
+        bizday = _date_attributes.FedBusDay()
         return next(
-            (
-                day == date
-                for day in payday_range[::-1]
-                if _date_attributes.FedBusDay.is_bday(date=day)
-            ),
+            (day == date for day in payday_range[::-1] if bizday.is_bday(date=day)),
             False,
         )
 
@@ -220,9 +199,9 @@ class ProbableMilitaryPassDay:
 
     """
 
-    date: "FedDateStamp" = field(converter=_importer.time_utils.to_datestamp)
+    date: pd.Timestamp = field(converter=time_utils.to_timestamp)
 
-    def is_likely_passday(self, date: "FedDateStamp" | None = None) -> bool:
+    def is_likely_passday(self, date: pd.Timestamp | None = None) -> bool:
         """
         Evaluates whether the given date is likely a military pass day.
 
@@ -235,12 +214,13 @@ class ProbableMilitaryPassDay:
         Boolean indicating whether the date is likely a pass day.
 
         """
+        bizdays = _date_attributes.FedBusDay()
         if date is None:
             date = self.date
-        elif not _importer._date_attributes.FedBusDay.is_bday(date=date):
+        elif not bizdays.is_bday(date=date):
             return False
 
-        holidays_in_offset: list["FedDateStamp"] | None = self._get_holidays_in_range(
+        holidays_in_offset: list[pd.Timestamp] | None = self._get_holidays_in_range(
             date=date
         )
         if len(holidays_in_offset) == 0:
@@ -251,7 +231,7 @@ class ProbableMilitaryPassDay:
             return False
 
     @staticmethod
-    def _get_holidays_in_range(date: "FedDateStamp") -> list["FedDateStamp"] | None:
+    def _get_holidays_in_range(date: pd.Timestamp) -> list[pd.Timestamp] | None:
         """
         Retrieves holidays within a specified range around a date.
 
@@ -263,20 +243,18 @@ class ProbableMilitaryPassDay:
         -------
         List of holidays within the specified range.
         """
-        _date_attributes: ModuleType = _importer._date_attributes
-        offset_range: "pd.DatetimeIndex" = pd.date_range(
+        _holidays = _date_attributes.FedHolidays()
+        offset_range: pd.DatetimeIndex = pd.date_range(
             start=date - pd.Timedelta(days=3), end=date + pd.Timedelta(days=3)
         )
         if holidays_in_offset := [
-            day
-            for day in offset_range
-            if _date_attributes.FedHolidays.is_holiday(date=day)
+            day for day in offset_range if _holidays.is_holiday(date=day)
         ]:
             return holidays_in_offset
 
     @staticmethod
     def _likely_passday(
-        date: "FedDateStamp", holidays_in_offset: list["FedDateStamp"]
+        date: pd.Timestamp, holidays_in_offset: list[pd.Timestamp]
     ) -> bool:
         """
         Determines if the given date is likely a pass day based on surrounding
@@ -356,13 +334,13 @@ class MilPayPassRange:
 
     """
 
-    start: "FedDateStamp" = field(
+    start: pd.Timestamp = field(
         default=pd.Timestamp(year=1970, month=1, day=1),
-        converter=_importer.time_utils.to_datestamp,
+        converter=time_utils.to_timestamp,
     )
-    end: "FedDateStamp" = field(
+    end: pd.Timestamp = field(
         default=pd.Timestamp(year=2040, month=9, day=30),
-        converter=_importer.time_utils.to_datestamp,
+        converter=time_utils.to_timestamp,
     )
     milday: MilDay = field(default=MilDay.PAY_AND_PASS)
 
@@ -371,14 +349,14 @@ class MilPayPassRange:
         Finishes initializing the instance, generating daterange and
         attributes paydays and passdays (see above.)
         """
-        self.daterange: "FedDateIndex" = _importer.time_utils.to_feddateindex(
+        self.daterange: pd.DatetimeIndex = time_utils.to_datetimeindex(
             (self.start, self.end)
         )
         self.paydays, self.passdays = self.get_mil_dates()
 
     def get_mil_dates(
         self,
-    ) -> tuple[list["FedDateStamp" | None], list["FedDateStamp" | None]]:
+    ) -> tuple[list[pd.Timestamp | None], list[pd.Timestamp | None]]:
         """
         Retrieves military pay and pass days within the specified range.
         The range is determined by the start and end dates of the instance.
@@ -396,12 +374,12 @@ class MilPayPassRange:
             if self.milday in [
                 MilDay.PAYDAY,
                 MilDay.PAY_AND_PASS,
-            ] and MilitaryPayDay.is_military_payday(day):
+            ] and MilitaryPayDay.is_military_payday(date=day):
                 paydays.append(day)
             if self.milday in [
                 MilDay.LIKELY_PASS,
                 MilDay.PAY_AND_PASS,
-            ] and ProbableMilitaryPassDay.is_likely_passday(day):
+            ] and ProbableMilitaryPassDay.is_likely_passday(date=day):
                 passdays.append(day)
 
         return paydays, passdays
@@ -476,7 +454,7 @@ class MilPayPassRange:
         containing the respective dates within the specified range.
 
         """
-        data: dict[str, list["FedDateStamp" | None]] = {
+        data: dict[str, list[pd.Timestamp | None]] = {
             "PayDays": self.paydays,
             "PassDays": self.passdays,
         }
