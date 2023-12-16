@@ -1,3 +1,29 @@
+# fedcal _date_attributes.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+This is a private module. Feel free to use it directly if you like,
+but we aim to expose all functionality through `FedIndex` and
+`FedStamp` for simplicity.
+
+The _date_attributes module contains classes for handling general
+date attributes of the federal calendar:
+- business days (`FedBusDay`)
+- holidays (`FedHolidays`)
+- fiscal years (`FedFiscalYear`)
+- fiscal quarters (`FedFiscalQuarter`)
+"""
+
 from __future__ import annotations
 
 from enum import Enum
@@ -99,7 +125,8 @@ class FedHolidays:
         Guess if Christmas Eve is likely to be a holiday based on Christmas
         day.
     guess_proclamation_holidays(pd.DatetimeIndex) -> Series
-        Guess if any Christmas Eves in a pd.DatetimeIndex may be a holiday based
+        Guess if any Christmas Eves in a pd.DatetimeIndex may be a holiday
+        based
         on Christmas day
     add_poss_christmas_eve_holidays() -> pd.DatetimeIndex
         Add possible Christmas Eve holidays to the holiday list.

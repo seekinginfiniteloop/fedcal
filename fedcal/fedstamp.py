@@ -1,3 +1,23 @@
+# fedcal fedstamp.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+fedstamp is one of fedcal's two main APIs, home to `FedStamp` a proxy
+for pandas' `pd.Timestamp` with additional functionality for fedcal
+data, with the goal of seamlessly building on `pd.Timestamp` and
+integrating fedcal data into pandas analyses.
+"""
+
 from __future__ import annotations
 
 from datetime import date, datetime

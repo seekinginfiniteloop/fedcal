@@ -1,3 +1,31 @@
+# fedcal depts.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+The depts module houses the `FedDepartment` class, which represents a possible
+status of a given federal executive department (i.e. Department of Commerce).
+`FedDepartment` objects represent a department's appropriations and operational
+statuses, but are not time-bound or intended to be instantiated directly.
+Instead, they are generated and pooled in a flyweight structure by
+`_dept_status.DepartmentStatus` and queried with that module's
+`DepartmentState` class, and served to `FedStamp` and `FedIndex` as
+output.
+
+We expose this publicly because users will receive FedDepartment objects
+from those queries, and can use `FedDepartment`'s properties to customize
+that output.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Tuple

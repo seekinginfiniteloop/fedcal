@@ -1,3 +1,57 @@
+# fedcal time_utils.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+time_utils.py provides a number of helper converter functions for handling
+time conversions in fedcal. We expose it publicly because they're probably
+generally useful for other things.
+
+It includes:
+- `_pydate_to_posix` a private converter for datetime conversion to POSIX integer seconds.
+- `get_today_in_posix` and `pdtimestamp_to_posix_seconds` for
+handling POSIX integer second retrieval for today and from pandas
+Timestamp objects respectively.
+
+- `YearMonthDay` a class for handling date conversions from year, month, day.
+It's there because I wanted something cleaner than datetime. I like it. It's
+gonna stay.
+
+- `to_timestamp` and `to_datetimeindex` are singledispatch converter functions
+for converting a wide range of possible time inputs to `pd.Timestamp` and
+`pd.DatetimeIndex` respectively. As they can look complex for the uninitiated
+let's dive in deeper:
+
+- `to_timestamp` routes input based on type (that's what a singledispatch is)
+to helper converters, most of which prep input for conversion to `pd.
+Timestamp`. Those converters then route output through a wrapper,
+`check_timestamp`, which centralizes conversions to `pd.Timestamp` so
+we're not repeating ourselves in each of the converters. `check_timestamp`
+wraps `_stamp_date`, which normalizes timezone-aware `pd.Timestamps`
+to U.S. Eastern (because Washington D.C.).
+
+- `to_datetimeindex` is similar to `to_timestamp`, but is itself wrapped
+by `wrap_tuple`, which intercepts two argument formatted input (i.e.
+start-date, end_date) and outputs it as a single argument tuple (i.e.
+(start_date, end_date)). Most input is then processed through `to_timestamp`
+with the tuple's two dates routed separately. That keeps us from repeating
+ourselves. `to_datetimeindex` does add functionality for conversions from
+array-like objects (i.e. numpy arrays) to `pd.DatetimeIndex` objects.
+After conversion, tupled start/end dates are passed through
+`_get_datetimeindex_for_range` and all input is finally passed
+through `_normalize_datetimeindex` to normalize timezone aware
+input to U.S. Eastern, as with `to_timestamp`.
+"""
+
 from __future__ import annotations
 
 import time
@@ -187,7 +241,8 @@ def to_timestamp(date_input: "FedStampConvertibleTypes") -> pd.Timestamp | None:
 
     Parameters
     ----------
-    date_input : Any FedStampConvertibleTypes for conversion to a time zone normalized Timestamp.
+    date_input : Any FedStampConvertibleTypes for conversion to a time zone
+    normalized Timestamp.
 
     Returns
     -------

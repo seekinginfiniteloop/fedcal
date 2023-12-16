@@ -1,3 +1,21 @@
+# fedcal _typing.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+This module provides internal type definitions for fedcal to keep the code
+clean but well-typed.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Generator, Mapping, Union

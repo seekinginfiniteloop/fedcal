@@ -1,3 +1,23 @@
+# fedcal _meta.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+_meta is an internal support module containing the `MagicDelegator`
+metaclass, which facilitates cloning magic/dunder methods from the
+underlying target class, which is `pd.Timestamp` for `FedStamp` and
+`pd.DatetimeIndex` for `FedIndex`.
+"""
+
 import inspect
 from typing import Any, Callable
 
@@ -139,6 +159,7 @@ class MagicDelegator(type):
             "__reduce__",
             "__reduce_ex__",
             "__reduce_cython__",
+            "__doc__",
         }
         magic_methods: list[str] = [
             name

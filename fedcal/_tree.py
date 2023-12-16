@@ -1,3 +1,36 @@
+# fedcal _tree.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+This is a private module that implements intervaltree storage of
+appropriations status data from constants.py. Given the eccentricities
+of interval trees, we handle querying through a layered approach with
+`_dept_status.DepartmentState` handling queries for `FedStamp` and `FedIndex`.
+
+We use interval trees because they're optimal for interval queries.
+This module's classes and functions:
+- `_get_date_interval` and `_get_overlap_interval` are helpers
+for building our trees.
+- `CRTreeGrower` and `AppropriationsTreeGrower` build
+interval trees for continuing resolutions and approps gaps/shutdowns
+respectively.
+- `Tree` is the primary tree, which is a union of the trees built
+by `CRTreeGrower` and `AppropriationsTreeGrower`. It's a singleton
+class -- we only want (and need) to build one. As designed,
+`CRTreeGrower` and `AppropriationsTreeGrower` are initialized by `Tree`,
+and so are also effectively singletons.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Self, Tuple

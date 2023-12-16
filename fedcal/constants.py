@@ -1,4 +1,30 @@
-# constants.py
+# fedcal constants.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+The constants data here primarily concern historical appropriations data to
+enable queries of executive department funding and operations statuses over
+time. Shifts in appropriations status can have profound impacts on the
+effectiveness of federal departments, and so these data enable analyses of the
+impacts on not just federal services, but national and local economies.
+
+Budget data were primarily accumulated from from Congressional Research
+Service: https://crsreports.congress.gov/AppropriationsStatusTable and
+cross-referenced with Wikipedia, and the Government Accountability Office
+The data are entirely within the public domain. I was unable to find a
+publicly available dataset with this information precompiled; so I made one.
+"""
+
 from __future__ import annotations
 
 from enum import Enum, unique
@@ -14,20 +40,6 @@ if TYPE_CHECKING:
         StatusMapType,
         StatusTupleType,
     )
-
-"""
-The constants data here primarily concern historical appropriations data to
-enable queries of executive department funding and operations statuses over
-time. Shifts in appropriations status can have profound impacts on the
-effectiveness of federal departments, and so these data enable analyses of the
-impacts on not just federal services, but national and local economies.
-
-Budget data were primarily accumulated from from Congressional Research
-Service: https://crsreports.congress.gov/AppropriationsStatusTable and
-cross-referenced with Wikipedia, and the Government Accountability Office
-The data are entirely within the public domain. I was unable to find a
-publicly available dataset with this information precompiled; so I made one.
-"""
 
 
 @unique

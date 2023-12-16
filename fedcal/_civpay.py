@@ -1,3 +1,25 @@
+# fedcal _civpay.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+fedcal's _civpay module is not intended for public use, though it certainly
+could be. We want to keep the interface simple, so we expose all functionality
+through `FedIndex` and `FedStamp`.
+
+`FedPayDay` calculates and provides federal civilian biweekly paydays
+and outputs them in a variety of formats.
+"""
+
 from __future__ import annotations
 
 import pandas as pd

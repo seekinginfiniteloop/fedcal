@@ -1,3 +1,33 @@
+# fedcal _mil.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+This is a private module. Feel free to use it directly if you like,
+but we aim to expose all functionality through `FedIndex` and
+`FedStamp` for simplicity.
+
+The _mil module contains classes for calculations related to military
+person-power:
+- `MilitaryPayDay` calculates and provides military pay days
+- `ProbableMilitaryPassday` heuristically calculates probable
+military passdays surrounding federal holidays.
+- `MilDay` is an enum class for setting what data is pulled for
+ranges from `MilPayPassRange`, granular functionality that is not
+yet implemented in `FedIndex`.
+- `MilPayPassRange` handles date range calculations for `MilitaryPayDay`
+and `ProbableMilitaryPassday` for `FedIndex`.
+"""
+
 from __future__ import annotations
 
 from enum import Enum, unique

@@ -1,3 +1,32 @@
+# fedcal _dept_status.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+This is a private module. Feel free to use it directly if you like,
+but we aim to expose all functionality through `FedIndex` and
+`FedStamp` for simplicity.
+
+The _dept_status module contains classes for processing
+federal department appropriations and associated operating
+statuses over time, which is drawn from constants.py
+and stored in an interval tree (_tree module). Classes:
+- `DepartmentStatus` creates a 'status pool' of
+FedDepartment instances of all possible combinations
+for reuse, using a flyweight pattern.
+- `DepartmentState` queries and retrieves points and ranges
+of interval data from `_tree.Tree()`
+"""
+
 from __future__ import annotations
 
 from itertools import product
@@ -172,7 +201,8 @@ class DepartmentState:
         An interval tree representing department status changes over time.
 
         """
-        from fedcal import _tree  # we wait to load _tree until needed for speed
+        # we wait to load _tree until needed for snappiness
+        from fedcal import _tree
 
         interval_tree: IntervalTree = _tree.Tree()
         return interval_tree.tree.copy()
