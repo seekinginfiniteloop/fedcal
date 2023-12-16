@@ -1,9 +1,13 @@
-from .feddateindex import FedDateIndex, to_feddateindex
-from .feddatestamp import FedDateStamp, to_feddatestamp
+from .fedindex import FedIndex, to_fedindex
+from .fedstamp import FedStamp, to_fedstamp
+from .depts import FedDepartment
+from .constants import Dept
 
 __all__: list[str] = [
-    "FedDateStamp",
-    "FedDateIndex",
-    "to_feddatestamp",
-    "to_feddateindex",
+    "FedStamp",
+    "FedIndex",
+    "to_fedstamp",
+    "to_fedindex",
+    "FedDepartment",
+    "Dept",
 ]

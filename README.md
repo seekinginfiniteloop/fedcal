@@ -57,12 +57,12 @@ Of course, as a calendar library, fedcal can help you streamline more developmen
 
 **The fedcal API bolts on Federal data/time information enhancements to two of the most powerful classes in data science for time series analysis - pandas' `Timestamp` and `DatetimeIndex`:**
 
-1. `FedDateStamp` - fedcal's enhanced sub-class to [pandas' Timestamp class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timestamp.html)
+1. `FedStamp` - fedcal's enhanced sub-class to [pandas' Timestamp class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timestamp.html)
 
-2. `FedDateIndex` a companion class that adds similar functionality to [pandas' DatetimeIndex class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DatetimeIndex.html#pandas-datetimeindex)
+2. `FedIndex` a companion class that adds similar functionality to [pandas' DatetimeIndex class](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DatetimeIndex.html#pandas-datetimeindex)
 
 > [!IMPORTANT]
-> `FedDateStamp` and `FedDateIndex` **retain all functionality** of pandas `Timestamp` and `DatetimeIndex`. (... or they should, pending testing and refinement and your issue submissions...)
+> `FedStamp` and `FedIndex` **retain all functionality** of pandas `Timestamp` and `DatetimeIndex`. (... or they should, pending testing and refinement and your issue submissions...)
 
 ### Core Enhancements to Timestamp and DatetimeIndex
 

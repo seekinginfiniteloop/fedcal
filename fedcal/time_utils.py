@@ -11,8 +11,7 @@ from attrs import astuple, define, field
 from pandas.tseries.frequencies import to_offset
 
 if TYPE_CHECKING:
-    from ._typing import (FedDateIndexConvertibleTypes,
-                          FedDateStampConvertibleTypes)
+    from ._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
 
 
 def _pydate_to_posix(pydate: date) -> int:
@@ -174,7 +173,7 @@ class YearMonthDay:
 
 
 @singledispatch
-def to_timestamp(date_input: "FedDateStampConvertibleTypes") -> pd.Timestamp | None:
+def to_timestamp(date_input: "FedStampConvertibleTypes") -> pd.Timestamp | None:
     """
     We want to handle diverse date inputs without tripping, because one
     goal of our library is to provide a feature-rich addition that
@@ -188,7 +187,7 @@ def to_timestamp(date_input: "FedDateStampConvertibleTypes") -> pd.Timestamp | N
 
     Parameters
     ----------
-    date_input : Any FedDateStampConvertibleTypes for conversion to a time zone normalized Timestamp.
+    date_input : Any FedStampConvertibleTypes for conversion to a time zone normalized Timestamp.
 
     Returns
     -------
@@ -201,7 +200,7 @@ def to_timestamp(date_input: "FedDateStampConvertibleTypes") -> pd.Timestamp | N
 
     """
     raise TypeError(
-        f"Unsupported date format. You provided type: {type(date_input)}. Supported types are FedDateStampConvertibleTypes"
+        f"Unsupported date format. You provided type: {type(date_input)}. Supported types are FedStampConvertibleTypes"
     )
 
 
@@ -360,7 +359,7 @@ def wrap_tuple(
 ):
     """
     To avoid repeating ourselves with date converters that handle two
-    arguments for FedDateIndex, we instead wrap the singledispatch
+    arguments for FedIndex, we instead wrap the singledispatch
     function so it converts two arguments into a tuple. This way, we can
     elegantly route all tuples to our existing to_timestamp converters.
 
@@ -391,7 +390,7 @@ def wrap_tuple(
 @wrap_tuple
 @singledispatch
 def to_datetimeindex(
-    input_dates: "FedDateIndexConvertibleTypes",
+    input_dates: "FedIndexConvertibleTypes",
 ) -> pd.DatetimeIndex | None:
     """
     A singledispatch function for handling date conversions to DatetimeIndex.
@@ -405,8 +404,8 @@ def to_datetimeindex(
 
     Parameters
     ----------
-    input_dates : Any FedDateIndexConvertibleTypes (i.e. any
-    FedDateStampConvertibleType, pd.Timestamp).
+    input_dates : Any FedIndexConvertibleTypes (i.e. any
+    FedStampConvertibleType, pd.Timestamp).
 
     Returns
     -------
@@ -420,7 +419,7 @@ def to_datetimeindex(
     """
 
     raise TypeError(
-        "You provided unsupported types. Supported types are FedDateIndexConvertibleTypes"
+        "You provided unsupported types. Supported types are FedIndexConvertibleTypes"
     )
 
 
@@ -468,8 +467,8 @@ def _from_array_like(input_dates) -> pd.DatetimeIndex:
 
 
 def _get_datetimeindex_from_range(
-    start: pd.Timestamp | "FedDateStampConvertibleTypes",
-    end: pd.Timestamp | "FedDateStampConvertibleTypes",
+    start: pd.Timestamp | "FedStampConvertibleTypes",
+    end: pd.Timestamp | "FedStampConvertibleTypes",
 ) -> pd.DatetimeIndex:
     """
     Converts a start and end date to datetimeindex.

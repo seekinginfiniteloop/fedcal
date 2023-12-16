@@ -88,7 +88,7 @@ class MilitaryPayDay:
 
         Returns
         -------
-        FedDateStamp of the next military payday.
+        FedStamp of the next military payday.
 
         """
         if next_month:

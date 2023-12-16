@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     import numpy as np
     from fedcal._typing import (
         ExtractedStatusDataGeneratorType,
-        FedDateIndexConvertibleTypes,
-        FedDateStampConvertibleTypes,
+        FedIndexConvertibleTypes,
+        FedStampConvertibleTypes,
         StatusCacheType,
         StatusGeneratorType,
         StatusTupleType,
@@ -19,15 +19,15 @@ if TYPE_CHECKING:
     from fedcal.constants import AppropsStatus, Dept, OpsStatus
 
 
-class FedDateIndex(
+class FedIndex(
     metaclass=MagicDelegator,
     delegate_to="datetimeindex",
     delegate_class=pd.DatetimeIndex,
 ):
 
     """
-    `FedDateIndex` extends pd.DatetimeIndex with additional
-    functionality specific to federal dates. Like `FedDateStamp`, it uses
+    `FedIndex` extends pd.DatetimeIndex with additional
+    functionality specific to federal dates. Like `FedStamp`, it uses
     a metaclass, `MagicDelegator`, combined with attribute delegation to its
     datetimeindex attribute to mirror pandas' `DatetimeIndex` functionality
     while adding significant additional capabilities for federal analysis.It
@@ -141,7 +141,7 @@ class FedDateIndex(
     --------
     # Example usage
     (TODO: Beef up examples)
-    fed_index = FedDateIndex(['2023-01-01', '2023-01-02'])
+    fed_index = FedIndex(['2023-01-01', '2023-01-02'])
     print(fed_index.business_days)
     print(fed_index.full_op_depts)
 
@@ -169,7 +169,7 @@ class FedDateIndex(
     def __init__(
         self,
         datetimeindex: pd.DatetimeIndex | None = None,
-        dates: FedDateIndexConvertibleTypes | None = None,
+        dates: FedIndexConvertibleTypes | None = None,
     ) -> None:
         if isinstance(datetimeindex, pd.DatetimeIndex):
             self.datetimeindex: pd.DatetimeIndex = datetimeindex
@@ -205,7 +205,7 @@ class FedDateIndex(
 
     # Methods for caching and other internal use to the class
     @staticmethod
-    def _convert_input(time_input: FedDateIndexConvertibleTypes) -> pd.DatetimeIndex:
+    def _convert_input(time_input: FedIndexConvertibleTypes) -> pd.DatetimeIndex:
         return time_utils.to_datetimeindex(time_input)
 
     @staticmethod
@@ -241,7 +241,7 @@ class FedDateIndex(
 
     def set_self_date_range(self) -> tuple[pd.Timestamp, pd.Timestamp]:
         """
-        Set the start and end date range of the FedDateIndex instance.
+        Set the start and end date range of the FedIndex instance.
 
         Notes
         -----
@@ -300,7 +300,7 @@ class FedDateIndex(
     def _get_status_gen(self) -> "StatusGeneratorType":
         """
         Retrieve the status generator for the current date range. This is
-        `FedDateIndex`'s primary means of retrieving statuses for Federal
+        `FedIndex`'s primary means of retrieving statuses for Federal
         departments.
 
         Returns
@@ -507,13 +507,13 @@ class FedDateIndex(
             .astype(dtype=int)
         )
 
-    def contains_date(self, date: "FedDateStampConvertibleTypes") -> bool:
+    def contains_date(self, date: "FedStampConvertibleTypes") -> bool:
         """
         Check if the index contains a specified date.
 
         Parameters
         ----------
-        date : FedDateStampConvertibleTypes
+        date : FedStampConvertibleTypes
         The date to check for in the index.
 
         Returns
@@ -523,19 +523,19 @@ class FedDateIndex(
 
         Notes
         -----
-        This method converts the input date to a `FedDateStamp`, if necessary,
+        This method converts the input date to a `FedStamp`, if necessary,
         and then checks if it exists in the index.
         """
         date: pd.Timestamp = time_utils.to_timestamp(date)
         return date in self.datetimeindex
 
-    def contains_index(self, other_index: "FedDateIndexConvertibleTypes") -> bool:
+    def contains_index(self, other_index: "FedIndexConvertibleTypes") -> bool:
         """
         Check if the index contains a specified date.
 
         Parameters
         ----------
-        date : FedDateIndexConvertibleTypes
+        date : FedIndexConvertibleTypes
             The date to check for in the index.
 
         Returns
@@ -552,13 +552,13 @@ class FedDateIndex(
         other_index = time_utils.to_datetimeindex(other_index)
         return other_index.isin(values=self.datetimeindex).all()
 
-    def overlaps_index(self, other_index: "FedDateIndexConvertibleTypes") -> bool:
+    def overlaps_index(self, other_index: "FedIndexConvertibleTypes") -> bool:
         """
         Check if the index overlaps with another index.
 
         Parameters
         ----------
-        other_index : FedDateIndexConvertibleTypes
+        other_index : FedIndexConvertibleTypes
             The other index to check for overlap.
 
         Returns
@@ -583,7 +583,7 @@ class FedDateIndex(
         department_filter: set["Dept"] | None = None,
     ) -> pd.DataFrame:
         """
-        Primary constructor method for `FedDateIndex`s department status
+        Primary constructor method for `FedIndex`s department status
         properties. Outputs a human readable pd.DataFrame of data for the given
         status and department inputs. For deeper analysis, may be optionally
         converted with the status_dataframe_to_multiindex() and
@@ -722,7 +722,7 @@ class FedDateIndex(
         departments.
 
         This method provides a pd.DataFrame detailing the statuses for a
-        specific set of departments over the `FedDateIndex`'s date range.
+        specific set of departments over the `FedIndex`'s date range.
 
         Parameters
         ----------
@@ -852,7 +852,7 @@ class FedDateIndex(
 
         Notes
         -----
-        See notes to FedDateStamp.possible_proclamation_holiday.
+        See notes to FedStamp.possible_proclamation_holiday.
 
         """
         self._set_holidays()
@@ -867,7 +867,7 @@ class FedDateIndex(
 
         This property calculates the probable military pass days based on the
         index's date range and internal military cache data. See notes on
-        similar properties in FedDateStamp; while this will be mostly
+        similar properties in FedStamp; while this will be mostly
         accurate, specific dates for passes vary between commands and locales.
 
         Returns
@@ -1251,16 +1251,16 @@ class FedDateIndex(
         )
 
 
-def to_feddateindex(date_range: FedDateIndexConvertibleTypes = None) -> FedDateIndex:
+def to_fedindex(date_range: FedIndexConvertibleTypes = None) -> FedIndex:
     """
-    Converts a date range to a `FedDateIndex`.
+    Converts a date range to a `FedIndex`.
 
     Parameters
     ----------
     date_range
-        A date range to convert to a `FedDateIndex`. The date range can be any
-        `FedDateIndexConvertibleTypes`:
-            tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes],
+        A date range to convert to a `FedIndex`. The date range can be any
+        `FedIndexConvertibleTypes`:
+            tuple[FedStampConvertibleTypes, FedStampConvertibleTypes],
             tuple[pd.Timestamp, pd.Timestamp],
             "np.np.ndarray",
             "pd.Series",
@@ -1270,19 +1270,19 @@ def to_feddateindex(date_range: FedDateIndexConvertibleTypes = None) -> FedDateI
 
     Returns
     -------
-    FedDateIndex
-        A `FedDateIndex` object representing the date range.
+    FedIndex
+        A `FedIndex` object representing the date range.
 
     Examples
     --------
     ```python
-    to_feddateindex((("2017-10-1"), "2025-9-30"))
-    to_feddateindex(pd.date_range(start="2017-10-1", end="2025-9-30"))
-    to_feddateindex(np.arange("2017-10-1", "2025-9-30", dtype="datetime64[D]"))
-    to_feddateindex(pd.Series(pd.date_range(start="2017-10-1", end="2025-9-30")))
-    to_feddateindex(pd.Index(pd.date_range(start="2017-10-1", end="2025-9-30")))
-    to_feddateindex(((datetime.datetime(2000,1,1)),datetime.datetime(2010,5,30)))
+    to_fedindex((("2017-10-1"), "2025-9-30"))
+    to_fedindex(pd.date_range(start="2017-10-1", end="2025-9-30"))
+    to_fedindex(np.arange("2017-10-1", "2025-9-30", dtype="datetime64[D]"))
+    to_fedindex(pd.Series(pd.date_range(start="2017-10-1", end="2025-9-30")))
+    to_fedindex(pd.Index(pd.date_range(start="2017-10-1", end="2025-9-30")))
+    to_fedindex(((datetime.datetime(2000,1,1)),datetime.datetime(2010,5,30)))
     ```
     """
     date_range = time_utils.to_datetimeindex(date_range)
-    return FedDateIndex(datetimeindex=date_range)
+    return FedIndex(datetimeindex=date_range)

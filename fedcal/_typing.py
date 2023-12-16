@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from fedcal.depts import FedDepartment
     from fedcal.time_utils import YearMonthDay
 
-FedDateStampConvertibleTypes = Union[
+FedStampConvertibleTypes = Union[
     "pd.Timestamp",
     int,
     "np.int64",
@@ -26,8 +26,8 @@ FedDateStampConvertibleTypes = Union[
     "datetime",
 ]
 
-FedDateIndexConvertibleTypes = Union[
-    tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes],
+FedIndexConvertibleTypes = Union[
+    tuple[FedStampConvertibleTypes, FedStampConvertibleTypes],
     tuple["pd.Timestamp", "pd.Timestamp"],
     "np.ndarray",
     "pd.Series",

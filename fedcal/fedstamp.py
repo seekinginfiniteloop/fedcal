@@ -4,19 +4,21 @@ from datetime import date, datetime
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from fedcal import (_civpay, _date_attributes, _dept_status, _mil, constants,
-                    time_utils)
+from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
 from fedcal._meta import MagicDelegator
 
 if TYPE_CHECKING:
-    from fedcal._typing import (FedDateStampConvertibleTypes, StatusDictType,
-                                StatusTupleType)
+    from fedcal._typing import (
+        FedStampConvertibleTypes,
+        StatusDictType,
+        StatusTupleType,
+    )
     from fedcal.constants import Dept
     from fedcal.depts import FedDepartment
     from fedcal.time_utils import YearMonthDay
 
 
-class FedDateStamp(
+class FedStamp(
     metaclass=MagicDelegator, delegate_to="pdtimestamp", delegate_class=pd.Timestamp
 ):
 
@@ -38,7 +40,7 @@ class FedDateStamp(
     Provided by _get_status_cache() and _set_status_cache() private methods.
 
     year_month_day
-        returns the FedDateStamp as a YearMonthDay object.
+        returns the FedStamp as a YearMonthDay object.
 
     fedtimestamp
         Returns the POSIX timestamp normalized to midnight.
@@ -203,7 +205,7 @@ class FedDateStamp(
     def __getattr__(self, name: str) -> Any:
         """
         Delegates attribute access to the pdtimestamp attribute. This lets
-        FedDateStamp objects use any methods/attributes of Timestamp.
+        FedStamp objects use any methods/attributes of Timestamp.
 
         Parameters
         ----------
@@ -238,7 +240,7 @@ class FedDateStamp(
         ----------
         status_dict : A dictionary mapping departments to their statuses from
         a dictionary structure (StatusDictType) supplied by most of
-        FedDateStamp's status-related property methods.
+        FedStamp's status-related property methods.
 
         Returns
         -------
@@ -326,7 +328,7 @@ class FedDateStamp(
     def get_departments_by_status(self, status_key: str) -> "StatusDictType":
         """
         Retrieve departments matching a specific status. This is the primary
-        getter method for FedDateStamp's status-related property methods.
+        getter method for FedStamp's status-related property methods.
 
         Parameters
         ----------
@@ -795,19 +797,19 @@ class FedDateStamp(
         ) | self.get_departments_by_status(status_key="GAP_STATUS")
 
 
-def to_feddatestamp(date: "FedDateStampConvertibleTypes") -> FedDateStamp:
+def to_fedstamp(date: "FedStampConvertibleTypes") -> FedStamp:
     """
-    Converts a date to a FedDateStamp object.
+    Converts a date to a FedStamp object.
 
     Parameters
     ----------
-    date : FedDateStampConvertibleTypes
+    date : FedStampConvertibleTypes
         The date to convert.
 
     Returns
     -------
-    FedDateStamp
-        The FedDateStamp object representing the date.
+    FedStamp
+        The FedStamp object representing the date.
 
     """
-    return FedDateStamp(pdtimestamp=time_utils.to_timestamp(date))
+    return FedStamp(pdtimestamp=time_utils.to_timestamp(date))

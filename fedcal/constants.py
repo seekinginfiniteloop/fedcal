@@ -8,8 +8,12 @@ import pandas as pd
 from bidict import frozenbidict
 
 if TYPE_CHECKING:
-    from ._typing import (AppropriationsGapsMapType, CRMapType, StatusMapType,
-                          StatusTupleType)
+    from ._typing import (
+        AppropriationsGapsMapType,
+        CRMapType,
+        StatusMapType,
+        StatusTupleType,
+    )
 
 """
 The constants data here primarily concern historical appropriations data to
@@ -312,7 +316,7 @@ READABLE_STATUSES: list[str] = [
 
 """
 READABLE_STATUSES: Simplified human-readable statuses for the default
-FedDateIndex behavior of outputing human-readable status.
+FedIndex behavior of outputing human-readable status.
 """
 
 READABLE_STATUS_MAP: frozenbidict["StatusTupleType", str] = frozenbidict(
@@ -322,7 +326,7 @@ READABLE_STATUS_MAP: frozenbidict["StatusTupleType", str] = frozenbidict(
 """
 READABLE_STATUS_MAP: An immutable bidict mapping human-readable statuses to
 their enum status tuples (AppropsStatus, OpsStatus). We use this for
-FedDepartments' .status property and for converting FedDateIndex
+FedDepartments' .status property and for converting FedIndex
 human-readable statuses to more detailed output for power users.
 """
 

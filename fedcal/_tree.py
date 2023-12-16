@@ -21,25 +21,25 @@ if TYPE_CHECKING:
         AppropriationsGapsMapType,
         AssembledBudgetIntervalType,
         CRMapType,
-        FedDateStampConvertibleTypes,
+        FedStampConvertibleTypes,
     )
     from fedcal.time_utils import YearMonthDay
 
 
 def _get_date_interval(
     dates: Tuple[int, int]
-    | Tuple["FedDateStampConvertibleTypes", "FedDateStampConvertibleTypes"]
+    | Tuple["FedStampConvertibleTypes", "FedStampConvertibleTypes"]
 ) -> tuple[int, int]:
     """
     Converts a tuple dates to a tuple of POSIX timestamps for use in our
     IntervalTrees. Primarily accepts Timestamps, but can handle any
-    FedDateStampConvertibleTypes.
+    FedStampConvertibleTypes.
 
     Parameters
     ----------
         dates
             tuple of dates comprised of int (POSIX), or
-            FedDateStampConvertibleTypes representing the start and end of an
+            FedStampConvertibleTypes representing the start and end of an
             interval.
 
     Returns
@@ -47,8 +47,8 @@ def _get_date_interval(
         A tuple of POSIX timestamps representing the start and end dates.
 
     """
-    start: "pd.Timestamp" | int | "FedDateStampConvertibleTypes"
-    end: "pd.Timestamp" | int | "FedDateStampConvertibleTypes"
+    start: "pd.Timestamp" | int | "FedStampConvertibleTypes"
+    end: "pd.Timestamp" | int | "FedStampConvertibleTypes"
     start, end = dates
     if start is not isinstance(start, int):
         start_timestamp: "pd.Timestamp" = time_utils.to_timestamp(start)
@@ -69,7 +69,7 @@ def _get_overlap_interval(
     start: int,
     end: int,
     date_range: Tuple[int, int]
-    | Tuple["FedDateStampConvertibleTypes", "FedDateStampConvertibleTypes"]
+    | Tuple["FedStampConvertibleTypes", "FedStampConvertibleTypes"]
     | None = None,
 ) -> Tuple[int, int] | None:
     """
@@ -265,7 +265,7 @@ class AppropriationsGapsTreeGrower:
     def grow_appropriation_gaps_tree(
         self,
         appropriations_gaps: "AppropriationsGapsMapType" | None = None,
-        dates: "FedDateStampConvertibleTypes" = None,
+        dates: "FedStampConvertibleTypes" = None,
     ) -> IntervalTree:
         """
         Grows an interval tree based on the provided data for appropriations
@@ -279,7 +279,7 @@ class AppropriationsGapsTreeGrower:
             Optional dates for restricting the dates of the produced
             tree. By default produces a tree for all dates there are data
             (FY75 - Present). Accepts any
-            FedDateStampConvertibleTypes.
+            FedStampConvertibleTypes.
 
         Returns
         --------

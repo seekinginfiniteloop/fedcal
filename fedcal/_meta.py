@@ -6,15 +6,15 @@ class MagicDelegator(type):
 
     """
     `MagicDelegator` is a metaclass that facilitates cloning magic/dunder
-    methods from the target class, which is `pd.Timestamp` for `FedDateStamp`
-    and `pd.DatetimeIndex` for `FedDateIndex`. This allows us to maintain
+    methods from the target class, which is `pd.Timestamp` for `FedStamp`
+    and `pd.DatetimeIndex` for `FedIndex`. This allows us to maintain
     compositional principles, and avoid writing excessive boilerplate.
     Essentially, all we do here is check for magic methods not in the
-    child class (i.e. `FedDateStamp`) and clone them from the target class
+    child class (i.e. `FedStamp`) and clone them from the target class
     (i.e. `pd.Timestamp`).
 
     Coupled with attribute delegation to the target class,
-    this metaclass enables `FedDateStamp` and `FedDateIndex` to
+    this metaclass enables `FedStamp` and `FedIndex` to
     act as if they were `pd.Timestamp` and `pd.DatetimeIndex`, respectively,
     and seamlessly integrate into pandas operations.
     """
@@ -42,13 +42,13 @@ class MagicDelegator(type):
 
         **delegate_to** (class argument)
             name of new class's target attribute to delegate magic methods to
-            (e.g. 'timestamp' for `FedDateStamp`), by default None
+            (e.g. 'timestamp' for `FedStamp`), by default None
         **delegate_class** (class argument)
             name of the , by default None
 
         Returns
         -------
-            New class (i.e. `FedDateStamp`) with magic methods cloned from
+            New class (i.e. `FedStamp`) with magic methods cloned from
             target class for target attribute.
 
         Raises
@@ -80,7 +80,7 @@ class MagicDelegator(type):
                 """
                 Helper method to call the magic method from the target class.
                 This is used to create the magic methods for the new class
-                (e.g. we take `pd.Timestamp`'s `__eq__` and clone it for `FedDateStamp`).
+                (e.g. we take `pd.Timestamp`'s `__eq__` and clone it for `FedStamp`).
 
                 Parameters
                 ----------
@@ -90,7 +90,7 @@ class MagicDelegator(type):
                     Positional arguments to pass to the magic method.
                 **kwargs
                     Keyword arguments to pass to the magic method.
-                    (e.g. `FedDateStamp.__eq__(self, other)`)
+                    (e.g. `FedStamp.__eq__(self, other)`)
 
 
                 Returns

@@ -15,7 +15,7 @@ from fedcal.depts import FedDepartment
 if TYPE_CHECKING:
     import pandas as pd
     from fedcal._typing import (
-        FedDateStampConvertibleTypes,
+        FedStampConvertibleTypes,
         StatusDictType,
         StatusGeneratorType,
         StatusMapType,
@@ -216,7 +216,7 @@ class DepartmentState:
         return max(tree_ceiling, today)
 
     def get_state(
-        self, date: "pd.Timestamp" | "FedDateStampConvertibleTypes"
+        self, date: "pd.Timestamp" | "FedStampConvertibleTypes"
     ) -> "StatusDictType":
         """
         Retrieves the status of all departments for a specific date.
