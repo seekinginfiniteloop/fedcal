@@ -177,7 +177,8 @@ class FedStamp(
     TODO
     ----
     Implement custom __setattr__, __setstate_cython__, __setstate__,
-    __init_subclass__, __hash__, __getstate__, __dir__, (__slots__?)
+    __delattr__, __init_subclass__, __hash__, __getstate__, __dir__,
+    __reduce__, __reduce_ex__, reduce_cython__, (__slots__?)
     """
 
     def __init__(self, pdtimestamp: pd.Timestamp | None = None) -> None:
@@ -312,8 +313,8 @@ class FedStamp(
         The current status cache, mapping departments to their statuses.
 
         """
-        _dept_status.DepartmentState()
-        return _dept_status.DepartmentState.get_state(date=self.pdtimestamp)
+        state = _dept_status.DepartmentState()
+        return state.get_state(date=self.pdtimestamp)
 
     def _set_status_cache(self) -> None:
         """

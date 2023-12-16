@@ -136,6 +136,9 @@ class MagicDelegator(type):
             "__hash__",
             "__getstate__",
             "__dir__",
+            "__reduce__",
+            "__reduce_ex__",
+            "__reduce_cython__",
         }
         magic_methods: list[str] = [
             name

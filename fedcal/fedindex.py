@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         StatusTupleType,
     )
     from fedcal.constants import AppropsStatus, Dept, OpsStatus
+    from fedcal.time_utils import YearMonthDay
 
 
 class FedIndex(

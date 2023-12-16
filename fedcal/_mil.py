@@ -223,7 +223,7 @@ class ProbableMilitaryPassDay:
         holidays_in_offset: list[pd.Timestamp] | None = self._get_holidays_in_range(
             date=date
         )
-        if len(holidays_in_offset) == 0:
+        if holidays_in_offset is None:
             return False
         elif self._likely_passday(date=date, holidays_in_offset=holidays_in_offset):
             return True
