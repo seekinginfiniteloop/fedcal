@@ -5,47 +5,40 @@ from typing import TYPE_CHECKING, Any, Self, Tuple
 from attrs import define, field
 from intervaltree import IntervalTree
 
-from ._load import LoadOrchestrator
-
-_importer = LoadOrchestrator()
-
-# Because _tree is only loaded if _dept_status' classes are called, we don't
-# need to make these lazy
-from .constants import (
+from fedcal import time_utils
+from fedcal.constants import (
     APPROPRIATIONS_GAPS,
     CR_DEPARTMENTS,
-    Dept,
     DEPTS_SET,
-    ShutdownFlag,
     STATUS_MAP,
+    Dept,
+    ShutdownFlag,
 )
 
 if TYPE_CHECKING:
-    from ._typing import (
+    import pandas as pd
+    from fedcal._typing import (
         AppropriationsGapsMapType,
         AssembledBudgetIntervalType,
         CRMapType,
         FedDateStampConvertibleTypes,
     )
-    from .feddatestamp import FedDateStamp
-    from .time_utils import YearMonthDay
-
-_importer.register(module_name="time_utils", package_name=".")
+    from fedcal.time_utils import YearMonthDay
 
 
 def _get_date_interval(
     dates: Tuple[int, int]
-    | Tuple["FedDateStamp", "FedDateStamp"]
     | Tuple["FedDateStampConvertibleTypes", "FedDateStampConvertibleTypes"]
 ) -> tuple[int, int]:
     """
     Converts a tuple dates to a tuple of POSIX timestamps for use in our
-    IntervalTrees. Primarily accepts FedDateStamp objects, but
+    IntervalTrees. Primarily accepts Timestamps, but can handle any
+    FedDateStampConvertibleTypes.
 
     Parameters
     ----------
         dates
-            tuple of dates comprised of int (POSIX), FedDateStamp, or
+            tuple of dates comprised of int (POSIX), or
             FedDateStampConvertibleTypes representing the start and end of an
             interval.
 
@@ -54,15 +47,17 @@ def _get_date_interval(
         A tuple of POSIX timestamps representing the start and end dates.
 
     """
-    start: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
-    end: "FedDateStamp" | int | "FedDateStampConvertibleTypes"
+    start: "pd.Timestamp" | int | "FedDateStampConvertibleTypes"
+    end: "pd.Timestamp" | int | "FedDateStampConvertibleTypes"
     start, end = dates
     if start is not isinstance(start, int):
-        start_datestamp: "FedDateStamp" = _importer.time_utils.to_datestamp(start)
-        start = start_datestamp.fedtimestamp()
+        start_timestamp: "pd.Timestamp" = time_utils.to_timestamp(start)
+        start = time_utils.pdtimestamp_to_posix_seconds(timestamp=start_timestamp)
     if end is not isinstance(end, int):
-        end_datestamp: "FedDateStamp" = _importer.time_utils.to_datestamp(end)
-        end: "FedDateStamp" = end_datestamp.fedtimestamp()
+        end_timestamp: "pd.Timestamp" = time_utils.to_timestamp(end)
+        end: "pd.Timestamp" = time_utils.pdtimestamp_to_posix_seconds(
+            timestamp=end_timestamp
+        )
     if start == end:
         # we add a day because intervaltree's end intervals are exclusive, and
         # our calendar otherwise uses inclusive dates.
@@ -74,7 +69,6 @@ def _get_overlap_interval(
     start: int,
     end: int,
     date_range: Tuple[int, int]
-    | Tuple["FedDateStamp", "FedDateStamp"]
     | Tuple["FedDateStampConvertibleTypes", "FedDateStampConvertibleTypes"]
     | None = None,
 ) -> Tuple[int, int] | None:
@@ -99,12 +93,20 @@ def _get_overlap_interval(
         return start, end
     start_range, end_range = date_range
     start_range: int = (
-        (_importer.time_utils.to_datestamp(start_range).fedtimestamp())
+        (
+            time_utils.pdtimestamp_to_posix_seconds(
+                timestamp=time_utils.to_timestamp(start_range)
+            )
+        )
         if start_range is not isinstance(start_range, int)
         else start_range
     )
     end_range: int = (
-        (_importer.time_utils.to_datestamp(end_range).fedtimestamp())
+        (
+            time_utils.pdtimestamp_to_posix_seconds(
+                timestamp=time_utils.to_timestamp(start_range)
+            )
+        )
         if end_range is not isinstance(end_range, int)
         else end_range
     )
@@ -263,7 +265,7 @@ class AppropriationsGapsTreeGrower:
     def grow_appropriation_gaps_tree(
         self,
         appropriations_gaps: "AppropriationsGapsMapType" | None = None,
-        dates: "FedDateStamp" | "FedDateStampConvertibleTypes" = None,
+        dates: "FedDateStampConvertibleTypes" = None,
     ) -> IntervalTree:
         """
         Grows an interval tree based on the provided data for appropriations
@@ -276,7 +278,7 @@ class AppropriationsGapsTreeGrower:
         dates
             Optional dates for restricting the dates of the produced
             tree. By default produces a tree for all dates there are data
-            (FY75 - Present). Accepts any FedDateStamp or
+            (FY75 - Present). Accepts any
             FedDateStampConvertibleTypes.
 
         Returns

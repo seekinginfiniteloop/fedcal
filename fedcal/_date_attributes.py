@@ -8,18 +8,12 @@ from attrs import define, field
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
-from ._load import LoadOrchestrator
-
-_importer = LoadOrchestrator()
+from fedcal import constants
+from fedcal.time_utils import to_timestamp
 
 if TYPE_CHECKING:
     from numpy import ndarray
     from pandas import Index, Series
-
-    from .feddatestamp import FedDateStamp
-
-_importer.register(module_name="constants", package_name=".")
-_importer.register(module_name="time_utils", package_name=".")
 
 
 @define(order=True)
@@ -43,7 +37,7 @@ class FedBusDay:
         factory=lambda: CustomBusinessDay(calendar=FedHolidays.holidays)
     )
 
-    def is_bday(self, date: pd.Timestamp | "FedDateStamp") -> bool:
+    def is_bday(self, date: pd.Timestamp) -> bool:
         """
         Class representing federal business days, excluding federal holidays.
 
@@ -113,7 +107,7 @@ class FedHolidays:
     """
 
     proclaimed_holidays: list[pd.Timestamp] = field(
-        default=_importer.constants.HISTORICAL_HOLIDAYS_BY_PROCLAMATION
+        default=constants.HISTORICAL_HOLIDAYS_BY_PROCLAMATION
     )
     holidays: pd.DatetimeIndex = field(init=False)
 
@@ -126,12 +120,15 @@ class FedHolidays:
         If you decide to roll the dice and guess on Presidential proclamations, then we add these to self.holidays
         """
         self.holidays = pd.concat(
-            [self.proclaimed_holidays, USFederalHolidayCalendar().holidays()]
+            [
+                pd.Series(data=self.proclaimed_holidays),
+                USFederalHolidayCalendar().holidays().to_frame(),
+            ]
         ).drop_duplicates()
         if self.guess_christmas_eve_holiday == GuessChristmasEveHoliday.YES:
             self.holidays = self.add_poss_christmas_eve_holidays()
 
-    def is_holiday(self, date: pd.Timestamp | "FedDateStamp") -> bool:
+    def is_holiday(self, date: pd.Timestamp) -> bool:
         """
         Check if a given date is a federal holiday.
 
@@ -146,7 +143,7 @@ class FedHolidays:
         """
         return date in self.holidays
 
-    def was_proclaimed_holiday(self, date: pd.Timestamp | "FedDateStamp") -> bool:
+    def was_proclaimed_holiday(self, date: pd.Timestamp) -> bool:
         """
         Check if a given date was a holiday proclaimed by executive order.
 
@@ -161,9 +158,7 @@ class FedHolidays:
         """
         return date in self.proclaimed_holidays
 
-    def guess_christmas_eve_proclamation_holiday(
-        self, date: pd.Timestamp | "FedDateStamp"
-    ) -> bool:
+    def guess_christmas_eve_proclamation_holiday(self, date: pd.Timestamp) -> bool:
         """
         Guess if Christmas Eve is likely to be a holiday based on Christmas
         day's weekday.
@@ -249,7 +244,7 @@ class FedFiscalYear:
 
     """
 
-    date: pd.Timestamp = field(converter=_importer.time_utils.to_datestamp)
+    date: pd.Timestamp = field(converter=to_timestamp)
 
     @staticmethod
     def get_fiscal_years(datetimeindex: pd.DatetimeIndex) -> "Series":
@@ -268,7 +263,7 @@ class FedFiscalYear:
         year_offset: int = (datetimeindex.month >= 10).astype(dtype=int)
         return datetimeindex.year + year_offset
 
-    def get_fiscal_year(self, date: pd.Timestamp | "FedDateStamp" | None = None) -> int:
+    def get_fiscal_year(self, date: pd.Timestamp | None = None) -> int:
         """
         Calculate the fiscal year for a given date.
 
@@ -287,7 +282,7 @@ class FedFiscalYear:
         return date.year + offset
 
     def is_fiscal_year(
-        self, year_to_check: int, date: pd.Timestamp | "FedDateStamp" | None = None
+        self, year_to_check: int, date: pd.Timestamp | None = None
     ) -> bool:
         """
         Check if a given year is the fiscal year of the provided date.
@@ -331,7 +326,7 @@ class FedFiscalQuarter:
 
     """
 
-    date: pd.Timestamp = field(converter=_importer.time_utils.to_datestamp)
+    date: pd.Timestamp = field(converter=to_timestamp)
 
     @staticmethod
     def get_fiscal_quarters(datetimeindex: pd.DatetimeIndex) -> "Series":

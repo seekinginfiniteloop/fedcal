@@ -1,22 +1,20 @@
 from __future__ import annotations
 
 from itertools import product
-from types import ModuleType
 from typing import TYPE_CHECKING
 
 from attrs import define, field
 from intervaltree import IntervalTree
 
-from ._load import LoadOrchestrator
+from fedcal import constants, time_utils
+from fedcal.depts import FedDepartment
 
-_importer = LoadOrchestrator()
+# we import Tree from fedcal._tree inside DepartmentState to keep it offline
+# until needed
 
 if TYPE_CHECKING:
-    from pandas import Timestamp
-
-    from .constants import Dept
-    from .feddatestamp import FedDateStamp
-    from ._typing import (
+    import pandas as pd
+    from fedcal._typing import (
         FedDateStampConvertibleTypes,
         StatusDictType,
         StatusGeneratorType,
@@ -24,12 +22,7 @@ if TYPE_CHECKING:
         StatusPoolType,
         StatusTupleType,
     )
-    from . import constants
-
-_importer.register(module_name="_tree", package_name=".")
-_importer.register(module_name="constants", package_name=".")
-_importer.register(module_name="time_utils", package_name=".")
-_importer.register(module_name="depts", package_name=".")
+    from fedcal.constants import Dept
 
 
 @define(order=True)
@@ -48,7 +41,8 @@ class DepartmentStatus:
         Maps status keys to corresponding tuples of funding and operational
         statuses, from constants.py STATUS_MAP.
     _status_pool : StatusPoolType
-        *class attribute*: A pool of FedDepartment instances for reuse, ensuring only one instance per status combination.
+        *class attribute*: A pool of FedDepartment instances for reuse,
+        ensuring only one instance per status combination.
 
     Methods
     -------
@@ -61,7 +55,6 @@ class DepartmentStatus:
 
     """
 
-    constants: ModuleType = _importer.import_module
     status_map: "StatusMapType" = field(default=constants.STATUS_MAP)
     _status_pool: "StatusPoolType" | None = None
 
@@ -98,10 +91,9 @@ class DepartmentStatus:
         populated correctly, adhering to the flyweight pattern for efficient
         memory usage.
         """
-        constants: ModuleType = _importer.import_module
-        depts: ModuleType = _importer.import_module
+
         _status_pool: "StatusPoolType" = {
-            (dept, status_key): depts.FedDepartment(
+            (dept, status_key): FedDepartment(
                 name=dept,
                 funding_status=cls.status_map[status_key][0],
                 operational_status=cls.status_map[status_key][1],
@@ -180,18 +172,19 @@ class DepartmentState:
         An interval tree representing department status changes over time.
 
         """
-        _tree: ModuleType = _importer._tree
+        from fedcal import _tree  # we wait to load _tree until needed for speed
+
         interval_tree: IntervalTree = _tree.Tree()
         return interval_tree.tree.copy()
 
     @staticmethod
     def get_executive_departments_set_at_time(
-        date: "FedDateStamp" | "Timestamp" | int,
+        date: "pd.Timestamp" | int,
     ) -> set["Dept"]:
-        time_utils: ModuleType = _importer.time_utils
-        constants: ModuleType = _importer.constants
         if not isinstance(date, int):
-            date = time_utils.to_datestamp(date).fedtimestamp()
+            date = time_utils.pdtimestamp_to_posix_seconds(
+                timestamp=time_utils.to_timestamp(date)
+            )
         if date >= constants.DHS_FORMED:
             return constants.DEPTS_SET
         else:
@@ -218,13 +211,12 @@ class DepartmentState:
         FUTURE_STATUS.
 
         """
-        time_utils: ModuleType = _importer.time_utils
         tree_ceiling: int = self.tree.end() if self.tree else 0
         today: int = time_utils.get_today_in_posix()
         return max(tree_ceiling, today)
 
     def get_state(
-        self, date: "FedDateStamp" | "Timestamp" | "FedDateStampConvertibleTypes"
+        self, date: "pd.Timestamp" | "FedDateStampConvertibleTypes"
     ) -> "StatusDictType":
         """
         Retrieves the status of all departments for a specific date.
@@ -247,9 +239,9 @@ class DepartmentState:
         date.
 
         """
-        constants: ModuleType = _importer.constants
-        time_utils: ModuleType = _importer.time_utils
-        posix_date: int = time_utils.to_datestamp(date).fedtimestamp()
+        posix_date: int = time_utils.pdtimestamp_to_posix_seconds(
+            timestamp=time_utils.to_timestamp(date)
+        )
 
         executive_department_set: set[
             "Dept"
@@ -277,8 +269,8 @@ class DepartmentState:
 
     def get_state_for_range_generator(
         self,
-        start: "FedDateStamp" | "Timestamp",
-        end: "FedDateStamp" | "Timestamp",
+        start: "pd.Timestamp",
+        end: "pd.Timestamp",
     ) -> "StatusGeneratorType":
         """
         Yields a generator of statuses for a given date range.
@@ -310,10 +302,12 @@ class DepartmentState:
         for pandas to translate.
 
         """
-        time_utils: ModuleType = _importer.time_utils
-
-        start_posix: int = time_utils.to_datestamp(start).fedtimestamp()
-        end_posix: int = time_utils.to_datestamp(end).fedtimestamp()
+        start_posix: int = time_utils.pdtimestamp_to_posix_seconds(
+            timestamp=time_utils.to_timestamp(start)
+        )
+        end_posix: int = time_utils.pdtimestamp_to_posix_seconds(
+            time_utils.to_timestamp(end)
+        )
 
         for interval in self.tree[start_posix:end_posix]:
             for key_date in {interval.begin, interval.end, start_posix, end_posix}:
@@ -353,7 +347,6 @@ class DepartmentState:
         Returns the default key for STATUS_MAP based on the date.
 
         """
-        constants: ModuleType = _importer.constants
         if posix_date < constants.CR_DATA_CUTOFF_DATE:
             return "CR_DATA_CUTOFF_DEFAULT_STATUS"
         elif posix_date > self.max_default_date:

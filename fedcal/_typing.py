@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Generator, Mapping, Tuple, Union
+from typing import TYPE_CHECKING, Dict, Generator, Mapping, Union
 
 if TYPE_CHECKING:
     from datetime import date, datetime
@@ -8,10 +8,9 @@ if TYPE_CHECKING:
     import numpy as np
     import pandas as pd
 
-    from .constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
-    from .depts import FedDepartment
-    from .feddatestamp import FedDateStamp
-    from .time_utils import YearMonthDay
+    from fedcal.constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
+    from fedcal.depts import FedDepartment
+    from fedcal.time_utils import YearMonthDay
 
 FedDateStampConvertibleTypes = Union[
     "pd.Timestamp",
@@ -20,40 +19,40 @@ FedDateStampConvertibleTypes = Union[
     "np.datetime64",
     float,
     "YearMonthDay",
-    Tuple[int, int, int],
-    Tuple[str, str, str],
+    tuple[int, int, int],
+    tuple[str, str, str],
     str,
     "date",
     "datetime",
 ]
 
 FedDateIndexConvertibleTypes = Union[
-    Tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes],
-    Tuple["FedDateStamp", "FedDateStamp"],
+    tuple[FedDateStampConvertibleTypes, FedDateStampConvertibleTypes],
+    tuple["pd.Timestamp", "pd.Timestamp"],
     "np.ndarray",
     "pd.Series",
     "pd.DatetimeIndex",
     "pd.Index",
 ]
 
-AppropriationsGapsMapType = Mapping[tuple[int, int], Tuple[set["Dept"], "ShutdownFlag"]]
+AppropriationsGapsMapType = Mapping[tuple[int, int], tuple[set["Dept"], "ShutdownFlag"]]
 
-CRMapType = Mapping[Tuple[int, int], set["Dept"]]
+CRMapType = Mapping[tuple[int, int], set["Dept"]]
 
-StatusTupleType = Tuple["AppropsStatus", "OpsStatus"]
+StatusTupleType = tuple["AppropsStatus", "OpsStatus"]
 
-AssembledBudgetIntervalType = Tuple[set["Dept"], StatusTupleType]
+AssembledBudgetIntervalType = tuple[set["Dept"], StatusTupleType]
 
 DateStampStatusMapType = Mapping["Dept", StatusTupleType]
 
 StatusMapType = Mapping[str, StatusTupleType]
 
-StatusPoolType = Mapping[Tuple["Dept", str], "FedDepartment"]
+StatusPoolType = Mapping[tuple["Dept", str], "FedDepartment"]
 
 StatusDictType = Dict["Dept", "FedDepartment"]
 
-StatusGeneratorType = Generator[Tuple[str, StatusDictType], None, None]
+StatusGeneratorType = Generator[tuple[str, StatusDictType], None, None]
 
 StatusCacheType = Dict[str, StatusDictType]
 
-ExtractedStatusDataGeneratorType = Generator[Tuple["FedDateStamp", "FedDepartment"]]
+ExtractedStatusDataGeneratorType = Generator[tuple["pd.Timestamp", "FedDepartment"]]
