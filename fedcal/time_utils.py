@@ -169,8 +169,7 @@ class YearMonthDay:
         A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
 
         """
-        pydate: datetime.date = self.to_pydate()
-        return _pydate_to_posix(pydate=pydate)
+        return pdtimestamp_to_posix_seconds(timestamp=self.to_pdtimestamp())
 
     def to_pdtimestamp(self) -> pd.Timestamp:
         """

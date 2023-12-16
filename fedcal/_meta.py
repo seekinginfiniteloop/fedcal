@@ -41,6 +41,7 @@ class MagicDelegator(type):
 
     def __new__(
         mcs,
+        cls,
         name: str,
         bases: tuple[type, ...],
         dct: dict[str, Any],
