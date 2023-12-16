@@ -41,7 +41,6 @@ class MagicDelegator(type):
 
     def __new__(
         mcs,
-        cls,
         name: str,
         bases: tuple[type, ...],
         dct: dict[str, Any],
@@ -101,7 +100,8 @@ class MagicDelegator(type):
                 """
                 Helper method to call the magic method from the target class.
                 This is used to create the magic methods for the new class
-                (e.g. we take `pd.Timestamp`'s `__eq__` and clone it for `FedStamp`).
+                (e.g. we take `pd.Timestamp`'s `__eq__` and clone it for
+                `FedStamp`).
 
                 Parameters
                 ----------
@@ -141,26 +141,26 @@ class MagicDelegator(type):
             return magic_method
 
         excluded_methods: set[str] = {
-            "__getattr__",
-            "__setattr__",
-            "__getattribute__",
-            "__init__",
-            "__new__",
-            "__del__",
-            "__repr__",
             "__class__",
+            "__del__",
             "__dict__",
-            "__subclasshook",
-            "__setstate_cython__",
-            "__setstate__",
-            "__init_subclass__",
-            "__hash__",
-            "__getstate__",
             "__dir__",
-            "__reduce__",
-            "__reduce_ex__",
-            "__reduce_cython__",
             "__doc__",
+            "__getattr__",
+            "__getattribute__",
+            "__getstate__",
+            "__hash__",
+            "__init__",
+            "__init_subclass__",
+            "__new__",
+            "__reduce__",
+            "__reduce_cython__",
+            "__reduce_ex__",
+            "__repr__",
+            "__setattr__",
+            "__setstate__",
+            "__setstate_cython__",
+            "__subclasshook",
         }
         magic_methods: list[str] = [
             name
@@ -174,4 +174,4 @@ class MagicDelegator(type):
             if method_name not in dct:
                 dct[method_name] = create_magic_method(method_name=method_name)
 
-        return super().__new__(cls, name, bases, dct)
+        return super().__new__(mcs, name, bases, dct)
