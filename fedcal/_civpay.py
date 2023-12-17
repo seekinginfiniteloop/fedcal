@@ -115,8 +115,7 @@ class FedPayDay:
         """
         if date is None:
             date = self.end_date
-        if (not self.paydays) or (self.paydays.ceil(freq="D") < date):
-            self.paydays = self._generate_paydays(end_date=date)
+
         return date in self.paydays
 
     def get_paydays_as_index(

@@ -53,8 +53,8 @@ class FedDepartment:
     Attributes
     ----------
     name : The name of the executive department.
-    funding_status : The funding status of the department.
-    operational_status : The operational status of the department.
+    approps_status : The funding status of the department.
+    ops_status : The operational status of the department.
 
     status : A simplified string representation of the department's status.
 
@@ -69,15 +69,15 @@ class FedDepartment:
     """
 
     name: "Dept" = field()
-    funding_status: "AppropsStatus" = field()
-    operational_status: "OpsStatus" = field()
+    approps_status: "AppropsStatus" = field()
+    ops_status: "OpsStatus" = field()
 
     def __str__(self) -> str:
         """We override attrs default to provide a meaningful string
         representation"""
         return f"""{self.name.abbrev}:
-            funding: {self.funding_status},
-            operational: {self.operational_status}"""
+            funding: {self.approps_status},
+            operational: {self.ops_status}"""
 
     def attributes_to_tuple(
         self,
@@ -101,7 +101,7 @@ class FedDepartment:
         A StatusTupleType for the instance.
 
         """
-        return self.funding_status, self.operational_status
+        return self.approps_status, self.ops_status
 
     @property
     def status(self) -> str:

@@ -730,15 +730,13 @@ class FedIndex(
             department_enum: "Dept" = constants.Dept.from_short_name(
                 short_name=department_short
             )
-            funding_status: "AppropsStatus"
-            operational_status: "OpsStatus"
-            funding_status, operational_status = self._reverse_human_readable_status(
+            approps_status: "AppropsStatus"
+            ops_status: "OpsStatus"
+            approps_status, ops_status = self._reverse_human_readable_status(
                 status_str=human_readable_status
             )
 
-            multiindex_data.append(
-                (date, department_enum, funding_status, operational_status)
-            )
+            multiindex_data.append((date, department_enum, approps_status, ops_status))
 
         multiindex: pd.MultiIndex = pd.MultiIndex.from_tuples(
             tuples=multiindex_data,

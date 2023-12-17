@@ -292,27 +292,30 @@ DEPTS_SET: set[Dept] = {
 
 """
 DEPTS_SET: A set of top-level executive departments as enum
-objects. Data currently omit judiciary and legislative budgets (federal courts and Congress).
+objects. Data currently omit judiciary and legislative budgets (federal courts
+and Congress).
 """
 
 DHS_FORMED: int = 1038200400
 """DHS_FORMED: POSIX date of DHS formation (2003-11-25)"""
 
 
-STATUS_MAP: "StatusMapType" = {
-    "DEFAULT_STATUS": (AppropsStatus.FULLY_APPROPRIATED, OpsStatus.OPEN),
-    "CR_STATUS": (
-        AppropsStatus.TEMPORARILY_APPROPRIATED,
-        OpsStatus.OPEN_WITH_LIMITATIONS,
-    ),
-    "CR_DATA_CUTOFF_DEFAULT_STATUS": (
-        AppropsStatus.FULLY_OR_TEMPORARILY_APPROPRIATED,
-        OpsStatus.OPEN_OR_OPEN_WITH_LIMITATIONS,
-    ),
-    "GAP_STATUS": (AppropsStatus.NO_APPROPRIATIONS, OpsStatus.MINIMALLY_OPEN),
-    "SHUTDOWN_STATUS": (AppropsStatus.NO_APPROPRIATIONS, OpsStatus.SHUTDOWN),
-    "FUTURE_STATUS": (AppropsStatus.FUTURE, OpsStatus.FUTURE),
-}
+STATUS_MAP: "StatusMapType" = frozenbidict(
+    {
+        "DEFAULT_STATUS": (AppropsStatus.FULLY_APPROPRIATED, OpsStatus.OPEN),
+        "CR_STATUS": (
+            AppropsStatus.TEMPORARILY_APPROPRIATED,
+            OpsStatus.OPEN_WITH_LIMITATIONS,
+        ),
+        "CR_DATA_CUTOFF_DEFAULT_STATUS": (
+            AppropsStatus.FULLY_OR_TEMPORARILY_APPROPRIATED,
+            OpsStatus.OPEN_OR_OPEN_WITH_LIMITATIONS,
+        ),
+        "GAP_STATUS": (AppropsStatus.NO_APPROPRIATIONS, OpsStatus.MINIMALLY_OPEN),
+        "SHUTDOWN_STATUS": (AppropsStatus.NO_APPROPRIATIONS, OpsStatus.SHUTDOWN),
+        "FUTURE_STATUS": (AppropsStatus.FUTURE, OpsStatus.FUTURE),
+    }
+)
 
 """
 STATUS_MAP: We map possible AppropsStatus, OpsStatus combinations to string

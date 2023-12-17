@@ -610,9 +610,7 @@ class FedStamp(
         A set of Dept enums.
 
         """
-        return _dept_status.DepartmentState.get_depts_set_set_at_time(
-            date=self.pdtimestamp
-        )
+        return _dept_status.DepartmentState.get_depts_set_at_time(date=self.pdtimestamp)
 
     @property
     def all_depts_status(self) -> "StatusDictType":

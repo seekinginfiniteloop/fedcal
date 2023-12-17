@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     import numpy as np
     import pandas as pd
+    from bidict import frozenbidict
 
     from fedcal.constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
     from fedcal.depts import FedDepartment
@@ -63,7 +64,7 @@ AssembledBudgetIntervalType = tuple[set["Dept"], StatusTupleType]
 
 DateStampStatusMapType = Mapping["Dept", StatusTupleType]
 
-StatusMapType = Mapping[str, StatusTupleType]
+StatusMapType = "frozenbidict"[str, StatusTupleType]
 
 StatusPoolType = Mapping[tuple["Dept", str], "FedDepartment"]
 
