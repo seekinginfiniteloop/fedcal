@@ -46,6 +46,7 @@ from fedcal.constants import (
     STATUS_MAP,
     Dept,
     ShutdownFlag,
+    DHS_FORMED,
 )
 
 if TYPE_CHECKING:
@@ -64,20 +65,20 @@ def _get_date_interval(
     | Tuple["FedStampConvertibleTypes", "FedStampConvertibleTypes"]
 ) -> tuple[int, int]:
     """
-    Converts a tuple dates to a tuple of POSIX timestamps for use in our
+    Converts a tuple dates to a tuple of POSIX-day timestamps for use in our
     IntervalTrees. Primarily accepts Timestamps, but can handle any
     FedStampConvertibleTypes.
 
     Parameters
     ----------
         dates
-            tuple of dates comprised of int (POSIX), or
+            tuple of dates comprised of int (POSIX-day), or
             FedStampConvertibleTypes representing the start and end of an
             interval.
 
     Returns
     -------
-        A tuple of POSIX timestamps representing the start and end dates.
+        A tuple of POSIX-day timestamps representing the start and end dates.
 
     """
     start: "pd.Timestamp" | int | "FedStampConvertibleTypes"
@@ -85,16 +86,14 @@ def _get_date_interval(
     start, end = dates
     if start is not isinstance(start, int):
         start_timestamp: "pd.Timestamp" = time_utils.to_timestamp(start)
-        start = time_utils.pdtimestamp_to_posix_seconds(timestamp=start_timestamp)
+        start = time_utils.pdtimestamp_to_posix_day(timestamp=start_timestamp)
     if end is not isinstance(end, int):
         end_timestamp: "pd.Timestamp" = time_utils.to_timestamp(end)
-        end: "pd.Timestamp" = time_utils.pdtimestamp_to_posix_seconds(
+        end: "pd.Timestamp" = time_utils.pdtimestamp_to_posix_day(
             timestamp=end_timestamp
         )
     if start == end:
-        # we add a day because intervaltree's end intervals are exclusive, and
-        # our calendar otherwise uses inclusive dates.
-        end = end + 86400
+        end = end
     return start, end
 
 
@@ -127,7 +126,7 @@ def _get_overlap_interval(
     start_range, end_range = date_range
     start_range: int = (
         (
-            time_utils.pdtimestamp_to_posix_seconds(
+            time_utils.pdtimestamp_to_posix_day(
                 timestamp=time_utils.to_timestamp(start_range)
             )
         )
@@ -136,7 +135,7 @@ def _get_overlap_interval(
     )
     end_range: int = (
         (
-            time_utils.pdtimestamp_to_posix_seconds(
+            time_utils.pdtimestamp_to_posix_day(
                 timestamp=time_utils.to_timestamp(start_range)
             )
         )
@@ -160,8 +159,8 @@ class CRTreeGrower:
 
     Attributes
     ----------
-    depts_set_set: A set of Dept enum objects.
-    cr_departments : Dictionary mapping intervals (POSIX timestamps) for
+    depts_set: A set of Dept enum objects.
+    cr_departments : Dictionary mapping intervals (POSIX-day timestamps) for
         continuing resolutions (FY99-Present) to affected departments.
     tree : The interval tree to grow.
 
@@ -180,7 +179,7 @@ class CRTreeGrower:
 
     """
 
-    depts_set_set: set[Dept] = field(default=DEPTS_SET)
+    depts_set: set[Dept] = field(default=DEPTS_SET)
     cr_departments: "CRMapType" = field(default=CR_DEPARTMENTS)
     tree: IntervalTree = field(factory=IntervalTree)
 
@@ -232,6 +231,9 @@ class CRTreeGrower:
         The populated interval tree.
 
         """
+        if self.tree:
+            return self.tree
+
         cr_departments = (
             cr_departments if cr_departments is not None else self.cr_departments
         )
@@ -242,14 +244,19 @@ class CRTreeGrower:
 
         for (start, end), departments in cr_departments.items():
             if _get_overlap_interval(start=start, end=end, date_range=date_range):
-                generated_departments: set[Dept] = self._filter_cr_department_sets(
-                    departments=departments
+                generated_departments = (
+                    self._filter_cr_department_sets(departments=departments).difference(
+                        {Dept.DHS}
+                    )
+                    if end < DHS_FORMED
+                    else self._filter_cr_department_sets(departments=departments)
                 )
                 data: "AssembledBudgetIntervalType" = (
                     generated_departments,
                     STATUS_MAP["CR_STATUS"],
                 )
-                cr_tree.addi(begin=start, end=end + 86400, data=data)
+                # We add 1 because the tree's end is exclusive
+                cr_tree.addi(begin=start, end=end + 1, data=data)
         return cr_tree
 
 
@@ -317,12 +324,15 @@ class AppropriationsGapsTreeGrower:
         The populated interval tree with appropriations gaps information.
 
         """
+        if self.tree:
+            return self.tree
 
         appropriations_gaps = (
             appropriations_gaps
             if appropriations_gaps is not None
             else self.appropriations_gaps
         )
+
         gap_tree: IntervalTree = self.tree if self.tree is not None else IntervalTree()
         date_range: tuple[int, int] | None = (
             _get_date_interval(dates=dates) if dates else None
@@ -340,7 +350,8 @@ class AppropriationsGapsTreeGrower:
                         departments,
                         STATUS_MAP["GAP_STATUS"],
                     )
-                gap_tree.addi(begin=start, end=end + 86400, data=data)
+                    # We add one because the tree's end is exclusive
+                gap_tree.addi(begin=start, end=end + 1, data=data)
         return gap_tree
 
 
@@ -434,33 +445,32 @@ class Tree:
         https://github.com/chaimleib/intervaltree
         """
         if not hasattr(self, "_initialized"):
-            self.cr_tree: IntervalTree = self._initialize_cr_tree()
-            self.gap_tree: IntervalTree = self._initialize_gap_tree()
-            self.tree: IntervalTree = self.cr_tree.union(other=self.gap_tree)
+            self.cr_instance: CRTreeGrower = self._initialize_cr_tree()
+            cr_tree = self.cr_instance.grow_cr_tree()
+            self.gap_instance: CRTreeGrower = self._initialize_gap_tree()
+            gap_tree = self.gap_instance.grow_appropriation_gaps_tree()
+            self.tree: IntervalTree = cr_tree.union(other=gap_tree)
 
             self._initialized = True
 
-    def _initialize_cr_tree(self) -> IntervalTree:
+    def _initialize_cr_tree(self) -> CRTreeGrower:
         """
         We initialize the CR tree if it has not already been initialized.
 
         Returns
         -------
-        CRTreeGrower.tree : The CR tree.
+        Initialized CRTreeGrower()
 
         """
-        crtree = CRTreeGrower()
-        return crtree.tree
+        return CRTreeGrower()
 
-    def _initialize_gap_tree(self) -> IntervalTree:
+    def _initialize_gap_tree(self) -> AppropriationsGapsTreeGrower:
         """
         We initialize the appropriations gaps tree if it has not already been
         initialized.
 
         Returns
         -------
-        AppropriationsGapsTreeGrower.tree : The appropriations gaps tree.
-
+        Initialized AppropriationsGapsTreeGrower()
         """
-        gaptree = AppropriationsGapsTreeGrower()
-        return gaptree.tree
+        return AppropriationsGapsTreeGrower()

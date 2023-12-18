@@ -36,6 +36,7 @@ import pandas as pd
 from attrs import define, field
 
 from fedcal import _date_attributes, time_utils
+from fedcal.constants import EnumDunderBase
 
 
 @define(order=True)
@@ -310,7 +311,7 @@ class ProbableMilitaryPassDay:
 
 
 @unique
-class MilDay(Enum):
+class MilDay(EnumDunderBase, Enum):
 
     """
     Enum for military payday types.

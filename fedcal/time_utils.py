@@ -17,8 +17,8 @@ time conversions in fedcal. We expose it publicly because they're probably
 generally useful for other things.
 
 It includes:
-- `get_today_in_posix` and `pdtimestamp_to_posix_seconds` for
-handling POSIX integer second retrieval for today and from pandas
+- `get_today_in_posix_day` and `pdtimestamp_to_posix_day` for
+handling POSIX-day integer second retrieval for today and from pandas
 Timestamp objects respectively.
 
 - `YearMonthDay` a class for handling date conversions from year, month, day.
@@ -35,7 +35,7 @@ to helper converters, most of which prep input for conversion to `pd.
 Timestamp`. Those converters then route output through a wrapper,
 `check_timestamp`, which centralizes conversions to `pd.Timestamp` so
 we're not repeating ourselves in each of the converters. `check_timestamp`
-wraps `_stamp_date`, which normalizes timezone-aware `pd.Timestamps`
+wraps `_normalize_timestamp`, which normalizes timezone-aware `pd.Timestamps`
 to U.S. Eastern (because Washington D.C.).
 
 - `to_datetimeindex` is similar to `to_timestamp`, but is itself wrapped
@@ -67,23 +67,23 @@ if TYPE_CHECKING:
     from ._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
 
 
-def get_today_in_posix() -> int:
+def get_today_in_posix_day() -> int:
     """
-    Returns the current date in POSIX format.
+    Returns the current date in POSIX-day format.
 
     Returns
     -------
     int
-        The current date in POSIX format.
+        The current date in POSIX-day format.
 
     """
-    today: datetime.datetime = datetime.datetime.now()
-    return int(time.mktime(today.timetuple()))
+    today: float = pd.Timestamp(datetime.date.today()).timestamp()
+    return int(today // 86400)
 
 
-def pdtimestamp_to_posix_seconds(timestamp: pd.Timestamp) -> int:
+def pdtimestamp_to_posix_day(timestamp: pd.Timestamp) -> int:
     """
-    Converts a pandas Timestamp object to a POSIX integer timestamp.
+    Converts a pandas Timestamp object to a POSIX-day integer timestamp.
 
     Parameters
     ----------
@@ -92,10 +92,10 @@ def pdtimestamp_to_posix_seconds(timestamp: pd.Timestamp) -> int:
     Returns
     -------
     int
-        POSIX timestamp in seconds.
+        POSIX-day timestamp in days.
 
     """
-    return int(timestamp.timestamp())
+    return int(timestamp.timestamp() // 86400)
 
 
 @define(order=True)
@@ -126,7 +126,7 @@ class YearMonthDay:
         object.
 
     to_posix_timestamp(self) -> int
-        Converts a YearMonthDay object to a POSIX integer timestamp.
+        Converts a YearMonthDay object to a POSIX-day integer timestamp.
 
     to_pdtimestamp(self) -> pd.Timestamp
         Converts YearMonthDay to pandas pd.Timestamp.
@@ -160,16 +160,26 @@ class YearMonthDay:
         """
         return YearMonthDay(year=date.year, month=date.month, day=date.day)
 
-    def to_posix_timestamp(self) -> int:
+    def to_timestamp(self) -> int:
         """
-        Converts a YearMonthDay object to a POSIX integer timestamp.
+        Converts a YearMonthDay object to a POSIX-day integer timestamp.
 
         Returns
         -------
-        A POSIX timestamp as an integer (whole seconds since the Unix Epoch).
+        A POSIX timestamp as an integer (seconds since the Unix Epoch).
+        """
+        return int(self.to_pdtimestamp().timestamp())
+
+    def to_timestamp_day(self) -> int:
+        """
+        Converts a YearMonthDay object to a POSIX-day integer timestamp.
+
+        Returns
+        -------
+        A POSIX-day timestamp as an integer (whole days since the Unix Epoch).
 
         """
-        return pdtimestamp_to_posix_seconds(timestamp=self.to_pdtimestamp())
+        return pdtimestamp_to_posix_day(timestamp=self.to_pdtimestamp())
 
     def to_pdtimestamp(self) -> pd.Timestamp:
         """
@@ -244,7 +254,7 @@ def to_timestamp(date_input: "FedStampConvertibleTypes") -> pd.Timestamp | None:
 @to_timestamp.register(cls=pd.Timestamp)
 def _timestamp_to_timestamp(date_input: pd.Timestamp) -> pd.Timestamp:
     """Conversion for pandas Timestamps"""
-    return _stamp_date(date_input)
+    return _normalize_timestamp(date_input)
 
 
 @to_timestamp.register(cls=int)
@@ -254,7 +264,11 @@ def _posix_to_timestamp(date_input: int | np.int64 | float) -> pd.Timestamp:
     """
     Conversion for POSIX timestamps; we assume isolated integers or floats are POSIX time.
     """
-    return _stamp_date(datetime.date.fromtimestamp(date_input))
+    if date_input < 100000:
+        return _normalize_timestamp(
+            datetime.datetime.fromtimestamp((int(date_input) * 86400))
+        )
+    return _normalize_timestamp(datetime.date.fromtimestamp(date_input))
 
 
 @to_timestamp.register(cls=str)
@@ -273,12 +287,12 @@ def _str_to_timestamp(date_input: str) -> pd.Timestamp:
 
     """
     try:
-        return _stamp_date(datetime.date.fromisoformat(date_input))
+        return _normalize_timestamp(datetime.date.fromisoformat(date_input))
     except ValueError as e:
         for fmt in ("%m/%d/%Y", "%m-%d-%Y", "%d/%m/%Y", "%d-%m-%Y"):
             try:
                 parsed_date = datetime.datetime.strptime(date_input, fmt).date()
-                return _stamp_date(parsed_date)
+                return _normalize_timestamp(parsed_date)
             except ValueError:
                 continue
         raise ValueError(
@@ -295,13 +309,13 @@ def _date_to_timestamp(
     date_input: datetime.date | datetime.datetime | np.datetime64,
 ) -> pd.Timestamp:
     """Conversions for Python date and datetime objects."""
-    return _stamp_date(date_input)
+    return _normalize_timestamp(date_input)
 
 
 @to_timestamp.register(cls=YearMonthDay)
 def _yearmonthday_to_timestamp(date_input: YearMonthDay) -> pd.Timestamp:
     """Conversion for YearMonthDay objects."""
-    return _stamp_date(date_input.to_pdtimestamp())
+    return _normalize_timestamp(date_input.to_pdtimestamp())
 
 
 @to_timestamp.register(cls=tuple)
@@ -323,16 +337,18 @@ def _timetuple_to_timestamp(date_input: tuple) -> pd.Timestamp:
     if not 1970 <= year <= 9999:
         raise ValueError("Year must be a four-digit number, and not before 1970.")
 
-    return _stamp_date(YearMonthDay(year=year, month=month, day=day).to_pdtimestamp())
+    return _normalize_timestamp(
+        YearMonthDay(year=year, month=month, day=day).to_pdtimestamp()
+    )
 
 
 def check_timestamp(
     func,
 ):
     """
-    Since _stamp_date is designed to normalize Timestamps, to avoid repeating
+    Since _normalize_timestamp is designed to normalize Timestamps, to avoid repeating
     ourselves with conversions to Timestamps in most of our to_timestamp
-    converters, we instead wrap/decorate _stamp_date to intercept and convert
+    converters, we instead wrap/decorate _normalize_timestamp to intercept and convert
     any non-Timestamps to Timestamps once to_timestamp gets them in a format
     pd.Timestamp will accept.
 
@@ -355,14 +371,14 @@ def check_timestamp(
         if arg is None:
             raise ValueError(
                 f"""provided argument, {arg} is None; we're not mind readers
-                here. Please provide a pd.Timestamp for _stamp_date."""
+                here. Please provide a pd.Timestamp for _normalize_timestamp."""
             )
         try:
             return func(pd.Timestamp(ts_input=arg))
         except TypeError as e:
             raise TypeError(
                 f"""input {arg} could not be converted to a pd.Timestamp.
-                    Our _stamp_date function needs pandas Timestamps or a
+                    Our _normalize_timestamp function needs pandas Timestamps or a
                     pd.Timestamp convertible date-like object (e.g. Python
                     date)
                     """
@@ -372,10 +388,11 @@ def check_timestamp(
 
 
 @check_timestamp
-def _stamp_date(timestamp: pd.Timestamp = None) -> pd.Timestamp:
+def _normalize_timestamp(timestamp: pd.Timestamp = None) -> pd.Timestamp:
     """
     If incoming Timestamps have timezone information, we normalize them to
-    U.S. Eastern -- because Washington D.C.
+    timezone naive UTC for consistency and because we're concerned with
+    date-level precision here.
 
     Parameters
     ----------
@@ -386,11 +403,9 @@ def _stamp_date(timestamp: pd.Timestamp = None) -> pd.Timestamp:
     Normalized Timestamp
 
     """
-    if timestamp is None:
-        raise ValueError
     if timestamp.tzinfo:
-        return timestamp.tz_convert(tz="America/New_York")
-    return timestamp
+        timestamp = timestamp.tz_convert(tz="UTC").normalize()
+    return timestamp.normalize()
 
 
 def wrap_tuple(
@@ -533,7 +548,9 @@ def _get_datetimeindex_from_range(
 
 def _normalize_datetimeindex(datetimeindex: pd.DatetimeIndex) -> pd.DatetimeIndex:
     """
-    Normalizes a datetimeindex to U.S. Eastern if time zone aware.
+    Normalizes a datetimeindex to UTC and makes it timezone naive
+    because we're not concerned with that kind of precision here,
+    and it keeps output consistent.
 
     Parameters
     ----------
@@ -545,5 +562,5 @@ def _normalize_datetimeindex(datetimeindex: pd.DatetimeIndex) -> pd.DatetimeInde
 
     """
     if datetimeindex.tz:
-        return datetimeindex.tz_convert(tz="America/New_York")
-    return datetimeindex
+        return datetimeindex.tz_convert(tz="UTC").normalize()
+    return datetimeindex.normalize()

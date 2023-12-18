@@ -28,7 +28,7 @@ publicly available dataset with this information precompiled; so I made one.
 from __future__ import annotations
 
 from enum import Enum, unique
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Generator, Literal
 
 import pandas as pd
 from bidict import frozenbidict
@@ -79,6 +79,66 @@ class Dept(Enum):
         self.abbrev: str = abbreviation  # mixed case abbreviation
         self.full: str = full_name  # full name in mixed case
         self.short: str = short_name  # shortened name in mixed case
+
+    def __iter__(self) -> Generator[str, Any, None]:
+        """
+        Iterates through the enum object's attributes.
+        Returns a generator that yields the enum object's attributes.
+
+        Yields
+        ------
+            str: The enum object's attributes.
+
+        Example
+        -------
+        ```python
+        for attr in Dept.DHS:
+            print(attr)
+
+        > DHS
+        > Department of Homeland Security
+        > Homeland Security
+        ```
+        """
+        yield self.abbrev
+        yield self.full
+        yield self.short
+
+    def __str__(self) -> str:
+        """
+        Customized string representation of enum
+
+        Returns
+        -------
+        Returns object's full name with abbreviation in parens
+        (e.g. "Department of State (DoS)")
+        """
+        return f"{self.__class__.__name__}: {self.full} ({self.abbrev})"
+
+    def __eq__(self, other: Any) -> bool:
+        """
+        Customized equality comparison for enum
+
+        Returns
+        -------
+        Returns True if other is a Dept enum and its abbrev matches self.abbrev
+        """
+        return (
+            (self.abbrev, self.full, self.short)
+            == (other.abbrev, other.full, other.short)
+            if isinstance(other, Dept)
+            else False
+        )
+
+    def __hash__(self) -> int:
+        """
+        Customized hash function for enum
+
+        Returns
+        -------
+        Returns hash of tuple of attributes.
+        """
+        return hash((self.abbrev, self.full, self.short))
 
     DHS = ("DHS", "Department of Homeland Security", "Homeland Security")
     DOC = ("DoC", "Department of Commerce", "Commerce")
@@ -162,9 +222,9 @@ class Dept(Enum):
         raise ValueError(f"Department with long name {long_name} not found")
 
     @classmethod
-    def from_abbreviation(cls, abbreviation: str) -> Dept:
+    def from_abbrev(cls, abbrev: str) -> Dept:
         """
-        Converts an abbreviation of a department to an enum object.
+        Converts an abbrev of a department to an enum object.
         Raises a ValueError if the department is not found.
 
         Returns
@@ -178,13 +238,13 @@ class Dept(Enum):
         Example
         -------
         >>> from fedcal.constants import Dept
-        >>> Dept.from_abbreviation("DoI")
+        >>> Dept.from_abbrev("DoI")
         Dept.DOI
         """
         for dept in cls:
-            if dept.abbrev == abbreviation:
+            if dept.abbrev == abbrev:
                 return dept
-        raise ValueError(f"Department with abbreviation {abbreviation} not found")
+        raise ValueError(f"Department with abbrev {abbrev} not found")
 
 
 HISTORICAL_HOLIDAYS_BY_PROCLAMATION: list[pd.Timestamp] = [
@@ -220,8 +280,60 @@ first payday of the epoch).
 """
 
 
+class EnumDunderBase:
+    """
+    A base class for defining dunder methods for most of fedcal's
+    enumerations.
+    """
+
+    def __iter__(self) -> Literal:
+        """
+        Custom iter method for enums
+
+        Returns
+        -------
+            enum object's value
+        """
+        return self.value
+
+    def __str__(self) -> str:
+        """
+        Custom string representation of enum object
+
+        Returns
+        -------
+            str: a string in the form :ClassName: value"
+        """
+        return f"{self.__class__.__name__}: {self.value}"
+
+    def __eq__(self, other) -> bool:
+        """
+        custom eq representation of enum object
+
+        Parameters
+        ----------
+        other
+            other object for comparison
+
+        Returns
+        -------
+            bool -- True if isinstance of same class and has same value
+        """
+        return isinstance(other, self.__class__) and self.value == other.value
+
+    def __hash__(self) -> int:
+        """
+        custom hash representation of enum object
+
+        Returns
+        -------
+            int -- hash of enum object's value
+        """
+        return hash(self.value)
+
+
 @unique
-class AppropsStatus(Enum):
+class AppropsStatus(EnumDunderBase, Enum):
     """
     An enum class for setting appropriations status for executive departments
     - Fully Appropriated denotes departments operating under a full-year
@@ -246,7 +358,7 @@ class AppropsStatus(Enum):
 
 
 @unique
-class OpsStatus(Enum):
+class OpsStatus(EnumDunderBase, Enum):
     """
     An enum class for setting operating status for executive departments.
     - Open denotes departments operating under a full-year appropriation.
@@ -296,8 +408,8 @@ objects. Data currently omit judiciary and legislative budgets (federal courts
 and Congress).
 """
 
-DHS_FORMED: int = 1038200400
-"""DHS_FORMED: POSIX date of DHS formation (2003-11-25)"""
+DHS_FORMED: int = 12016
+"""DHS_FORMED: POSIX-day date of DHS formation (2003-11-25)"""
 
 
 STATUS_MAP: "StatusMapType" = frozenbidict(
@@ -347,85 +459,152 @@ human-readable statuses to more detailed output for power users.
 """
 
 
-class ShutdownFlag(Enum):
+class ShutdownFlag(EnumDunderBase, Enum):
     """ShutdownFlag: An enum object denoting whether an appropriations gap
     caused a shutdown."""
+
+    def __str__(
+        self,
+    ) -> str:
+        return (
+            f"{self.__class__.__name__}: shutdown"
+            if self.value == 1
+            else f"{self.__class__.__name__}: not shutdown"
+        )
 
     NO_SHUTDOWN = 0
     SHUTDOWN = 1
 
 
 APPROPRIATIONS_GAPS: "AppropriationsGapsMapType" = {
-    (212990400, 213768000): ({Dept.HHS, Dept.DOL, Dept.ED}, ShutdownFlag.NO_SHUTDOWN),
-    (244526400, 245476800): ({Dept.HHS, Dept.DOL, Dept.ED}, ShutdownFlag.NO_SHUTDOWN),
-    (247986000, 249627600): ({Dept.HHS, Dept.DOL, Dept.ED}, ShutdownFlag.NO_SHUTDOWN),
-    (276062400, 277444800): (
-        {Dept.HHS, Dept.DOL, Dept.DOD, Dept.ED},
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (307598400, 308462400): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (375166800, 375166800): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (409035600, 409208400): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (437374800, 437547600): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (465710400, 466660800): (
-        {Dept.DOJ, Dept.DOS, Dept.HUD, Dept.IA},
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (529905600, 529905600): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (566888400, 566888400): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (655185600, 655358400): (
-        DEPTS_SET.difference({Dept.DHS}),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (816325200, 816670800): (
-        DEPTS_SET.difference({Dept.DHS, Dept.DOE, Dept.USDA}),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (819090000, 820818000): (
-        DEPTS_SET.difference({Dept.DHS, Dept.DOE, Dept.USDA, Dept.DOD, Dept.USDT}),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (1380600000, 1381896000): (
-        DEPTS_SET,
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (1516510800, 1516510800): (
-        DEPTS_SET,
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (1545454800, 1549688400): (
+    (2465, 2474): (
         DEPTS_SET.difference(
             {
+                Dept.DOI,
+                Dept.DOE,
+                Dept.DHS,
+                Dept.DOJ,
+                Dept.DOC,
+                Dept.DOT,
+                Dept.USDA,
+                Dept.USDT,
+                Dept.VA,
+                Dept.HUD,
                 Dept.DOD,
+                Dept.PRES,
+                Dept.IA,
+                Dept.DOS,
+            }
+        ),
+        ShutdownFlag.NO_SHUTDOWN,
+    ),
+    (2830, 2841): (
+        DEPTS_SET.difference(
+            {
+                Dept.DOI,
+                Dept.DOE,
+                Dept.DHS,
+                Dept.DOJ,
+                Dept.DOC,
+                Dept.DOT,
+                Dept.USDA,
+                Dept.USDT,
+                Dept.VA,
+                Dept.HUD,
+                Dept.DOD,
+                Dept.PRES,
+                Dept.IA,
+                Dept.DOS,
+            }
+        ),
+        ShutdownFlag.NO_SHUTDOWN,
+    ),
+    (2870, 2889): (
+        DEPTS_SET.difference(
+            {
+                Dept.DOI,
+                Dept.DOE,
+                Dept.DHS,
+                Dept.DOJ,
+                Dept.DOC,
+                Dept.DOT,
+                Dept.USDA,
+                Dept.USDT,
+                Dept.VA,
+                Dept.HUD,
+                Dept.DOD,
+                Dept.PRES,
+                Dept.IA,
+                Dept.DOS,
+            }
+        ),
+        ShutdownFlag.NO_SHUTDOWN,
+    ),
+    (3195, 3211): (
+        DEPTS_SET.difference(
+            {
+                Dept.DOI,
+                Dept.DOT,
+                Dept.USDA,
+                Dept.USDT,
+                Dept.VA,
+                Dept.DOE,
+                Dept.HUD,
+                Dept.DHS,
+                Dept.PRES,
+                Dept.IA,
+                Dept.DOJ,
+                Dept.DOS,
+                Dept.DOC,
+            }
+        ),
+        ShutdownFlag.NO_SHUTDOWN,
+    ),
+    (3560, 3570): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
+    (4342, 4342): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.SHUTDOWN),
+    (4734, 4736): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
+    (5062, 5064): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
+    (5390, 5401): (
+        DEPTS_SET.difference(
+            {
+                Dept.DOI,
                 Dept.DOL,
+                Dept.DOD,
                 Dept.HHS,
+                Dept.DOT,
+                Dept.USDA,
+                Dept.USDT,
                 Dept.ED,
                 Dept.VA,
                 Dept.DOE,
+                Dept.PRES,
+                Dept.DHS,
+                Dept.DOC,
             }
         ),
         ShutdownFlag.SHUTDOWN,
     ),
+    (6133, 6133): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.SHUTDOWN),
+    (6561, 6561): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
+    (7583, 7585): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
+    (9448, 9452): (
+        DEPTS_SET.difference({Dept.USDA, Dept.DOE, Dept.DHS}),
+        ShutdownFlag.SHUTDOWN,
+    ),
+    (9480, 9500): (
+        DEPTS_SET.difference({Dept.USDA, Dept.USDT, Dept.DHS, Dept.DOE, Dept.DOD}),
+        ShutdownFlag.SHUTDOWN,
+    ),
+    (15979, 15994): (DEPTS_SET, ShutdownFlag.SHUTDOWN),
+    (17552, 17552): (DEPTS_SET, ShutdownFlag.SHUTDOWN),
+    (17887, 17936): (
+        DEPTS_SET.difference(
+            {Dept.DOL, Dept.HHS, Dept.ED, Dept.VA, Dept.DOE, Dept.DOD}
+        ),
+        ShutdownFlag.SHUTDOWN,
+    ),
 }
-# (326001600, 326001600): ({"Federal Trade Commission"}, ShutdownFlag.
+# (3773, 3773): ({"Federal Trade Commission"}, ShutdownFlag.
 # SHUTDOWN), for now, we omit FTC since it is not a Department-level entity;
 # agency-level data is on the to-do list
 """
@@ -440,247 +619,182 @@ day and had no substantial impact on government operations.
 """
 
 
-CR_DATA_CUTOFF_DATE: int = 883630800
+CR_DATA_CUTOFF_DATE: int = 10227
 
 """
-CR_DATA_CUTOFF_DATE: POSIX date of the beginning of the data cutoff period.
+CR_DATA_CUTOFF_DATE: POSIX-day date of the beginning of the data cutoff period.
 Current cutoff is 1 October 1998, CR data is not currently in fedcal for
 any time before this.
 """
 
 CR_DEPARTMENTS: "CRMapType" = {
-    (907214400, 907732800): set(),
-    (907819200, 908596800): {Dept.DOE},
-    (908683200, 908942400): {Dept.DOD, Dept.DOE},
-    (938750400, 939441600): {Dept.USDT, Dept.DOE},
-    (939528000, 940392000): {Dept.USDT, Dept.DOE, Dept.DOT},
-    (940478400, 940478400): {
-        Dept.VA,
-        Dept.HUD,
-        Dept.USDT,
-        Dept.DOE,
-        Dept.DOT,
-    },
-    (940651200, 940824000): {
-        Dept.USDT,
-        Dept.DOE,
-        Dept.HUD,
-        Dept.VA,
-        Dept.DOT,
-        Dept.USDA,
-    },
-    (940910400, 943851600): {
-        Dept.USDT,
-        Dept.DOE,
+    (10500, 10506): set(),
+    (10507, 10516): {Dept.DOE},
+    (10517, 10520): {Dept.DOE, Dept.DOD},
+    (10865, 10873): {Dept.USDT, Dept.DOE},
+    (10874, 10884): {Dept.USDT, Dept.DOE, Dept.DOT},
+    (10885, 10885): {Dept.HUD, Dept.DOT, Dept.USDT, Dept.VA, Dept.DOE},
+    (10887, 10889): {Dept.USDA, Dept.HUD, Dept.DOT, Dept.USDT, Dept.VA, Dept.DOE},
+    (10890, 10924): {
         Dept.DOD,
-        Dept.HUD,
-        Dept.VA,
-        Dept.DOT,
         Dept.USDA,
+        Dept.HUD,
+        Dept.DOT,
+        Dept.USDT,
+        Dept.VA,
+        Dept.DOE,
     },
-    (970372800, 971236800): {Dept.DOD},
-    (971323200, 972273600): {Dept.DOD, Dept.DOT, Dept.DOE, Dept.DOI},
-    (972360000, 972619200): {
+    (11231, 11241): {Dept.DOD},
+    (11242, 11253): {Dept.DOE, Dept.DOI, Dept.DOD, Dept.DOT},
+    (11254, 11257): {Dept.DOD, Dept.HUD, Dept.DOT, Dept.VA, Dept.DOE, Dept.DOI},
+    (11258, 11267): {
+        Dept.DOD,
+        Dept.USDA,
+        Dept.HUD,
+        Dept.DOT,
+        Dept.VA,
+        Dept.DOE,
+        Dept.DOI,
+    },
+    (11268, 11312): {
         Dept.DOD,
         Dept.DOE,
-        Dept.DOI,
-        Dept.HUD,
-        Dept.VA,
-        Dept.DOT,
-    },
-    (972705600, 973486800): {
-        Dept.DOD,
-        Dept.DOE,
-        Dept.DOI,
-        Dept.HUD,
-        Dept.VA,
-        Dept.DOT,
         Dept.USDA,
-    },
-    (973573200, 977374800): {
-        Dept.DOD,
-        Dept.DOE,
-        Dept.DOI,
+        Dept.HUD,
+        Dept.DOT,
+        Dept.VA,
         Dept.DOS,
-        Dept.HUD,
-        Dept.VA,
-        Dept.DOT,
-        Dept.USDA,
-    },
-    (1001908800, 1004936400): set(),
-    (1005022800, 1005541200): {Dept.DOI},
-    (1005627600, 1006750800): {Dept.USDT, Dept.DOI, Dept.DOE},
-    (1006837200, 1006837200): {
-        Dept.VA,
-        Dept.USDT,
-        Dept.HUD,
         Dept.DOI,
-        Dept.DOE,
     },
-    (1007010000, 1008651600): {
+    (11596, 11631): set(),
+    (11632, 11638): {Dept.DOI},
+    (11639, 11652): {Dept.USDT, Dept.DOI, Dept.DOE},
+    (11653, 11653): {Dept.HUD, Dept.USDT, Dept.VA, Dept.DOE, Dept.DOI},
+    (11655, 11674): {
+        Dept.DOE,
         Dept.DOC,
-        Dept.DOJ,
-        Dept.DOI,
-        Dept.USDT,
-        Dept.DOS,
+        Dept.USDA,
         Dept.HUD,
-        Dept.VA,
-        Dept.USDA,
-        Dept.DOE,
-    },
-    (1008738000, 1010638800): {
-        Dept.DOC,
-        Dept.DOJ,
-        Dept.DOT,
-        Dept.DOI,
-        Dept.USDT,
-        Dept.DOS,
-        Dept.HUD,
-        Dept.VA,
-        Dept.USDA,
-        Dept.DOE,
-    },
-    (1033444800, 1035259200): set(),
-    (1035345600, 1038200400): {Dept.DOD},
-    (1035345600, 1045717200): {Dept.DOD},
-    (1038200400, 1045717200): {Dept.DOD},
-    (1064980800, 1068440400): {Dept.DHS, Dept.DOD},
-    (1068526800, 1070254800): {Dept.DHS, Dept.DOI, Dept.DOD},
-    (1070341200, 1074834000): {Dept.DHS, Dept.DOI, Dept.DOD, Dept.DOE},
-    (1096603200, 1098072000): {Dept.DOD},
-    (1098158400, 1102482000): {Dept.DHS, Dept.DOD},
-    (1128139200, 1129608000): {Dept.DOI},
-    (1129694400, 1131598800): {Dept.DHS, Dept.DOI},
-    (1131685200, 1131944400): {Dept.DHS, Dept.DOI, Dept.USDA},
-    (1132030800, 1132376400): {Dept.DHS, Dept.DOI, Dept.DOS, Dept.USDA},
-    (1132462800, 1132635600): {
-        Dept.DHS,
-        Dept.DOS,
-        Dept.DOI,
-        Dept.USDA,
-        Dept.DOE,
-    },
-    (1132722000, 1133326800): {
-        Dept.DHS,
-        Dept.DOS,
-        Dept.DOC,
-        Dept.DOJ,
-        Dept.DOI,
-        Dept.USDA,
-        Dept.DOE,
-    },
-    (1133413200, 1135918800): {
-        Dept.DHS,
-        Dept.DOC,
-        Dept.DOT,
-        Dept.DOI,
         Dept.USDT,
         Dept.VA,
         Dept.DOS,
-        Dept.HUD,
         Dept.DOJ,
-        Dept.USDA,
-        Dept.DOE,
-    },
-    (1159675200, 1159934400): {Dept.DOD},
-    (1160020800, 1191124800): {Dept.DHS, Dept.DOD},
-    (1191211200, 1194930000): set(),
-    (1195016400, 1198645200): {Dept.DOD},
-    (1222833600, 1236744000): {Dept.VA, Dept.DHS, Dept.DOD},
-    (1254369600, 1256097600): set(),
-    (1256184000, 1256702400): {Dept.USDA},
-    (1256788800, 1256788800): {Dept.DHS, Dept.USDA, Dept.DOE},
-    (1256961600, 1261112400): {
         Dept.DOI,
-        Dept.DHS,
-        Dept.USDA,
-        Dept.DOE,
     },
-    (1261198800, 1261198800): {
+    (11675, 11697): {
+        Dept.DOE,
+        Dept.DOC,
+        Dept.USDA,
+        Dept.HUD,
+        Dept.DOT,
+        Dept.USDT,
+        Dept.VA,
+        Dept.DOS,
+        Dept.DOJ,
+        Dept.DOI,
+    },
+    (11961, 11982): set(),
+    (11983, 12016): {Dept.DOD},
+    (11983, 12103): {Dept.DOD},
+    (12016, 12103): {Dept.DOD},
+    (12326, 12366): {Dept.DHS, Dept.DOD},
+    (12367, 12387): {Dept.DHS, Dept.DOI, Dept.DOD},
+    (12388, 12440): {Dept.DHS, Dept.DOE, Dept.DOI, Dept.DOD},
+    (12692, 12709): {Dept.DOD},
+    (12710, 12760): {Dept.DHS, Dept.DOD},
+    (13057, 13074): {Dept.DOI},
+    (13075, 13097): {Dept.DHS, Dept.DOI},
+    (13098, 13101): {Dept.DHS, Dept.DOI, Dept.USDA},
+    (13102, 13106): {Dept.DHS, Dept.DOS, Dept.DOI, Dept.USDA},
+    (13107, 13109): {Dept.DOE, Dept.USDA, Dept.DHS, Dept.DOS, Dept.DOI},
+    (13110, 13117): {
+        Dept.DOE,
+        Dept.DOC,
+        Dept.USDA,
+        Dept.DHS,
+        Dept.DOS,
+        Dept.DOJ,
+        Dept.DOI,
+    },
+    (13118, 13147): {
+        Dept.DOE,
+        Dept.DOC,
+        Dept.USDA,
+        Dept.HUD,
+        Dept.DOT,
+        Dept.DHS,
+        Dept.USDT,
+        Dept.VA,
+        Dept.DOS,
+        Dept.DOJ,
+        Dept.DOI,
+    },
+    (13422, 13425): {Dept.DOD},
+    (13426, 13786): {Dept.DHS, Dept.DOD},
+    (13787, 13830): set(),
+    (13831, 13873): {Dept.DOD},
+    (14153, 14314): {Dept.DHS, Dept.DOD, Dept.VA},
+    (14518, 14538): set(),
+    (14539, 14545): {Dept.USDA},
+    (14546, 14546): {Dept.DHS, Dept.DOE, Dept.USDA},
+    (14548, 14596): {Dept.DHS, Dept.DOE, Dept.DOI, Dept.USDA},
+    (14597, 14597): {
         Dept.DOL,
-        Dept.DHS,
+        Dept.DOE,
         Dept.DOC,
-        Dept.DOJ,
+        Dept.USDA,
         Dept.IA,
-        Dept.DOT,
-        Dept.PRES,
-        Dept.USDT,
-        Dept.VA,
-        Dept.DOS,
+        Dept.HUD,
         Dept.ED,
-        Dept.HUD,
-        Dept.DOI,
-        Dept.USDA,
-        Dept.DOE,
-    },
-    (1285905600, 1302840000): set(),
-    (1285905600, 1321592400): set(),
-    (1321678800, 1324616400): {
-        Dept.DOC,
-        Dept.HUD,
-        Dept.DOJ,
         Dept.DOT,
-        Dept.USDA,
-    },
-    (1349064000, 1364270400): set(),
-    (1364356800, 1380513600): {
-        Dept.VA,
-        Dept.DOD,
         Dept.DHS,
-        Dept.DOC,
+        Dept.USDT,
+        Dept.PRES,
+        Dept.VA,
+        Dept.DOS,
         Dept.DOJ,
-        Dept.USDA,
+        Dept.DOI,
     },
-    (1381982400, 1389934800): set(),
-    (1412136000, 1418706000): set(),
-    (1418792400, 1425445200): {
+    (14883, 15079): set(),
+    (14883, 15296): set(),
+    (15297, 15331): {Dept.USDA, Dept.DOC, Dept.HUD, Dept.DOT, Dept.DOJ},
+    (15614, 15790): set(),
+    (15791, 15978): {Dept.DOD, Dept.DOC, Dept.USDA, Dept.DHS, Dept.VA, Dept.DOJ},
+    (15995, 16087): set(),
+    (16344, 16420): set(),
+    (16421, 16498): {
         Dept.DOL,
         Dept.DOD,
+        Dept.DOE,
         Dept.DOC,
-        Dept.DOT,
-        Dept.PRES,
-        Dept.USDT,
-        Dept.VA,
-        Dept.DOI,
-        Dept.DOS,
-        Dept.ED,
         Dept.USDA,
         Dept.HUD,
-        Dept.DOJ,
         Dept.IA,
-        Dept.DOE,
-    },
-    (1443672000, 1450414800): set(),
-    (1475294400, 1493956800): {Dept.VA},
-    (1506830400, 1516424400): set(),
-    (1516597200, 1521777600): set(),
-    (1538366400, 1545368400): {
-        Dept.VA,
-        Dept.DOL,
-        Dept.DOD,
         Dept.ED,
-        Dept.HHS,
-        Dept.DOE,
-    },
-    (1549774800, 1550206800): {
+        Dept.DOT,
+        Dept.USDT,
+        Dept.PRES,
         Dept.VA,
-        Dept.DOL,
-        Dept.DOD,
-        Dept.ED,
-        Dept.HHS,
-        Dept.DOE,
+        Dept.DOS,
+        Dept.DOJ,
+        Dept.DOI,
     },
-    (1569902400, 1576818000): set(),
-    (1601524800, 1609045200): set(),
-    (1633060800, 1647316800): set(),
-    (1664596800, 1672290000): set(),
-    (1696132800, 1705640400): set(),
+    (16709, 16787): set(),
+    (17075, 17291): {Dept.VA},
+    (17440, 17551): set(),
+    (17553, 17613): set(),
+    (17805, 17886): {Dept.DOL, Dept.DOD, Dept.ED, Dept.VA, Dept.HHS, Dept.DOE},
+    (17937, 17942): {Dept.DOL, Dept.DOD, Dept.ED, Dept.VA, Dept.HHS, Dept.DOE},
+    (18170, 18250): set(),
+    (18536, 18623): set(),
+    (18901, 19066): set(),
+    (19266, 19355): set(),
+    (19631, 19741): set(),
 }
-
 """
 CR_DEPARTMENTS: A mapping of arguments that craft the continuing resolution
 calendar. Current data begin with FY99. Each key is a tuple of unix
-timestamps for the start and end of the time interval. **Intervals represent
+timestamp for the start and end of the time interval. **Intervals represent
 periods where there were no changes in affected agencies.**
 
 **Each value is a set of UNAFFECTED departments as Dept enum

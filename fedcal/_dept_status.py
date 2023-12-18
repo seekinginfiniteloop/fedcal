@@ -30,13 +30,19 @@ of interval data from `_tree.Tree()`
 from __future__ import annotations
 
 from itertools import product
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Self
 
-from attrs import define, field
+from attrs import define
 
-from fedcal import constants, time_utils
+from fedcal import time_utils
 from fedcal.depts import FedDepartment
-from fedcal.constants import Dept
+from fedcal.constants import (
+    Dept,
+    DEPTS_SET,
+    CR_DATA_CUTOFF_DATE,
+    STATUS_MAP,
+    DHS_FORMED,
+)
 
 # we import Tree from fedcal._tree inside DepartmentState to keep it offline
 # until needed
@@ -45,14 +51,12 @@ if TYPE_CHECKING:
     import pandas as pd
     from intervaltree import IntervalTree
     from fedcal._typing import (
-        FedStampConvertibleTypes,
         StatusDictType,
         StatusGeneratorType,
         StatusMapType,
         StatusPoolType,
         StatusTupleType,
     )
-    from fedcal.constants import Dept
 
 
 @define(order=True, auto_attribs=True)
@@ -85,7 +89,7 @@ class DepartmentStatus:
 
     """
 
-    status_map: ClassVar["StatusMapType"] = constants.STATUS_MAP
+    status_map: ClassVar["StatusMapType"] = STATUS_MAP
     status_pool: ClassVar["StatusPoolType"] = None
 
     @classmethod
@@ -109,10 +113,10 @@ class DepartmentStatus:
                 approps_status=cls.status_map[status_key][0],
                 ops_status=cls.status_map[status_key][1],
             )
-            for dept, status_key in product(constants.DEPTS_SET, cls.status_map.keys())
+            for dept, status_key in product(DEPTS_SET, cls.status_map.keys())
         }
         # we delete DHS for this status since it was created after the cutoff
-        del status_pool[constants.Dept.DHS, "CR_DATA_CUTOFF_DEFAULT_STATUS"]
+        del status_pool[Dept.DHS, "CR_DATA_CUTOFF_DEFAULT_STATUS"]
         return status_pool
 
     @classmethod
@@ -165,10 +169,26 @@ class DepartmentState:
     """
 
     tree: ClassVar["IntervalTree"] = None
-    max_default_date: ClassVar[int] = 0
+    max_default_date: ClassVar[int] = None
+
+    def __new__(cls) -> "DepartmentState":
+        """
+        Overrides the default __new__ method to ensure that the tree is
+        initialized correctly.
+
+        Returns
+        -------
+        A new DepartmentState instance.
+
+        """
+        obj: Self = super().__new__(cls)
+        if not cls.tree or cls.max_default_date:
+            cls.get_state_tree()
+            cls._set_max_default()
+        return obj
 
     @classmethod
-    def _set_max_default(cls) -> int:
+    def _set_max_default(cls) -> None:
         """
         Set the maximum default date.
 
@@ -178,12 +198,14 @@ class DepartmentState:
         FUTURE_STATUS.
 
         """
+        if not cls.tree:
+            cls.initialize_tree()
         tree_ceiling: int = cls.tree.end() if cls.tree else 0
-        today: int = time_utils.get_today_in_posix()
-        return max(tree_ceiling, today)
+        today: int = time_utils.get_today_in_posix_day()
+        cls.max_default_date = max(tree_ceiling, today)
 
     @classmethod
-    def initialize_tree(cls) -> "IntervalTree":
+    def initialize_tree(cls) -> None:
         """
         Initializes and returns an IntervalTree instance.
 
@@ -207,9 +229,9 @@ class DepartmentState:
         # we wait to load _tree until needed for snappiness
         from fedcal._tree import Tree
 
-        int_tree: Tree = Tree()
-        cls.tree = int_tree.tree
-        cls.max_default_date: int = cls._set_max_default()
+        if not cls.tree:
+            int_tree: Tree = Tree()
+            cls.tree = int_tree.tree.copy()
 
     @classmethod
     def get_state_tree(cls) -> "IntervalTree":
@@ -221,14 +243,15 @@ class DepartmentState:
         The singleton tree.
 
         """
-        if cls.tree is None:
+        if not cls.tree:
             cls.initialize_tree()
-        return cls.tree
+        if not cls.max_default_date:
+            cls._set_max_default()
 
     @staticmethod
     def get_depts_set_at_time(
         date: "pd.Timestamp" | int,
-    ) -> set["Dept"]:
+    ) -> set[Dept]:
         """
         Retrieves set of Depts enum objects based on time input; a helper
         method  for handling DHS's creation.
@@ -238,12 +261,8 @@ class DepartmentState:
             The set of Depts objects.
         """
         if not isinstance(date, int):
-            date = time_utils.pdtimestamp_to_posix_seconds(
-                timestamp=time_utils.to_timestamp(date)
-            )
-        if date >= constants.DHS_FORMED:
-            return constants.DEPTS_SET
-        return constants.DEPTS_SET.difference({constants.Dept.DHS})
+            date = time_utils.pdtimestamp_to_posix_day(timestamp=date)
+        return DEPTS_SET if date >= DHS_FORMED else DEPTS_SET.difference({Dept.DHS})
 
     @classmethod
     def _determine_default_status_key(cls, posix_date: int) -> str:
@@ -255,20 +274,18 @@ class DepartmentState:
         Parameters
         ----------
         posix_date
-            date of the point of interest in POSIX time.
+            date of the point of interest in POSIX-day time.
 
         Returns
         -------
         Returns the default key for STATUS_MAP based on the date.
 
         """
-        if posix_date < constants.CR_DATA_CUTOFF_DATE:
+        if posix_date < CR_DATA_CUTOFF_DATE:
             return "CR_DATA_CUTOFF_DEFAULT_STATUS"
         if posix_date > cls.max_default_date:
             return "FUTURE_STATUS"
         return "DEFAULT_STATUS"
-
-    tree = get_state_tree()
 
     @classmethod
     def get_state(cls, date: "pd.Timestamp") -> "StatusDictType":
@@ -294,11 +311,13 @@ class DepartmentState:
 
         """
         status_pool: "StatusPoolType" = DepartmentStatus.get_status_pool()
-        status_map: "StatusMapType" = constants.STATUS_MAP
-        tree: "IntervalTree" = cls.get_state_tree()
+        status_map: "StatusMapType" = STATUS_MAP
+        if not cls.tree:
+            cls.get_state_tree()
+        tree: "IntervalTree" = cls.tree
 
-        posix_date: int = time_utils.pdtimestamp_to_posix_seconds(timestamp=date)
-        depts_set: set["Dept"] = cls.get_depts_set_at_time(date=date)
+        posix_date: int = time_utils.pdtimestamp_to_posix_day(timestamp=date)
+        depts_set: set[Dept] = cls.get_depts_set_at_time(date=date)
         default_status_key: str = cls._determine_default_status_key(
             posix_date=posix_date
         )
@@ -306,20 +325,18 @@ class DepartmentState:
 
         if data := tree.at(p=posix_date):
             for interval in data:
+                status_key: str = status_map.inverse[interval.data[1]]
                 for dept in interval.data[0]:
-                    status_key: str = status_map.inverse[interval.data[1]]
                     status_dict[dept] = status_pool[(dept, status_key)]
 
         elif not data:
             for dept in depts_set:
                 status_dict[dept] = status_pool[(dept, default_status_key)]
-
         else:
             interval_depts = set(status_dict.keys())
-            diff_set: set["Dept"] = depts_set.difference(interval_depts)
+            diff_set: set[Dept] = depts_set.difference(interval_depts)
             for dept in diff_set:
                 status_dict[dept] = status_pool[(dept, default_status_key)]
-
         return status_dict
 
     @classmethod
@@ -360,12 +377,12 @@ class DepartmentState:
         """
         status_pool: "StatusPoolType" = DepartmentStatus.get_status_pool()
         tree: "IntervalTree" = cls.get_state_tree()
-        start_posix: int = time_utils.pdtimestamp_to_posix_seconds(timestamp=start)
-        end_posix: int = time_utils.pdtimestamp_to_posix_seconds(timestamp=end)
+        start_posix: int = time_utils.pdtimestamp_to_posix_day(timestamp=start)
+        end_posix: int = time_utils.pdtimestamp_to_posix_day(timestamp=end)
 
         for interval in tree[start_posix:end_posix]:
             for key_date in {interval.begin, interval.end, start_posix, end_posix}:
-                department_set: set["Dept"] = cls.get_depts_set_at_time(date=key_date)
+                department_set: set[Dept] = cls.get_depts_set_at_time(date=key_date)
                 if start_posix <= key_date <= end_posix:
                     default_status_key: str = cls._determine_default_status_key(
                         posix_date=key_date

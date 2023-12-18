@@ -28,7 +28,7 @@ that output.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING, Any, Generator, Tuple
 
 from attrs import field, frozen, astuple
 
@@ -74,12 +74,58 @@ class FedDepartment:
 
     def __str__(self) -> str:
         """We override attrs default to provide a meaningful string
-        representation"""
-        return f"""{self.name.abbrev}:
-            funding: {self.approps_status},
-            operational: {self.ops_status}"""
+        representation
 
-    def attributes_to_tuple(
+        Returns
+        -------
+        string representation of instance
+        """
+        return f"""{self.name.abbrev}:
+            {self.approps_status},
+            {self.ops_status.value}"""
+
+    def __iter__(self) -> Generator["Dept" | "AppropsStatus" | "OpsStatus", Any, None]:
+        """
+        Implement a simple iter to make FedDepartment iterable.
+
+        Yields
+        ------
+            Generator of instance attributes
+        """
+        yield self.name
+        yield self.approps_status
+        yield self.ops_status
+
+    def __eq__(self, other) -> bool:
+        """
+        Override eq to ensure we can compare FedDepartment objects
+        appropriately.
+
+        Parameters
+        ----------
+        other
+            other object to compare
+
+        Returns
+        -------
+            True if a FedDepartment object with matching attributes
+        """
+        return (
+            isinstance(other, FedDepartment)
+            and self.attrs_to_tuple() == other.attrs_to_tuple()
+        )
+
+    def __hash__(self) -> int:
+        """
+        We want to make sure FedDepartment objects are properly hashable.
+
+        Returns
+        -------
+            hash of a tuple of instance's attributes
+        """
+        return hash(self.attrs_to_tuple())
+
+    def attrs_to_tuple(
         self,
     ) -> Tuple["Dept", "AppropsStatus", "OpsStatus"]:
         """

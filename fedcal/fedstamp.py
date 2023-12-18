@@ -67,8 +67,8 @@ class FedStamp(
         year_month_day
             returns the FedStamp as a YearMonthDay object.
 
-        fedtimestamp
-            Returns the POSIX timestamp normalized to midnight.
+        posix_day
+            Returns the POSIX-day timestamp normalized to midnight.
 
         business_day
             Checks if the date is a business day.
@@ -262,6 +262,7 @@ class FedStamp(
         """
         We set __getattribute__ manually to ensure it overrides
         any delegation to pd.Timestamp from our metaclass.
+        (It shouldn't, I know, but I swear it was.)
 
         Parameters
         ----------
@@ -356,8 +357,11 @@ class FedStamp(
         The current status cache, mapping departments to their statuses.
 
         """
-        state = _dept_status.DepartmentState()
-        return state.get_state(date=self.pdtimestamp)
+        if not _dept_status.DepartmentState.tree:
+            state = _dept_status.DepartmentState()
+
+            _dept_status.DepartmentState.get_state_tree()
+        return _dept_status.DepartmentState.get_state(date=self.pdtimestamp)
 
     def _set_status_cache(self) -> None:
         """
@@ -424,19 +428,19 @@ class FedStamp(
         )
 
     @property
-    def fedtimestamp(self) -> int:
+    def posix_day(self) -> int:
         """
         Built for internal use in fedcal, variation of pd.Timestamp.timestamp()
-        method, which remains available. Returns the number of seconds since
+        method, which remains available. Returns the number of days since
         the Unix epoch (1970-01-01 00:00:00 UTC) as an integer normalized to
         midnight (vice pandas' return of a float).
 
         Returns
         -------
-        Integer POSIX timestamp in seconds.
+        Integer POSIX-day timestamp in seconds.
 
         """
-        return time_utils.pdtimestamp_to_posix_seconds(timestamp=self.pdtimestamp)
+        return time_utils.pdtimestamp_to_posix_day(timestamp=self.pdtimestamp)
 
     # business day property
     @property

@@ -134,8 +134,8 @@ class FedIndex(
 
     Methods
     -------
-    to_fedtimestamp
-        Converts dates to POSIX timestamps.
+    to_posix_day
+        Converts dates to POSIX-day timestamps.
 
     contains_date
         Checks if a date is in the index.
@@ -478,7 +478,7 @@ class FedIndex(
         for date, department_statuses in (
             data_input.items() if isinstance(data_input, dict) else data_input
         ):
-            if time_utils.pdtimestamp_to_posix_seconds(
+            if time_utils.pdtimestamp_to_posix_day(
                 timestamp=time_utils.to_timestamp(date)
             ) < constants.CR_DATA_CUTOFF_DATE and any(
                 status in statuses for status in data_check_statuses
@@ -561,24 +561,24 @@ class FedIndex(
 
     # utility methods
 
-    def to_fedtimestamp(self) -> pd.Series:
+    def to_posix_day(self) -> pd.Series:
         """
-        Convert the dates in the index to POSIX timestamps normalized to midnight.
+        Convert the dates in the index to POSIX-day timestamps normalized to midnight.
 
         Returns
         -------
         pd.Series
-            A Pandas pd.Series containing integer POSIX timestamps.
+            A Pandas pd.Series containing integer POSIX-day timestamps.
 
         Notes
         -----
         This method normalizes each date in the index to midnight and then
-        converts them to POSIX timestamps (seconds since the Unix epoch).
+        converts them to POSIX-day timestamps (seconds since the Unix epoch).
         """
 
         return (
             self.datetimeindex.to_series()
-            .apply(func=lambda x: time_utils.pdtimestamp_to_posix_seconds(timestamp=x))
+            .apply(func=lambda x: time_utils.pdtimestamp_to_posix_day(timestamp=x))
             .astype(dtype=int)
         )
 
@@ -1339,7 +1339,7 @@ def to_fedindex(date_range: FedIndexConvertibleTypes = None) -> FedIndex:
         `FedIndexConvertibleTypes`:
             tuple[FedStampConvertibleTypes, FedStampConvertibleTypes],
             tuple[pd.Timestamp, pd.Timestamp],
-            "np.np.ndarray",
+            "np.ndarray",
             "pd.Series",
             "pd.DatetimeIndex",
             "pd.Index",
