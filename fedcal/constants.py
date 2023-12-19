@@ -130,6 +130,38 @@ class Dept(Enum):
             else False
         )
 
+    def __lt__(self, other: Any) -> bool:
+        """
+        Customized less than comparison for enum
+
+        Returns
+        -------
+        Returns True if other is a Dept enum and its abbrev is less than
+        self.abbrev
+        """
+        return (
+            (self.abbrev, self.full, self.short)
+            < (other.abbrev, other.full, other.short)
+            if isinstance(other, Dept)
+            else False
+        )
+
+    def __gt__(self, other: Any) -> bool:
+        """
+        Customized greater than comparison for enum
+
+        Returns
+        -------
+        Returns True if other is a Dept enum and its abbrev is greater than
+        self.abbrev
+        """
+        return (
+            (self.abbrev, self.full, self.short)
+            > (other.abbrev, other.full, other.short)
+            if isinstance(other, Dept)
+            else False
+        )
+
     def __hash__(self) -> int:
         """
         Customized hash function for enum
@@ -330,6 +362,36 @@ class EnumDunderBase:
             int -- hash of enum object's value
         """
         return hash(self.value)
+
+    def __lt__(self, other) -> bool:
+        """
+        custom lt representation of enum object
+
+        Parameters
+        ----------
+        other
+            other object for comparison
+
+        Returns
+        -------
+            bool -- True if isinstance of same class and has same value
+        """
+        return isinstance(other, self.__class__) and self.value < other.value
+
+    def __gt__(self, other) -> bool:
+        """
+        custom gt representation of enum object
+
+        Parameters
+        ----------
+        other
+            other object for comparison
+
+        Returns
+        -------
+            bool -- True if isinstance of same class and has same value
+        """
+        return isinstance(other, self.__class__) and self.value > other.value
 
 
 @unique

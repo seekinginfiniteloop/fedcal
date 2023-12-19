@@ -106,7 +106,8 @@ class FedStamp(
             Dept enum objects.
 
         all_depts_status
-            Retrieves the status of all departments as a dictionary on the date.
+            Retrieves the status of all departments as a dictionary on the
+            date.
 
         all_depts_full_approps
             Checks if all departments are fully appropriated on the date,
@@ -116,7 +117,7 @@ class FedStamp(
             Checks if all departments were/are under a continuing resolution on
             the date, returning bool.
 
-        all_depts_cr_or_full_approps
+        all_depts_funded
             Checks if all departments were/are either fully appropriated or
             under a continuing resolution on the date, returning bool.
 
@@ -144,7 +145,7 @@ class FedStamp(
             Retrieves departments that were fully operational (had a full-year
             appropriation) on the date, returning a dict.
 
-        full_or_cr_depts
+        funded_depts
             Retrieves departments that were/are either fully operational or
             under a continuing resolution on the date, returning a dict.
 
@@ -358,8 +359,7 @@ class FedStamp(
 
         """
         if not _dept_status.DepartmentState.tree:
-            state = _dept_status.DepartmentState()
-
+            _dept_status.DepartmentState()
             _dept_status.DepartmentState.get_state_tree()
         return _dept_status.DepartmentState.get_state(date=self.pdtimestamp)
 
@@ -392,7 +392,7 @@ class FedStamp(
         self._set_status_cache()
         cache: "StatusDictType" | None = self._status_cache
 
-        if self.pdtimestamp() < constants.CR_DATA_CUTOFF_DATE and status_key in {
+        if self.posix_day < constants.CR_DATA_CUTOFF_DATE and status_key in {
             "DEFAULT_STATUS",
             "CR_STATUS",
         }:
@@ -408,6 +408,27 @@ class FedStamp(
             for dept, fed_dept in cache.items()
             if fed_dept.to_status_tuple() == target_status
         }
+
+    def get_feddepts_status(
+        self, departments: list[Dept] | set[Dept]
+    ) -> set[FedDepartment]:
+        """
+        Retrieve the status for a list of departments.
+
+        Parameters
+        ----------
+        departments
+            A list of departments to retrieve status for.
+
+        Returns
+        -------
+        A set of FedDepartment objects representing the status of the
+        specified departments.
+
+        """
+        self._set_status_cache()
+        cache: "StatusDictType" | None = self._status_cache
+        return {cache.get(dept) for dept in departments}
 
     # utility properties
     @property
@@ -454,7 +475,7 @@ class FedStamp(
 
         """
         busday = _date_attributes.FedBusDay()
-        return busday.is_bday(date=self.pdtimestamp)
+        return busday.get_business_days(dates=self.pdtimestamp)
 
     # holiday properties
     def _set_holidays(self) -> None:
@@ -662,7 +683,7 @@ class FedStamp(
         )
 
     @property
-    def all_depts_cr_or_full_approps(self) -> bool:
+    def all_depts_funded(self) -> bool:
         """
         Checks if all departments were/are either fully appropriated or under
         a continuing resolution on the date.
@@ -737,7 +758,7 @@ class FedStamp(
         return bool(self.gapped_depts)
 
     @property
-    def gov_funding_gap(self) -> bool:
+    def gov_unfunded(self) -> bool:
         """
         Checks if any departments were/are either subject to a gap in
         appropriations or shutdown on the date.
@@ -766,7 +787,7 @@ class FedStamp(
         return self.get_departments_by_status(status_key="DEFAULT_STATUS")
 
     @property
-    def full_or_cr_depts(self) -> "StatusDictType" | None:
+    def funded_depts(self) -> "StatusDictType" | None:
         """
         Retrieves departments that were/are either fully operational or under
         a continuing resolution on the date.
@@ -838,7 +859,7 @@ class FedStamp(
         ) | self.get_departments_by_status(status_key="GAP_STATUS")
 
 
-def to_fedstamp(date: "FedStampConvertibleTypes") -> FedStamp:
+def to_fedstamp(*date: "FedStampConvertibleTypes") -> FedStamp:
     """
     Converts a date to a FedStamp object.
 
@@ -853,4 +874,10 @@ def to_fedstamp(date: "FedStampConvertibleTypes") -> FedStamp:
         The FedStamp object representing the date.
 
     """
-    return FedStamp(pdtimestamp=time_utils.to_timestamp(date))
+    if count := len(date):
+        if count in {1, 3}:
+            date = tuple(date) if count == 3 else date
+            return FedStamp(pdtimestamp=time_utils.to_timestamp(date))
+    raise ValueError(
+        f"invalid number of arguments: {count}. to_fedstamp() requires either 1 argument, or 3 integers as YYYY, M, D"
+    )

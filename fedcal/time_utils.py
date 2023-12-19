@@ -53,7 +53,6 @@ input to U.S. Eastern, as with `to_timestamp`.
 
 from __future__ import annotations
 
-import time
 import datetime
 from functools import singledispatch, wraps
 from typing import TYPE_CHECKING, Any
@@ -320,12 +319,12 @@ def _yearmonthday_to_timestamp(date_input: YearMonthDay) -> pd.Timestamp:
 
 @to_timestamp.register(cls=tuple)
 def _timetuple_to_timestamp(date_input: tuple) -> pd.Timestamp:
+    print(date_input, type(date_input))
     if len(date_input) != 3:
         raise ValueError(
             """Timetuple input requires a tuple with four-digit year, month,
             day as integers or integer-convertible strings."""
         )
-
     try:
         year, month, day = (int(item) for item in date_input)
     except ValueError as e:
@@ -346,11 +345,11 @@ def check_timestamp(
     func,
 ):
     """
-    Since _normalize_timestamp is designed to normalize Timestamps, to avoid repeating
-    ourselves with conversions to Timestamps in most of our to_timestamp
-    converters, we instead wrap/decorate _normalize_timestamp to intercept and convert
-    any non-Timestamps to Timestamps once to_timestamp gets them in a format
-    pd.Timestamp will accept.
+    Since _normalize_timestamp is designed to normalize Timestamps, to avoid
+    repeating ourselves with conversions to Timestamps in most of our
+    to_timestamp converters, we instead wrap/decorate _normalize_timestamp to
+    intercept and convert any non-Timestamps to Timestamps once to_timestamp
+    gets them in a format pd.Timestamp will accept.
 
     Parameters
     ----------
@@ -378,8 +377,8 @@ def check_timestamp(
         except TypeError as e:
             raise TypeError(
                 f"""input {arg} could not be converted to a pd.Timestamp.
-                    Our _normalize_timestamp function needs pandas Timestamps or a
-                    pd.Timestamp convertible date-like object (e.g. Python
+                    Our _normalize_timestamp function needs pandas Timestamps
+                    or a pd.Timestamp convertible date-like object (e.g. Python
                     date)
                     """
             ) from e
@@ -436,7 +435,9 @@ def wrap_tuple(
     @wraps(wrapped=func)
     def wrapper(*args) -> tuple | Any | None:
         """Our to-tuple handling wrapper."""
-        return func((args[0], args[1])) if len(args) == 2 else func(*args)
+        if count := len(args) in {1, 2}:
+            return func(args[0]) if count == 1 else func((args[0], args[1]))
+        raise ValueError(f"We need 1 or 2 arguments... not {count}")
 
     return wrapper
 
@@ -444,7 +445,7 @@ def wrap_tuple(
 @wrap_tuple
 @singledispatch
 def to_datetimeindex(
-    input_dates: "FedIndexConvertibleTypes",
+    *input_dates: "FedIndexConvertibleTypes",
 ) -> pd.DatetimeIndex | None:
     """
     A singledispatch function for handling date conversions to DatetimeIndex.

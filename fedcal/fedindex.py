@@ -606,25 +606,24 @@ class FedIndex(
 
     def contains_index(self, other_index: "FedIndexConvertibleTypes") -> bool:
         """
-        Check if the index contains a specified date.
+        Check if the index wholly contains another index..
 
         Parameters
         ----------
-        date : FedIndexConvertibleTypes
-            The date to check for in the index.
+        other_index : FedIndexConvertibleTypes
+            The other index to check for containment.
 
         Returns
         -------
         bool
-            True if the date is in the index, False otherwise.
-
-        Notes
-        -----
-        This method converts the input date to a `pd.Timestamp`, if necessary,
-        and then checks if it exists in the index.
+            True if the other index is wholly contained in this index, False
+            otherwise.
         """
-
-        other_index = time_utils.to_datetimeindex(other_index)
+        other_index = (
+            other_index.datetimeindex
+            if isinstance(other_index, FedIndex)
+            else time_utils.to_datetimeindex(other_index)
+        )
         return other_index.isin(values=self.datetimeindex).all()
 
     def overlaps_index(self, other_index: "FedIndexConvertibleTypes") -> bool:
@@ -648,8 +647,11 @@ class FedIndex(
         necessary, and then checks for any overlapping dates using the `isin`
         method.
         """
-
-        other_index = time_utils.to_datetimeindex(other_index)
+        other_index = (
+            other_index.datetimeindex
+            if isinstance(other_index, FedIndex)
+            else time_utils.to_datetimeindex(other_index)
+        )
         return other_index.isin(values=self.datetimeindex.any())
 
     def construct_status_dataframe(
@@ -818,7 +820,7 @@ class FedIndex(
 
     # Begin date attribute property methods
     @property
-    def business_days(self) -> pd.Series:
+    def business_days(self) -> "np.ndarray":
         """
         Determine if the dates in the index are Federal business days.
 
@@ -832,8 +834,10 @@ class FedIndex(
 
         """
         bizdays = _date_attributes.FedBusDay()
-        next_business_days = self.datetimeindex + bizdays.fed_business_days
-        return self == next_business_days
+        next_business_days = self.datetimeindex + bizdays.get_business_days(
+            dates=self.datetimeindex.to_series()
+        )
+        return self.datetimeindex == next_business_days
 
     @property
     def fys(self) -> pd.Series:
@@ -849,8 +853,9 @@ class FedIndex(
             A Pandas pd.Series with the fiscal year for each date in the index.
 
         """
-        fyears = _date_attributes.FedFiscalYear()
-        return fyears.get_fiscal_years(datetimeindex=self.datetimeindex)
+        return _date_attributes.FedFiscalYear.get_fiscal_years(
+            datetimeindex=self.datetimeindex
+        )
 
     @property
     def fiscal_quarters(self) -> pd.Series:
@@ -867,8 +872,9 @@ class FedIndex(
             index.
 
         """
-        fqs = _date_attributes.FedFiscalQuarter()
-        return fqs.get_fiscal_quarters(datetimeindex=self.datetimeindex)
+        return _date_attributes.FedFiscalQuarter.get_fiscal_quarters(
+            datetimeindex=self.datetimeindex
+        )
 
     def _set_holidays(self) -> None:
         """
@@ -877,7 +883,7 @@ class FedIndex(
         self._holidays = self._holidays or _date_attributes.FedHolidays()
 
     @property
-    def holidays(self) -> pd.Series:
+    def holidays(self) -> "np.ndarray":
         """
         Identify federal holidays in the index.
 
@@ -886,13 +892,12 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series of boolean values, where True indicates a
+        np.ndarray
+            An np.ndarray of boolean values, where True indicates a
             federal holiday.
         """
         self._set_holidays()
-        next_holidays: pd.DatetimeIndex = self.datetimeindex + self._holidays
-        return self.datetimeindex == next_holidays
+        return self.datetimeindex.isin(values=self._holidays.holidays)
 
     @property
     def proclaimed_holidays(self) -> "np.ndarray":
@@ -937,7 +942,7 @@ class FedIndex(
         )
 
     @property
-    def probable_mil_passdays(self) -> pd.Series:
+    def probable_mil_passdays(self) -> "np.ndarray":
         """
         Estimate military pass days within the index's date range.
 
@@ -948,17 +953,17 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series indicating probable military pass days.
-
+        np.ndarray
+            An np.ndarray of boolean values, where True indicates a probable
+            military pass day.
         """
 
         self._set_mil_cache()
-        return self._mil_cache.get_milpass_series()
+        return self.datetimeindex.isin(values=self._mil_cache.get_milpass_series())
 
     # Payday properties
     @property
-    def mil_paydays(self) -> pd.Series:
+    def mil_paydays(self) -> np.ndarray:
         """
         Identify military payday dates within the index.
 
@@ -967,13 +972,12 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series indicating military payday dates.
-
+        np.ndarray
+            A boolean np.ndarray indicating military payday dates as True.
         """
 
         self._set_mil_cache()
-        return self._mil_cache.get_milpay_series()
+        return self.datetimeindex.isin(values=self._mil_cache.get_milpay_series())
 
     @property
     def civ_paydays(self) -> pd.Series:
@@ -1328,7 +1332,7 @@ class FedIndex(
         )
 
 
-def to_fedindex(date_range: FedIndexConvertibleTypes = None) -> FedIndex:
+def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:
     """
     Converts a date range to a `FedIndex`.
 
@@ -1361,5 +1365,9 @@ def to_fedindex(date_range: FedIndexConvertibleTypes = None) -> FedIndex:
     to_fedindex(((datetime.datetime(2000,1,1)),datetime.datetime(2010,5,30)))
     ```
     """
-    date_range = time_utils.to_datetimeindex(date_range)
-    return FedIndex(datetimeindex=date_range)
+    if count := len(dates):
+        if count in {1, 2}:
+            return FedIndex(datetimeindex=time_utils.to_datetimeindex(dates))
+    raise ValueError(
+        f"Invalid number of arguments: {count}. Please pass either an array-like date object or start and end dates for the range."
+    )

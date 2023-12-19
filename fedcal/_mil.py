@@ -87,7 +87,7 @@ class MilitaryPayDay:
         if date is None:
             date: pd.Timestamp = self.date
         bizday = _date_attributes.FedBusDay()
-        if date.day in (1, 15) and bizday.is_bday(date=date):
+        if date.day in (1, 15) and bizday.get_business_days(dates=date):
             return True
 
         # Handle dates that are not the 1st or 15th
@@ -170,9 +170,13 @@ class MilitaryPayDay:
         Boolean indicating if the next business day is in the range.
 
         """
-        bizday = _date_attributes.FedBusDay()
+        biz_instance = _date_attributes.FedBusDay()
         return next(
-            (day == date for day in payday_range[::-1] if bizday.is_bday(date=day)),
+            (
+                day == date
+                for day in payday_range[::-1]
+                if biz_instance.get_business_days(dates=day)
+            ),
             False,
         )
 
@@ -247,7 +251,7 @@ class ProbableMilitaryPassDay:
         bizdays = _date_attributes.FedBusDay()
         if date is None:
             date = self.date
-        elif not bizdays.is_bday(date=date):
+        elif not bizdays.get_business_days(dates=date):
             return False
 
         holidays_in_offset: list[pd.Timestamp] | None = self._get_holidays_in_range(
@@ -410,6 +414,7 @@ class MilPayPassRange:
                 date=day
             ).is_military_payday(date=day):
                 paydays.append(day)
+
             if self.milday in [
                 MilDay.LIKELY_PASS,
                 MilDay.PAY_AND_PASS,

@@ -43,7 +43,7 @@ if TYPE_CHECKING:
     from ._typing import StatusDictType, StatusTupleType
 
 
-@frozen(order=True)
+@frozen()
 class FedDepartment:
 
     """
@@ -113,6 +113,46 @@ class FedDepartment:
         return (
             isinstance(other, FedDepartment)
             and self.attrs_to_tuple() == other.attrs_to_tuple()
+        )
+
+    def __lt__(self, other) -> bool:
+        """
+        Override lt to ensure we can compare FedDepartment objects
+        appropriately.
+
+        Parameters
+        ----------
+        other
+            other object to compare
+
+        Returns
+        -------
+            True if a FedDepartment object with matching attributes
+        """
+        return (
+            self.attrs_to_tuple() < other.attrs_to_tuple()
+            if isinstance(other, FedDepartment)
+            else NotImplemented
+        )
+
+    def __gt__(self, other) -> bool:
+        """
+        Override gt to ensure we can compare FedDepartment objects
+        appropriately.
+
+        Parameters
+        ----------
+        other
+            other object to compare
+
+        Returns
+        -------
+            True if a FedDepartment object with matching attributes
+        """
+        return (
+            self.attrs_to_tuple() > other.attrs_to_tuple()
+            if isinstance(other, FedDepartment)
+            else NotImplemented
         )
 
     def __hash__(self) -> int:

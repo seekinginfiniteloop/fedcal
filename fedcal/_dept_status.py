@@ -332,9 +332,8 @@ class DepartmentState:
         elif not data:
             for dept in depts_set:
                 status_dict[dept] = status_pool[(dept, default_status_key)]
-        else:
-            interval_depts = set(status_dict.keys())
-            diff_set: set[Dept] = depts_set.difference(interval_depts)
+
+        if diff_set := depts_set.difference(set(status_dict.keys())):
             for dept in diff_set:
                 status_dict[dept] = status_pool[(dept, default_status_key)]
         return status_dict

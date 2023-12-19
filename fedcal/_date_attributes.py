@@ -35,11 +35,11 @@ from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
 from fedcal import constants
-from fedcal.time_utils import to_timestamp
+from fedcal.time_utils import to_timestamp, to_datetimeindex
 
 if TYPE_CHECKING:
-    from numpy import ndarray
-    from pandas import Index, Series
+    import numpy as np
+    from pandas import Index, Series, DatetimeIndex
 
 
 @define(order=True)
@@ -54,7 +54,7 @@ class FedBusDay:
 
     Methods
     -------
-    is_bday(date) -> bool
+    get_business_days(dates) -> bool
         Determine if a given date is a federal business day.
 
     """
@@ -63,28 +63,33 @@ class FedBusDay:
         factory=lambda: CustomBusinessDay(calendar=FedHolidays.holidays)
     )
 
-    def is_bday(self, date: pd.Timestamp) -> bool:
+    def get_business_days(self, dates: pd.Timestamp | "Series") -> bool | "np.ndarray":
         """
-        Class representing federal business days, excluding federal holidays.
+        Method for retrieving business days.
 
-        Attributes
+        Parameters
         ----------
-        fed_business_days : CustomBusinessDay
-            Business day offset excluding US federal holidays.
+        dates : either a single pd.Timestamp or a Series of pd.
+        TimestampsBusiness for offsetting with fed_business_days.
 
-        Methods
+        Returns
         -------
-        is_bday(date)
-            Determine if a given date is a federal business day.
-
+        bool or np.ndarray of bool
+            True if the date is a business day, False if not. If dates is a
+            Series, returns a boolean array of the same length.
         """
-        next_business_day: pd.Timestamp = (
-            date - pd.Timedelta(days=1)
-        ) + self.fed_business_days
-        return next_business_day == date
+
+        if isinstance(dates, pd.Timestamp):
+            next_business_day: pd.Timestamp = (
+                dates - pd.Timedelta(days=1)
+            ) + self.fed_business_days
+            return next_business_day == dates
+        else:
+            next_business_days = (dates - pd.Timedelta(days=1)) + self.fed_business_days
+            return next_business_days == dates
 
 
-class GuessChristmasEveHoliday(Enum):
+class GuessChristmasEveHoliday(constants.EnumDunderBase, Enum):
 
     """
     A simple enum class for setting preferences on FedHolidays. If YES,
@@ -97,7 +102,7 @@ class GuessChristmasEveHoliday(Enum):
     """
 
     YES = 1
-    NO = 2
+    NO = 0
 
 
 @define(order=True)
@@ -136,7 +141,7 @@ class FedHolidays:
     proclaimed_holidays: list[pd.Timestamp] = field(
         default=constants.HISTORICAL_HOLIDAYS_BY_PROCLAMATION
     )
-    holidays: pd.DatetimeIndex = field(init=False)
+    holidays: pd.DataFrame = field(init=False)
 
     guess_christmas_eve_holiday: GuessChristmasEveHoliday = field(
         default=GuessChristmasEveHoliday.NO
@@ -147,7 +152,7 @@ class FedHolidays:
         If you decide to roll the dice and guess on Presidential
         proclamations, then we add these to self.holidays
         """
-        self.holidays = pd.concat(
+        self.holidays: pd.DataFrame = pd.concat(
             [
                 pd.Series(data=self.proclaimed_holidays),
                 USFederalHolidayCalendar().holidays().to_frame(),
@@ -206,7 +211,7 @@ class FedHolidays:
         return christmas.dayofweek in [1, 4] and (date.month == 12 and date.day == 24)
 
     @staticmethod
-    def guess_proclamation_holidays(datetimeindex: pd.DatetimeIndex) -> "ndarray":
+    def guess_proclamation_holidays(datetimeindex: pd.DatetimeIndex) -> "np.ndarray":
         """
         Guess if Christmas Eve may be proclaimed a holiday based on Christmas
         Day's weekday.
