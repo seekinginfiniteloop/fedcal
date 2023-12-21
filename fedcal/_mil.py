@@ -273,7 +273,7 @@ class ProbableMilitaryPassDay:
 
         thursday_holidays = dates[mask_dict["hol_day_idx"] == 3]
         thursday_offset = thursday_holidays + pd.Timedelta(value=1, unit='days')
-        passdays_mask.loc[thursday_offset] = True if
+        passdays_mask.loc[thursday_offset] = True
         friday_holidays = dates[mask_dict["hol_day_idx"] == 4]
         friday_offset = friday_holidays + pd.Timedelta(value=3, unit='days')
         passdays_mask.loc[friday_offset] = True
