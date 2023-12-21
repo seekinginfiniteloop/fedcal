@@ -27,7 +27,7 @@ date attributes of the federal calendar:
 from __future__ import annotations
 
 from enum import Enum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Generator
 
 import pandas as pd
 from attrs import define, field
@@ -35,7 +35,9 @@ from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
 from fedcal import constants
-from fedcal.time_utils import to_timestamp, to_datetimeindex
+from fedcal.time_utils import to_timestamp
+
+import warnings
 
 if TYPE_CHECKING:
     import numpy as np
@@ -57,13 +59,16 @@ class FedBusDay:
     get_business_days(dates) -> bool
         Determine if a given date is a federal business day.
 
+    get_next_prior_bday(date) -> Generator[pd.Timestamp, Any, None]
+        Generates next prior business day to the date.
+
     """
 
     fed_business_days: CustomBusinessDay = field(
         factory=lambda: CustomBusinessDay(calendar=FedHolidays.holidays)
     )
 
-    def get_business_days(self, dates: pd.Timestamp | "Series") -> bool | "np.ndarray":
+    def get_business_days(self, dates: pd.Timestamp | "Series") -> bool | pd.Series:
         """
         Method for retrieving business days.
 
@@ -80,13 +85,37 @@ class FedBusDay:
         """
 
         if isinstance(dates, pd.Timestamp):
-            next_business_day: pd.Timestamp = (
-                dates - pd.Timedelta(days=1)
-            ) + self.fed_business_days
-            return next_business_day == dates
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                next_business_day: pd.Timestamp = (
+                    dates - pd.Timedelta(days=1)
+                ) + self.fed_business_days
+                return next_business_day == dates
         else:
-            next_business_days = (dates - pd.Timedelta(days=1)) + self.fed_business_days
-            return next_business_days == dates
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                next_business_days = (
+                    dates - pd.Timedelta(days=1)
+                ) + self.fed_business_days
+                return dates[next_business_days == dates]
+
+    def get_next_prior_bday(
+        self, date: pd.Timestamp
+    ) -> Generator[pd.Timestamp, Any, None]:
+        """
+        Generates next earliest business day. Primarily for finding
+        next-earliest business day before a military payday that doesn't
+        fall on a business day.
+
+        Yields
+        ------
+        next nearest business day prior to the given date
+        """
+        current_day: pd.Timestamp = date
+        while True:
+            current_day -= pd.Timedelta(days=1)
+            if current_day in self.fed_business_days:
+                yield current_day
 
 
 class GuessChristmasEveHoliday(constants.EnumDunderBase, Enum):
@@ -157,7 +186,7 @@ class FedHolidays:
                 pd.Series(data=self.proclaimed_holidays),
                 USFederalHolidayCalendar().holidays().to_frame(),
             ]
-        ).drop_duplicates()
+        )
         if self.guess_christmas_eve_holiday == GuessChristmasEveHoliday.YES:
             self.holidays = self.add_poss_christmas_eve_holidays()
 

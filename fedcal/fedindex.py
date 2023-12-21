@@ -99,10 +99,10 @@ class FedIndex(
     all_depts_cr : pd.Series
         pd.Series for departments under a continuing resolution.
 
-    all_depts_cr_or_full_approps : pd.Series
+    all_depts_funded : pd.Series
         pd.Series for departments under full appropriations or a CR.
 
-    all_unfunded : pd.Series
+    all_depts_unfunded : pd.Series
         pd.Series for all unfunded departments.
 
     gov_cr : pd.Series
@@ -117,7 +117,7 @@ class FedIndex(
     full_op_depts : pd.DataFrame
         pd.DataFrame of fully operational departments.
 
-    full_or_cr_depts : pd.DataFrame
+    funded_depts : pd.DataFrame
         pd.DataFrame of departments fully funded or under a CR.
 
     cr_depts : pd.DataFrame
@@ -325,37 +325,6 @@ class FedIndex(
         are not explicitly set.
         """
         return self.datetimeindex.min(), self.datetimeindex.max()
-
-    def _get_mil_cache(self) -> None:
-        """
-        Retrieve the military pay pass range for the current date range.
-
-        Returns
-        -------
-        None
-        This method does not return a value but sets an internal cache.
-
-        Notes
-        -----
-        The method updates the start and end date range of the instance and
-        then retrieves the MilPayPassRange object corresponding to this
-        updated range.
-        """
-
-        self.set_self_date_range()
-        return _mil.MilPayPassRange(start=self.start, end=self.end)
-
-    def _set_mil_cache(self) -> None:
-        """
-        Initialize or update the military cache for the instance.
-
-        Notes
-        -----
-        This method sets the `_mil_cache` attribute with a `MilPayPassRange`
-        object. If `_mil_cache` is already set, it leaves it unchanged.
-        Otherwise, it calls `_get_mil_cache` to generate and set the cache.
-        """
-        self._mil_cache: _mil.MilPayPassRange = self._mil_cache or self._get_mil_cache()
 
     def _set_status_gen(self) -> None:
         """
@@ -942,24 +911,24 @@ class FedIndex(
         )
 
     @property
-    def probable_mil_passdays(self) -> "np.ndarray":
+    def probable_mil_passdays(self) -> pd.Series:
         """
         Estimate military pass days within the index's date range.
 
         This property calculates the probable military pass days based on the
-        index's date range and internal military cache data. See notes on
+        index's date range and ProbableMilitaryPassDay object. See notes on
         similar properties in FedStamp; while this will be mostly
         accurate, specific dates for passes vary between commands and locales.
 
         Returns
         -------
-        np.ndarray
-            An np.ndarray of boolean values, where True indicates a probable
+        pd.Series
+            A pd.Series of boolean values, where True indicates a probable
             military pass day.
         """
 
-        self._set_mil_cache()
-        return self.datetimeindex.isin(values=self._mil_cache.get_milpass_series())
+        passdays = _mil.ProbableMilitaryPassDay(dates=self.datetimeindex)
+        return passdays.passdays
 
     # Payday properties
     @property
@@ -967,17 +936,16 @@ class FedIndex(
         """
         Identify military payday dates within the index.
 
-        This property uses the index's date range and military cache data to
+        This property uses the index's date range and MilitaryPayDay object to
         determine the dates that are military paydays.
 
         Returns
         -------
-        np.ndarray
-            A boolean np.ndarray indicating military payday dates as True.
+        pd.Series
+            A boolean pd.Series indicating military payday dates as True.
         """
-
-        self._set_mil_cache()
-        return self.datetimeindex.isin(values=self._mil_cache.get_milpay_series())
+        milpays = _mil.MilitaryPayDay(dates=self.datetimeindex)
+        return milpays.paydays
 
     @property
     def civ_paydays(self) -> pd.Series:
@@ -1117,7 +1085,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"CR_STATUS"})
 
     @property
-    def all_depts_cr_or_full_approps(self) -> pd.Series:
+    def all_depts_funded(self) -> pd.Series:
         """
         Determines if all departments have either full appropriations or are
         under a continuing resolution on each date.
@@ -1136,7 +1104,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"DEFAULT_STATUS", "CR_STATUS"})
 
     @property
-    def all_unfunded(self) -> pd.Series:
+    def all_depts_unfunded(self) -> pd.Series:
         """
         Assesses if all departments are unfunded on each date.
 
@@ -1166,11 +1134,9 @@ class FedIndex(
         Returns
         -------
         pd.Series
-            A pd.Series where each date is True if *any* department is under a CR,
-            otherwise False.
+            A pd.Series where each date is True if *any* department is under a CR, otherwise False.
 
         """
-
         return self._check_dept_status(statuses={"CR_STATUS"}, check_any=True)
 
     @property
@@ -1234,7 +1200,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"DEFAULT_STATUS"})
 
     @property
-    def full_or_cr_depts(self) -> pd.DataFrame:
+    def funded_depts(self) -> pd.DataFrame:
         """
         Compiles a pd.DataFrame of departments either fully funded or under a
         continuing resolution.

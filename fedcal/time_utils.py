@@ -319,7 +319,6 @@ def _yearmonthday_to_timestamp(date_input: YearMonthDay) -> pd.Timestamp:
 
 @to_timestamp.register(cls=tuple)
 def _timetuple_to_timestamp(date_input: tuple) -> pd.Timestamp:
-    print(date_input, type(date_input))
     if len(date_input) != 3:
         raise ValueError(
             """Timetuple input requires a tuple with four-digit year, month,

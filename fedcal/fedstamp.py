@@ -563,8 +563,8 @@ class FedStamp(
         for predictable gaps in military person-power.
 
         """
-        passday = _mil.ProbableMilitaryPassDay(date=self.pdtimestamp)
-        return passday.is_likely_passday(date=self.pdtimestamp)
+        passday = _mil.ProbableMilitaryPassDay(dates=self.pdtimestamp)
+        return passday.passdays
 
     # payday properties
     @property
@@ -577,8 +577,8 @@ class FedStamp(
         True if the pdtimestamp is a military payday, False otherwise.
 
         """
-        milpay = _mil.MilitaryPayDay(date=self.pdtimestamp)
-        return milpay.is_military_payday(date=self.pdtimestamp)
+        milpay = _mil.MilitaryPayDay(dates=self.pdtimestamp)
+        return milpay.paydays
 
     @property
     def civ_payday(self) -> bool:
