@@ -98,22 +98,26 @@ class MilitaryPayDay:
 
         payday_mask: pd.Series[bool] = first_or_fifteenth_mask & business_days_mask
 
-        non_biz_1st_15th = dates[first_or_fifteenth_mask & ~business_days_mask]
+        non_biz_1st_15th: pd.DatetimeIndex = dates[
+            first_or_fifteenth_mask & ~business_days_mask
+        ]
         for non_biz_date in non_biz_1st_15th:
-            return self._extracted_from_get_mil_paydays_30(
-                non_biz_date, bizday_instance, payday_mask
+            prev_days: pd.DatetimeIndex = pd.date_range(
+                start=non_biz_date - pd.Timedelta(days=3),
+                end=non_biz_date - pd.Timedelta(days=1),
             )
+            prev_business_days: bool | pd.Series[
+                bool
+            ] = bizday_instance.get_business_days(dates=prev_days)
+            prev_business_day_mask: np.ndarray = prev_days.isin(
+                values=prev_business_days
+            )
+            recent_biz_day: pd.Timestamp = prev_days.to_series()[
+                prev_business_day_mask
+            ].max()
+            payday_mask.at[recent_biz_day] = recent_biz_day in dates
 
-    # TODO Rename this here and in `get_mil_paydays`
-    def _extracted_from_get_mil_paydays_30(self, non_biz_date, bizday_instance, payday_mask):
-        prev_days = pd.date_range(start=non_biz_date - pd.Timedelta(days=3), end=non_biz_date - pd.Timedelta(days=1))
-        prev_business_days = bizday_instance.get_business_days(dates=prev_days)
-        prev_business_day_mask = pd.Series(index=prev_days, data=prev_business_days)
-
-        recent_biz_day = prev_days[prev_business_day_mask].max()
-        payday_mask.at[recent_biz_day] = True
-
-        return payday_mask
+        return pd.Series(data=payday_mask, index=dates, dtype=bool, name="mil_paydays")
 
 
 @define(order=True, kw_only=True)
@@ -134,9 +138,6 @@ class ProbableMilitaryPassDay:
     get_probable_passdays(dates=None) -> np.ndarray
         Leverages boolean masking operations to identify probable
         military passdays across a DatetimeIndex.
-
-    is_likely_passday(date=None) -> bool
-        Evaluates whether the given date is likely a military pass day.
 
     Notes
     -----
@@ -212,18 +213,23 @@ class ProbableMilitaryPassDay:
                 else dates
             )
         masks: pd.DataFrame = self._get_base_masks(dates=dates)
-        fri_mask = dates.isin(
+        fri_mask: pd.Series[bool] = dates.isin(
             dates[masks["monday_holidays"]] - pd.DateOffset(days=3)
         ) | dates.isin(dates[masks["thursday_holidays"]] + pd.DateOffset(days=1))
 
-        mon_mask = dates.isin(
+        mon_mask: pd.Series[bool] = dates.isin(
             dates[masks["friday_holidays"]] + pd.DateOffset(days=3)
         ) | dates.isin(dates[masks["tuesday_holidays"]] - pd.DateOffset(days=1))
-        thurs_mask = dates.isin(
+        thurs_mask: pd.Series[bool] = dates.isin(
             dates[masks["wednesday_holidays"]] + pd.DateOffset(days=1)
         )
 
-        return (fri_mask | mon_mask | thurs_mask) & masks["eligible_days"]
+        return pd.Series(
+            data=((fri_mask | mon_mask | thurs_mask) & masks["eligible_days"]),
+            index=dates,
+            dtype=bool,
+            name="probable_mil_passdays",
+        )
 
     @staticmethod
     def _get_base_masks(
@@ -245,7 +251,6 @@ class ProbableMilitaryPassDay:
         bizday_instance = _date_attributes.FedBusDay()
         holidays_instance = _date_attributes.FedHolidays()
 
-        # Initialize the DataFrame
         mask_frame = pd.DataFrame(index=dates)
 
         mask_frame["dates"] = dates.to_series(index=dates)

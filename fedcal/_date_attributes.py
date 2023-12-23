@@ -86,14 +86,14 @@ class FedBusDay:
 
         if isinstance(dates, pd.Timestamp):
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+                warnings.simplefilter(action="ignore")
                 next_business_day: pd.Timestamp = (
                     dates - pd.Timedelta(days=1)
                 ) + self.fed_business_days
                 return next_business_day == dates
         else:
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore")
+                warnings.simplefilter(action="ignore")
                 next_business_days = (
                     dates - pd.Timedelta(days=1)
                 ) + self.fed_business_days
