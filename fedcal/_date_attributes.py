@@ -181,12 +181,17 @@ class FedHolidays:
         If you decide to roll the dice and guess on Presidential
         proclamations, then we add these to self.holidays
         """
-        self.holidays: pd.DataFrame = pd.concat(
+        _holidays = pd.concat(
             [
                 pd.Series(data=self.proclaimed_holidays),
                 USFederalHolidayCalendar().holidays().to_frame(),
             ]
         )
+
+        self.holidays: pd.DatetimeIndex = pd.DatetimeIndex(
+            data=_holidays[0], name="US_federal_holidays"
+        )
+
         if self.guess_christmas_eve_holiday == GuessChristmasEveHoliday.YES:
             self.holidays = self.add_poss_christmas_eve_holidays()
 

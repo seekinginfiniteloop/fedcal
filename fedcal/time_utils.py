@@ -97,6 +97,28 @@ def pdtimestamp_to_posix_day(timestamp: pd.Timestamp) -> int:
     return int(timestamp.timestamp() // 86400)
 
 
+def ensure_datetimeindex(
+    dates: pd.Series | pd.Timestamp | pd.DatetimeIndex,
+) -> pd.DatetimeIndex:
+    """
+    Simple function to ensure a DatetimeIndex for certain calculations.
+
+    Parameters
+    ----------
+    dates
+        Date or dates to ensure are outputted to a DatetimeIndex.
+
+    Returns
+    -------
+        DatetimeIndex
+    """
+    if isinstance(dates, (pd.Series, pd.Timestamp)):
+        return pd.DatetimeIndex(
+            data=[dates] if isinstance(dates, pd.Timestamp) else dates
+        )
+    return dates
+
+
 @define(order=True)
 class YearMonthDay:
 

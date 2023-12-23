@@ -29,28 +29,8 @@ import pandas as pd
 import numpy as np
 from attrs import define, field
 
+
 from fedcal import _date_attributes, time_utils
-
-
-def _npmask_to_series_mask(
-    dates: pd.DatetimeIndex, mask: np.ndarray[bool] | bool
-) -> pd.Series[bool]:
-    """
-    Converts a boolean numpy array to a boolean pandas series.
-    Utility for cutting repetition. Pandas throws a deprecation
-    warning when trying to directly mask a pandas object
-    with an np.ndarray, so we cast them to Series for consistency.
-
-    Parameters
-    ----------
-    dates : DatetimeIndex to use for the boolean series.
-    mask : numpy boolean array.
-
-    Returns
-    -------
-    Boolean pandas series.
-    """
-    return pd.Series(data=mask, index=dates, dtype=bool)
 
 
 @define(order=True, kw_only=True)
@@ -87,18 +67,9 @@ class MilitaryPayDay:
         """
         Initializes the instance and sets attributes.
         """
-        _timestamp = False
-        if isinstance(self.dates, pd.Series):
-            self.dates = time_utils.to_datetimeindex(self.dates)
-        if isinstance(self.dates, pd.Timestamp):
-            self.dates = pd.DatetimeIndex([self.dates])
-            _timestamp = True
+        self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
 
-        self.paydays: pd.Series | bool | None = (
-            self.get_mil_paydays(dates=self.dates).iloc[0]
-            if _timestamp
-            else self.get_mil_paydays(dates=self.dates)
-        )
+        self.paydays: pd.Series | bool | None = self.get_mil_paydays(dates=self.dates)
 
     def get_mil_paydays(self, dates: pd.DatetimeIndex | pd.Series = None) -> pd.Series:
         """
@@ -113,38 +84,34 @@ class MilitaryPayDay:
         Boolean array of dates reflecting military paydays for the range.
         """
 
-        if dates is None:
-            dates = (
-                self.dates
-                if isinstance(self.dates, (pd.DatetimeIndex, pd.Series))
-                else None
-            )
-        dates = pd.DatetimeIndex(dates) if isinstance(dates, pd.Series) else dates
-
+        dates = pd.DatetimeIndex(data=self.dates if dates is None else dates)
         bizday_instance = _date_attributes.FedBusDay()
 
-        first_or_fifteenth_mask: pd.Series[bool] = _npmask_to_series_mask(
-            dates=dates, mask=dates.day.isin([1, 15])
+        first_or_fifteenth_mask: pd.Series = pd.Series(
+            data=(dates.day.isin(values=[1, 15])), index=dates, dtype=bool
+        )
+        business_days_mask = pd.Series(
+            dates.isin(bizday_instance.get_business_days(dates=dates)),
+            index=dates,
+            dtype=bool,
         )
 
-        business_days_mask: pd.Series[bool] = _npmask_to_series_mask(
-            dates=dates, mask=bizday_instance.get_business_days(dates=dates)
-        )
+        payday_mask: pd.Series[bool] = first_or_fifteenth_mask & business_days_mask
 
-        payday_mask: pd.Series[bool] = _npmask_to_series_mask(dates=dates, mask=False)
-        payday_mask[first_or_fifteenth_mask & business_days_mask] = True
+        non_biz_1st_15th = dates[first_or_fifteenth_mask & ~business_days_mask]
+        for non_biz_date in non_biz_1st_15th:
+            return self._extracted_from_get_mil_paydays_30(
+                non_biz_date, bizday_instance, payday_mask
+            )
 
-        non_biz_1st_15th_indices = np.where(
-            dates.day.isin([1, 15]) & ~business_days_mask
-        )[0]
+    # TODO Rename this here and in `get_mil_paydays`
+    def _extracted_from_get_mil_paydays_30(self, non_biz_date, bizday_instance, payday_mask):
+        prev_days = pd.date_range(start=non_biz_date - pd.Timedelta(days=3), end=non_biz_date - pd.Timedelta(days=1))
+        prev_business_days = bizday_instance.get_business_days(dates=prev_days)
+        prev_business_day_mask = pd.Series(index=prev_days, data=prev_business_days)
 
-        # Check up to 3 days before each non-business 1st or 15th
-        for idx in non_biz_1st_15th_indices:
-            for shift in range(1, 4):
-                shifted_idx = idx - shift
-                if shifted_idx >= 0 and business_days_mask.iloc[shifted_idx]:
-                    payday_mask.iloc[shifted_idx] = True
-                    break
+        recent_biz_day = prev_days[prev_business_day_mask].max()
+        payday_mask.at[recent_biz_day] = True
 
         return payday_mask
 
@@ -200,7 +167,8 @@ class ProbableMilitaryPassDay:
 
     *Private Methods*:
         _get_base_masks(dates) -> dict
-            a helper method for get_probable_passdays that generates a dictionary of boolean masks to use for evaluation.
+            a helper method for get_probable_passdays that generates a
+            dictionary of boolean masks to use for evaluation.
     """
 
     dates: pd.DatetimeIndex | pd.Series | pd.Timestamp | None = field(default=None)
@@ -216,20 +184,12 @@ class ProbableMilitaryPassDay:
         AttributeError
             if neither date nor dates are provided
         """
-        _timestamp = False
-        if isinstance(self.dates, pd.Series):
-            self.dates = time_utils.to_datetimeindex(self.dates)
-        if isinstance(self.dates, pd.Timestamp):
-            self.dates = pd.DatetimeIndex([self.dates])
-            _timestamp = True
+        self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
+        self.passdays = self.get_probable_passdays(dates=self.dates)
 
-        self.passdays: pd.Series | bool = (
-            self.get_probable_passdays(dates=self.dates).iloc[0]
-            if _timestamp
-            else self.get_probable_passdays(dates=self.dates)
-        )
-
-    def get_probable_passdays(self, dates: pd.DatetimeIndex | pd.Series) -> pd.Series:
+    def get_probable_passdays(
+        self, dates: pd.DatetimeIndex | pd.Series
+    ) -> pd.Series[bool]:
         """
         Determines the likely passdays for the given dates.
 
@@ -243,50 +203,35 @@ class ProbableMilitaryPassDay:
         probable passdays.
 
         """
-
         if dates is None:
             dates = self.dates
-        dates = (
-            time_utils.to_datetimeindex(dates)
-            if isinstance(dates, pd.Series)
-            else dates
+        else:
+            dates = (
+                time_utils.to_datetimeindex(dates)
+                if isinstance(dates, pd.Series)
+                else dates
+            )
+        masks: pd.DataFrame = self._get_base_masks(dates=dates)
+        fri_mask = dates.isin(
+            dates[masks["monday_holidays"]] - pd.DateOffset(days=3)
+        ) | dates.isin(dates[masks["thursday_holidays"]] + pd.DateOffset(days=1))
+
+        mon_mask = dates.isin(
+            dates[masks["friday_holidays"]] + pd.DateOffset(days=3)
+        ) | dates.isin(dates[masks["tuesday_holidays"]] - pd.DateOffset(days=1))
+        thurs_mask = dates.isin(
+            dates[masks["wednesday_holidays"]] + pd.DateOffset(days=1)
         )
-        date_series = pd.Series(data=dates, index=dates)
 
-        mask_dict: dict[str, pd.Series[bool] | pd.Index[int]] = self._get_base_masks(
-            dates=dates
-        )
-        passdays_mask: pd.Series[bool] = _npmask_to_series_mask(dates=dates, mask=False)
-
-        monday_holidays = dates[mask_dict["hol_day_idx"] == 0]
-        monday_offset = monday_holidays - pd.Timedelta(value=3, unit='days')
-        passdays_mask.loc[monday_offset] = True
-
-
-        tuesday_holidays = dates[mask_dict["hol_day_idx"] == 1]
-        tuesday_offset = tuesday_holidays - pd.Timedelta(value=1, unit='days')
-        passdays_mask.loc[tuesday_offset] = True
-
-        wednesday_holidays = dates[mask_dict["hol_day_idx"] == 2]
-        wednesday_offset = wednesday_holidays + pd.Timedelta(value=1, unit='days')
-        passdays_mask.loc[wednesday_offset] = True
-
-        thursday_holidays = dates[mask_dict["hol_day_idx"] == 3]
-        thursday_offset = thursday_holidays + pd.Timedelta(value=1, unit='days')
-        passdays_mask.loc[thursday_offset] = True
-        friday_holidays = dates[mask_dict["hol_day_idx"] == 4]
-        friday_offset = friday_holidays + pd.Timedelta(value=3, unit='days')
-        passdays_mask.loc[friday_offset] = True
-
-        passdays_mask |= mask_dict["christmas_eve"] & mask_dict["eligible_days"]
-        return dates[passdays_mask]
+        return (fri_mask | mon_mask | thurs_mask) & masks["eligible_days"]
 
     @staticmethod
     def _get_base_masks(
         dates: pd.DatetimeIndex,
-    ) -> dict[str, pd.Series[bool] | pd.Index[int]]:
+    ) -> pd.DataFrame:
         """
-        Retrieves the base masks for evaluating a DatetimeIndex for possible passdays. A helper method to `get_probable_passdays`.
+        Retrieves the base masks for evaluating a DatetimeIndex for possible
+        passdays. A helper method to `get_probable_passdays`.
 
         Parameters
         ----------
@@ -294,60 +239,31 @@ class ProbableMilitaryPassDay:
 
         Returns
         -------
-        Dictionary of boolean masks.
-            - holidays : boolean array indicating whether the date is a holiday.
-            - businessdays : boolean array indicating whether the date is a business day.
-            - christmas_eve : boolean array indicating whether the date is Christmas Eve.
-            - hol_day_idx : integer array indicating the day of the week of the holiday.
-            - dates_day_idx : integer array indicating the day of the week of the date.
-            - eligible_days : boolean array indicating whether the date is a weekday.
-            - friday_holidays : boolean array indicating whether the date is a Friday holiday.
-            - monday_holidays : boolean array indicating whether the date is a Monday holiday.
-            - thursday_holidays : boolean array indicating whether the date is a Thursday holiday.
+        A dataframe of boolean masks, and date information
         """
+
         bizday_instance = _date_attributes.FedBusDay()
         holidays_instance = _date_attributes.FedHolidays()
-        date_series = pd.Series(data=dates, index=dates)
-        holidays_mask: pd.Series[bool] = date_series.isin(
-            values=holidays_instance.holidays
-        )
 
-        business_days_mask: pd.Series[bool] = date_series.isin(
+        # Initialize the DataFrame
+        mask_frame = pd.DataFrame(index=dates)
+
+        mask_frame["dates"] = dates.to_series(index=dates)
+        mask_frame["holidays"] = dates.isin(values=holidays_instance.holidays)
+        mask_frame["holiday_days_of_week"] = dates.dayofweek
+        mask_frame["business_days"] = dates.isin(
             values=bizday_instance.get_business_days(dates=dates)
         )
 
-        christmas_eve_mask: pd.Series = pd.Series(
-            data=(dates.month == 12) & (dates.day == 24), index=dates, dtype=bool
+        for day, dow in zip(
+            ["monday", "tuesday", "wednesday", "thursday", "friday"], range(5)
+        ):
+            mask_frame[f"{day}_holidays"] = (
+                mask_frame["holiday_days_of_week"] == dow
+            ) & mask_frame["holidays"]
+
+        mask_frame["eligible_days"] = (
+            mask_frame["business_days"] & ~mask_frame["holidays"]
         )
 
-        holiday_days_of_week: pd.Index[int] = dates[holidays_mask].dayofweek
-        print(holiday_days_of_week)
-        friday_holidays_mask: pd.Series[bool] = _npmask_to_series_mask(
-            dates=dates, mask=np.where(holiday_days_of_week == 4, True, False)
-        )
-        monday_holidays_mask: pd.Series[bool] = _npmask_to_series_mask(
-            dates=dates, mask=np.where(holiday_days_of_week == 0, True, False)
-        )
-        wednesday_holidays_mask: pd.Series[bool] = _npmask_to_series_mask(
-            dates=dates, mask=np.where(holiday_days_of_week == 2, True, False)
-        )
-
-        dates_weekdays: pd.Index = dates.dayofweek
-
-        eligible_days_mask: pd.Series[bool] = (
-            _npmask_to_series_mask(
-                dates=dates, mask=(business_days_mask & dates_weekdays <= 4)
-            ),
-        )
-
-        return {
-            "holidays": holidays_mask,
-            "businessdays": business_days_mask,
-            "christmas_eve": christmas_eve_mask,
-            "hol_day_idx": holiday_days_of_week,
-            "dates_day_idx": dates_weekdays,
-            "eligible_days": eligible_days_mask,
-            "friday_holidays": friday_holidays_mask,
-            "monday_holidays": monday_holidays_mask,
-            "wednesday_holidays": wednesday_holidays_mask,
-        }
+        return mask_frame
