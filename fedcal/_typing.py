@@ -19,13 +19,14 @@ clean but well-typed.
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Dict, Generator, Mapping, Union
+from bidict import frozenbidict
+
 
 if TYPE_CHECKING:
     from datetime import date, datetime
 
     import numpy as np
     import pandas as pd
-    import bidict
 
     from fedcal.constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
     from fedcal.depts import FedDepartment
@@ -64,7 +65,7 @@ AssembledBudgetIntervalType = tuple[set["Dept"], StatusTupleType]
 
 DateStampStatusMapType = Mapping["Dept", StatusTupleType]
 
-StatusMapType = "bidict.frozenbidict"[str, StatusTupleType]
+StatusMapType = frozenbidict[str, StatusTupleType]
 
 StatusPoolType = Mapping[tuple["Dept", str], "FedDepartment"]
 

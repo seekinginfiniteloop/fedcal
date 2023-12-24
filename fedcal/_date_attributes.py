@@ -306,9 +306,6 @@ class FedFiscalCal:
         dates = ensure_datetimeindex(dates=dates) if dates else self.dates
 
         fy_fq_idx: pd.PeriodIndex = dates.to_period(freq="Q-SEP")
-        _s: pd.Series = pd.Series(
-            data=fy_fq_idx, index=dates, dtype=str, name="fiscal_cal"
-        )
 
         fys: pd.Index[int] = fy_fq_idx.qyear
         fqs: pd.Index[int] = fy_fq_idx.quarter

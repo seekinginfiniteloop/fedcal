@@ -33,7 +33,7 @@ and so are also effectively singletons.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, Self, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Tuple
 
 from attrs import define, field
 from intervaltree import IntervalTree

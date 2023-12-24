@@ -53,7 +53,7 @@ class MilitaryPayDay:
     """
 
     dates: pd.Timestamp | pd.DatetimeIndex | pd.Series = field(default=None)
-    paydays: np.ndarray | bool | None  = field(default=None, init=False)
+    paydays: np.ndarray | bool | None = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """

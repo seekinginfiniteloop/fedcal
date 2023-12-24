@@ -20,7 +20,7 @@ integrating fedcal data into pandas analyses.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, KeysView, Type
+from typing import TYPE_CHECKING, Any, Callable, KeysView
 
 import pandas as pd
 from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
@@ -884,7 +884,6 @@ class FedIndex(
         return self._fiscalcal.fys_fqs
 
     @property
-    @to_series
     def fq_start(self) -> pd.PeriodIndex:
         """
         Identify the first day of each fiscal quarter.
@@ -948,7 +947,6 @@ class FedIndex(
         self._set_fiscalcal()
         return self._fiscalcal.fy_end
 
-    @to_series
     @property
     def holidays(self) -> "np.ndarray"[bool]:
         """
@@ -1432,5 +1430,6 @@ def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:
         if count in {1, 2}:
             return FedIndex(datetimeindex=time_utils.to_datetimeindex(dates))
     raise ValueError(
-        f"Invalid number of arguments: {count}. Please pass either an array-like date object or start and end dates for the range."
+        f"""Invalid number of arguments: {count}. Please pass either an
+        array-like date object or start and end dates for the range."""
     )
