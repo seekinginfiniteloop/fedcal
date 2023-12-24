@@ -20,11 +20,12 @@ integrating fedcal data into pandas analyses.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, KeysView
+from typing import TYPE_CHECKING, Any, Callable, KeysView, Type
 
 import pandas as pd
 from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
 from fedcal._meta import MagicDelegator
+from fedcal._cls_utils import to_series
 
 if TYPE_CHECKING:
     import numpy as np
@@ -63,7 +64,7 @@ class FedIndex(
     fys : pd.Series
         pd.Series representing fiscal years.
 
-    fiscal_quarters : pd.Series
+    fqs : pd.Series
         pd.Series for fiscal quarters.
 
     holidays : pd.Series
@@ -210,6 +211,7 @@ class FedIndex(
         self._status_gen = None
         self._status_cache = None
         self._holidays = None
+        self._fiscalcal = None
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -232,8 +234,8 @@ class FedIndex(
         AttributeError
             if attribute can't be found
         """
-        if name in self.__class__.__dict__:
-            return self.__class__.__dict__[name].__get__(self, self.__class__)
+        if name in type(self).__dict__:
+            return type(self).__dict__[name].__get__(self, type(self))
 
         if hasattr(self.datetimeindex, name):
             return getattr(self.datetimeindex, name)
@@ -787,9 +789,28 @@ class FedIndex(
             statuses={"all"}, department_filter=departments
         )
 
+    def _set_fiscalcal(self) -> None:
+        """
+        Sets the _fiscalcal attribute for fy/fq retrievals.
+        """
+        if not hasattr(_date_attributes.FedFiscalCal, "fqs") or self._fiscalcal is None:
+            self._fiscalcal = _date_attributes.FedFiscalCal(dates=self.datetimeindex)
+
+    def _set_holidays(self) -> None:
+        """
+        Sets the self._holidays attribute for FedHolidays retrievals.
+        """
+        if (
+            not hasattr(_date_attributes.FedHolidays, "holidays")
+            or self._holidays is None
+        ):
+            self._holidays = _date_attributes.FedHolidays()
+
     # Begin date attribute property methods
     @property
-    def business_days(self) -> "np.ndarray":
+    def business_days(
+        self,
+    ) -> "np.ndarray"[bool]:
         """
         Determine if the dates in the index are Federal business days.
 
@@ -798,18 +819,19 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series of boolean values, where True indicates a business day.
+        np.ndarray
+            An np.ndarray of boolean values, where True indicates a
+            business day.
 
         """
         bizdays = _date_attributes.FedBusDay()
         next_business_days = self.datetimeindex + bizdays.get_business_days(
-            dates=self.datetimeindex.to_series()
+            dates=self.datetimeindex
         )
-        return self.datetimeindex == next_business_days
+        return self.datetimeindex.isin(values=next_business_days)
 
     @property
-    def fys(self) -> pd.Series:
+    def fys(self) -> pd.Index[int]:
         """
         Retrieve the fiscal years for each date in the index.
 
@@ -818,16 +840,15 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series with the fiscal year for each date in the index.
+        pd.Index
+            A Pandas pd.Index with the fiscal year for each date in the index.
 
         """
-        return _date_attributes.FedFiscalYear.get_fiscal_years(
-            datetimeindex=self.datetimeindex
-        )
+        self._set_fiscalcal()
+        return self._fiscalcal.fys
 
     @property
-    def fiscal_quarters(self) -> pd.Series:
+    def fqs(self) -> pd.Index[int]:
         """
         Obtain the fiscal quarters for each date in the index.
 
@@ -836,23 +857,100 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series with the fiscal quarter for each date in the
+        pd.Index
+            A Pandas pd.Index with the fiscal quarter for each date in the
             index.
 
         """
-        return _date_attributes.FedFiscalQuarter.get_fiscal_quarters(
-            datetimeindex=self.datetimeindex
-        )
-
-    def _set_holidays(self) -> None:
-        """
-        Sets the self._holidays attribute for FedHolidays retrievals.
-        """
-        self._holidays = self._holidays or _date_attributes.FedHolidays()
+        self._set_fiscalcal()
+        return self._fiscalcal.fqs
 
     @property
-    def holidays(self) -> "np.ndarray":
+    def fys_fqs(self) -> pd.PeriodIndex:
+        """
+        Retrieve the fiscal year and quarter for each date in the index.
+
+        This property identifies the federal fiscal year and quarter for each
+        date in the index in string format 'YYYYQ#'
+
+        Returns
+        -------
+        pd.PeriodIndex
+            A Pandas pd.PeriodIndex with the fiscal year-quarter for each date
+            in the index.
+
+        """
+        self._set_fiscalcal()
+        return self._fiscalcal.fys_fqs
+
+    @property
+    @to_series
+    def fq_start(self) -> pd.PeriodIndex:
+        """
+        Identify the first day of each fiscal quarter.
+
+        This property identifies the first day of each fiscal quarter in
+        the index.
+
+        Returns
+        -------
+        pd.PeriodIndex
+            Returns an index of quarter start dates within the range.
+        """
+        self._set_fiscalcal()
+        return self._fiscalcal.fq_start
+
+    @property
+    def fq_end(self) -> pd.PeriodIndex:
+        """
+        Identify the last day of each fiscal quarter.
+
+        This property identifies the last day of each fiscal quarter in the
+        index.
+
+        Returns
+        -------
+        pd.PeriodIndex
+            Returns an index of quarter end dates within the range.
+        """
+        self._set_fiscalcal()
+        return self._fiscalcal.fq_end
+
+    @property
+    def fy_start(self) -> pd.PeriodIndex:
+        """
+        Identify the first day of each fiscal year.
+
+        This property identifies the first day of each fiscal year in the
+        index.
+
+        Returns
+        -------
+        pd.PeriodIndex
+            Returns an index of year start dates within the range.
+        """
+        self._set_fiscalcal()
+        return self._fiscalcal.fy_start
+
+    @property
+    def fy_end(self) -> pd.PeriodIndex:
+        """
+        Identify the last day of each fiscal year.
+
+        This property identifies the last day of each fiscal year in the
+        index.
+
+        Returns
+        -------
+        pd.PeriodIndex
+            Returns an index of year end dates within the range.
+        """
+        self._set_fiscalcal()
+        return self._fiscalcal.fy_end
+
+    @to_series
+    @property
+    def holidays(self) -> "np.ndarray"[bool]:
         """
         Identify federal holidays in the index.
 
@@ -862,8 +960,8 @@ class FedIndex(
         Returns
         -------
         np.ndarray
-            An np.ndarray of boolean values, where True indicates a
-            federal holiday.
+            An np.ndarray of boolean values, where True indicates a federal
+            holiday.
         """
         self._set_holidays()
         return self.datetimeindex.isin(values=self._holidays.holidays)
@@ -880,9 +978,7 @@ class FedIndex(
         -------
         np.ndarray
             An np.ndarray of boolean values, where True indicates a proclaimed
-            federal
-            holiday.
-
+            federalholiday.
         """
         self._set_holidays()
         return self.datetimeindex.isin(
@@ -897,7 +993,8 @@ class FedIndex(
 
         Returns
         -------
-        Pandas pd.Series of boolean values indicating possible proclamation
+        np.ndarray
+        np.ndarray of boolean values indicating possible proclamation
         holidays.
 
         Notes
@@ -911,7 +1008,7 @@ class FedIndex(
         )
 
     @property
-    def probable_mil_passdays(self) -> pd.Series:
+    def probable_mil_passdays(self) -> "np.ndarray"[bool]:
         """
         Estimate military pass days within the index's date range.
 
@@ -922,8 +1019,8 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A pd.Series of boolean values, where True indicates a probable
+        np.ndarray
+            An array of boolean values, where True indicates a probable
             military pass day.
         """
 
@@ -932,7 +1029,7 @@ class FedIndex(
 
     # Payday properties
     @property
-    def mil_paydays(self) -> np.ndarray:
+    def mil_paydays(self) -> "np.ndarray"[bool]:
         """
         Identify military payday dates within the index.
 
@@ -941,8 +1038,8 @@ class FedIndex(
 
         Returns
         -------
-        pd.Series
-            A boolean pd.Series indicating military payday dates as True.
+        np.ndarray
+            A boolean array indicating military payday dates as True.
         """
         milpays = _mil.MilitaryPayDay(dates=self.datetimeindex)
         return milpays.paydays
@@ -1048,7 +1145,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"all"})
 
     @property
-    def all_depts_full_approps(self) -> pd.Series:
+    def all_depts_full_approps(self) -> pd.Series[bool]:
         """
         Determines if all departments have full appropriations on each date.
 
@@ -1066,7 +1163,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"DEFAULT_STATUS"})
 
     @property
-    def all_depts_cr(self) -> pd.Series:
+    def all_depts_cr(self) -> pd.Series[bool]:
         """
         Checks if all departments are under a continuing resolution (CR) on
         each date.
@@ -1085,7 +1182,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"CR_STATUS"})
 
     @property
-    def all_depts_funded(self) -> pd.Series:
+    def all_depts_funded(self) -> pd.Series[bool]:
         """
         Determines if all departments have either full appropriations or are
         under a continuing resolution on each date.
@@ -1104,7 +1201,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"DEFAULT_STATUS", "CR_STATUS"})
 
     @property
-    def all_depts_unfunded(self) -> pd.Series:
+    def all_depts_unfunded(self) -> pd.Series[bool]:
         """
         Assesses if all departments are unfunded on each date.
 
@@ -1123,7 +1220,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"GAP_STATUS", "SHUTDOWN_STATUS"})
 
     @property
-    def gov_cr(self) -> pd.Series:
+    def gov_cr(self) -> pd.Series[bool]:
         """
         Checks if any department is under a continuing resolution (CR) on each
         date.
@@ -1140,7 +1237,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"CR_STATUS"}, check_any=True)
 
     @property
-    def gov_shutdown(self) -> pd.Series:
+    def gov_shutdown(self) -> pd.Series[bool]:
         """
         Determines if any department is in a shutdown status on each date.
 
@@ -1157,7 +1254,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"SHUTDOWN_STATUS"}, check_any=True)
 
     @property
-    def gov_unfunded(self) -> pd.Series:
+    def gov_unfunded(self) -> pd.Series[bool]:
         """
         Evaluates if any department is unfunded on each date.
 

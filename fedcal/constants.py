@@ -113,7 +113,7 @@ class Dept(Enum):
         Returns object's full name with abbreviation in parens
         (e.g. "Department of State (DoS)")
         """
-        return f"{self.__class__.__name__}: {self.full} ({self.abbrev})"
+        return f"{type(self).__name__}: {self.full} ({self.abbrev})"
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -336,7 +336,7 @@ class EnumDunderBase:
         -------
             str: a string in the form :ClassName: value"
         """
-        return f"{self.__class__.__name__}: {self.value}"
+        return f"{type(self).__name__}: {self.value}"
 
     def __eq__(self, other) -> bool:
         """
@@ -351,7 +351,7 @@ class EnumDunderBase:
         -------
             bool -- True if isinstance of same class and has same value
         """
-        return isinstance(other, self.__class__) and self.value == other.value
+        return isinstance(other, type(self)) and self.value == other.value
 
     def __hash__(self) -> int:
         """
@@ -376,7 +376,7 @@ class EnumDunderBase:
         -------
             bool -- True if isinstance of same class and has same value
         """
-        return isinstance(other, self.__class__) and self.value < other.value
+        return isinstance(other, type(self)) and self.value < other.value
 
     def __gt__(self, other) -> bool:
         """
@@ -391,7 +391,7 @@ class EnumDunderBase:
         -------
             bool -- True if isinstance of same class and has same value
         """
-        return isinstance(other, self.__class__) and self.value > other.value
+        return isinstance(other, type(self)) and self.value > other.value
 
 
 @unique
@@ -529,9 +529,9 @@ class ShutdownFlag(EnumDunderBase, Enum):
         self,
     ) -> str:
         return (
-            f"{self.__class__.__name__}: shutdown"
+            f"{type(self).__name__}: shutdown"
             if self.value == 1
-            else f"{self.__class__.__name__}: not shutdown"
+            else f"{type(self).__name__}: not shutdown"
         )
 
     NO_SHUTDOWN = 0

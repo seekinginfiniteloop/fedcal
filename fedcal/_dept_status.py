@@ -30,12 +30,14 @@ of interval data from `_tree.Tree()`
 from __future__ import annotations
 
 from itertools import product
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar
 
 from attrs import define
 
 from fedcal import time_utils
 from fedcal.depts import FedDepartment
+from fedcal._tree import Tree
+
 from fedcal.constants import (
     Dept,
     DEPTS_SET,
@@ -43,9 +45,6 @@ from fedcal.constants import (
     STATUS_MAP,
     DHS_FORMED,
 )
-
-# we import Tree from fedcal._tree inside DepartmentState to keep it offline
-# until needed
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -68,13 +67,10 @@ class DepartmentStatus:
 
     Attributes
     ----------
-    departments : Dict[Dept, FedDepartment]
-        A dictionary mapping each executive department to its current
-        FedDepartment instance.
-    status_map : StatusMapType
+    status_map (class attr): StatusMapType
         Maps status keys to corresponding tuples of funding and operational
         statuses, from constants.py STATUS_MAP.
-    status_pool : StatusPoolType
+    status_pool (class attr): StatusPoolType
         *class attribute*: A pool of FedDepartment instances for reuse,
         ensuring only one instance per status combination.
 
@@ -82,15 +78,23 @@ class DepartmentStatus:
     -------
     get_status_pool()
         Retrieves the singleton status pool.
-    set_department_status(department, status_key)
-        Sets the status of a given department based on a status key.
-    get_department_status(department)
-        Retrieves the current status of a given department.
 
+    Notes
+    -----
+    *Private Methods*:
+    - _initialize_status_pool()
+        Class method that creates the status_pool class attribute.
     """
 
     status_map: ClassVar["StatusMapType"] = STATUS_MAP
     status_pool: ClassVar["StatusPoolType"] = None
+
+    def __attrs_post_init(self) -> None:
+        """
+        Initializes status_pool if not initialized.
+        """
+        if not type(self).status_pool:
+            type(self).status_pool = type(self)._initialize_status_pool()
 
     @classmethod
     def _initialize_status_pool(cls) -> StatusPoolType:
@@ -152,45 +156,48 @@ class DepartmentState:
 
     Methods
     -------
+    initialize_tree()
+        Initializes the singleton interval tree.
     get_state(date)
         Retrieves the status of all departments for a specific date, returning
         a dictionary of statuses.
     get_state_for_range_generator(start_date, end_date)
         Returns a generator of statuses for a given date range.
+    get_depts_set_at_time(date)
+        Returns a set of department enums for all departments at a given date.
+    get_state_tree
+        Retrieves the singleton interval tree
 
     Notes
     -----
-    *Private Methods*:
-    _initialize_tree() :
-    _process_interval(interval, last_known_status, start_posix, end_posix)
-        Processes a given interval, updating department statuses as needed.
-        Helper function for get_state_for_range_generator().
+    Currently the framework assumes a default status of fully funded if during
+    a present timeframe and no other status is known. However, this needs
+    adjustment because if a Department has received a full-year appropriation,
+    we should return fully funded until the end of the FY, but currently it
+    will only return that way until the end of the tree or today, whichever is
+    later.
 
+    *Private Methods*:
+    _set_max_default
+        Sets the max_default date for determining what cutoff switches to
+        FUTURE_STATUS
+    _determine_default_status_key
+        Determines the default status key for a given date.
     """
 
-    tree: ClassVar["IntervalTree"] = None
-    max_default_date: ClassVar[int] = None
+    tree: ClassVar["IntervalTree"] | None = None
+    max_default_date: ClassVar[int] | None = None
 
-    def __new__(cls) -> "DepartmentState":
-        """
-        Overrides the default __new__ method to ensure that the tree is
-        initialized correctly.
-
-        Returns
-        -------
-        A new DepartmentState instance.
-
-        """
-        obj: Self = super().__new__(cls)
-        if not cls.tree or cls.max_default_date:
-            cls.get_state_tree()
-            cls._set_max_default()
-        return obj
+    def __attrs_post_init(self) -> None:
+        if not type(self.tree):
+            type(self).initialize_tree()
 
     @classmethod
     def _set_max_default(cls) -> None:
         """
-        Set the maximum default date.
+        Set the maximum default date. Sets to the latter of either today or
+        the end of the interval tree (because CRs have an expiration date,
+        we can have statuses into the future.)
 
         Returns
         -------
@@ -226,12 +233,10 @@ class DepartmentState:
 
         """
 
-        # we wait to load _tree until needed for snappiness
-        from fedcal._tree import Tree
-
-        if not cls.tree:
-            int_tree: Tree = Tree()
-            cls.tree = int_tree.tree.copy()
+        _tree_instance = Tree()
+        if not _tree_instance.tree:
+            _tree_instance.initialize_tree()
+        cls.tree = _tree_instance.tree.copy()
 
     @classmethod
     def get_state_tree(cls) -> "IntervalTree":
@@ -245,8 +250,8 @@ class DepartmentState:
         """
         if not cls.tree:
             cls.initialize_tree()
-        if not cls.max_default_date:
             cls._set_max_default()
+        return cls.tree
 
     @staticmethod
     def get_depts_set_at_time(
@@ -311,10 +316,10 @@ class DepartmentState:
 
         """
         status_pool: "StatusPoolType" = DepartmentStatus.get_status_pool()
+        tree: "IntervalTree" = (
+            cls.tree if cls.tree is not None else cls.get_state_tree()
+        )
         status_map: "StatusMapType" = STATUS_MAP
-        if not cls.tree:
-            cls.get_state_tree()
-        tree: "IntervalTree" = cls.tree
 
         posix_date: int = time_utils.pdtimestamp_to_posix_day(timestamp=date)
         depts_set: set[Dept] = cls.get_depts_set_at_time(date=date)

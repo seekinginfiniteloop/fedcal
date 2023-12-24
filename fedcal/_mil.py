@@ -47,20 +47,13 @@ class MilitaryPayDay:
 
     Methods
     -------
-    get_mil_paydays(dates=None) -> bool | np.ndarray
+    get_mil_paydays(dates=None) -> pd.Series[bool]
         Determines if the given date/dates is a military payday.
 
-    Notes
-    -----
-    *Private Methods*:
-
-        _get_paydays_mask(dates)
-            helper method for `get_mil_paydays` that generates a boolean mask
-            to use for evaluating the dates for paydays
     """
 
     dates: pd.Timestamp | pd.DatetimeIndex | pd.Series = field(default=None)
-    paydays = field(default=None, init=False)
+    paydays: np.ndarray | bool | None  = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
@@ -68,9 +61,9 @@ class MilitaryPayDay:
         """
         self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
 
-        self.paydays: pd.Series | bool | None = self.get_mil_paydays(dates=self.dates)
+        self.paydays: np.ndarray | bool | None = self.get_mil_paydays(dates=self.dates)
 
-    def get_mil_paydays(self, dates: pd.DatetimeIndex | pd.Series = None) -> pd.Series:
+    def get_mil_paydays(self, dates: pd.DatetimeIndex | pd.Series = None) -> np.ndarray:
         """
         Determines if the given date is a military payday.
 
@@ -89,8 +82,11 @@ class MilitaryPayDay:
         first_or_fifteenth_mask: pd.Series = pd.Series(
             data=(dates.day.isin(values=[1, 15])), index=dates, dtype=bool
         )
+
         business_days_mask = pd.Series(
-            dates.isin(values=bizday_instance.get_business_days(dates=dates)),
+            data=dates.isin(
+                values=bizday_instance.get_business_days(dates=dates).index
+            ),
             index=dates,
             dtype=bool,
         )
@@ -116,7 +112,7 @@ class MilitaryPayDay:
             ].max()
             payday_mask.at[recent_biz_day] = recent_biz_day in dates
 
-        return pd.Series(data=payday_mask, index=dates, dtype=bool, name="mil_paydays")
+        return payday_mask
 
 
 @define(order=True, kw_only=True)
@@ -148,10 +144,10 @@ class ProbableMilitaryPassDay:
         Military passdays are highly variable. When they are granted can vary
         even within major commands or at a single location based on commanders'
         discretion and mission needs. While we try to guess at what day will be
-        most likely to be a passday for the majority of members, the overall goal
-        is to roughly capture the loss of person-power for these periods for
-        offices or locations relying heavily on military personnel, enabling
-        productivity and microeconomic analysis.
+        most likely to be a passday for the majority of members, the overall
+        goal is to roughly capture the loss of person-power for these periods
+        for offices or locations relying heavily on military personnel,
+        enabling productivity and microeconomic analysis.
 
             Current rules set the following framework (in _likely_passday):
     ]       - If Monday holiday, previous Fridayis the likely passday.
@@ -160,37 +156,30 @@ class ProbableMilitaryPassDay:
             - If Thursday, Friday.
             - If Wednesday, Thursday.
 
-        TODO: In future versions, I hope to add customizable rules for evaluating
-        likely passdays (i.e. a Wednesday holiday's passday will be Tuesday
-        instead of Thursday).
+        TODO: In future versions, I hope to add customizable rules for
+        evaluating likely passdays (i.e. a Wednesday holiday's passday will be
+        Tuesday instead of Thursday).
 
     *Private Methods*:
-        _get_base_masks(dates) -> dict
+        _get_base_masks(dates) -> pd.DataFrame
             a helper method for get_probable_passdays that generates a
-            dictionary of boolean masks to use for evaluation.
-            a helper method for get_probable_passdays that generates a
-            dictionary of boolean masks to use for evaluation.
+            DataFrame of boolean masks for identifying passdays.
     """
 
     dates: pd.DatetimeIndex | pd.Series | pd.Timestamp | None = field(default=None)
 
-    passdays: pd.DatetimeIndex | pd.Series | None = field(default=None, init=False)
+    passdays: np.ndarray[bool] | None = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
         Complete initialization of the instance and sets attributes
-
-        Raises
-        ------
-        AttributeError
-            if neither date nor dates are provided
         """
         self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
         self.passdays = self.get_probable_passdays(dates=self.dates)
 
     def get_probable_passdays(
         self, dates: pd.DatetimeIndex | pd.Series
-    ) -> pd.Series[bool]:
+    ) -> np.ndarray[bool]:
         """
         Determines the likely passdays for the given dates.
 
@@ -200,7 +189,7 @@ class ProbableMilitaryPassDay:
 
         Returns
         -------
-        Boolean pd.Series indicating whether the dates in the range are
+        Boolean np.ndarray indicating whether the dates in the range are
         probable passdays.
 
         """
@@ -224,12 +213,7 @@ class ProbableMilitaryPassDay:
             dates[masks["wednesday_holidays"]] + pd.DateOffset(days=1)
         )
 
-        return pd.Series(
-            data=((fri_mask | mon_mask | thurs_mask) & masks["eligible_days"]),
-            index=dates,
-            dtype=bool,
-            name="probable_mil_passdays",
-        )
+        return (fri_mask | mon_mask | thurs_mask) & masks["eligible_days"]
 
     @staticmethod
     def _get_base_masks(
@@ -257,8 +241,9 @@ class ProbableMilitaryPassDay:
         mask_frame["dates"] = dates.to_series(index=dates)
         mask_frame["holidays"] = dates.isin(values=holidays_instance.holidays)
         mask_frame["holiday_days_of_week"] = dates.dayofweek
+
         mask_frame["business_days"] = dates.isin(
-            values=bizday_instance.get_business_days(dates=dates)
+            values=bizday_instance.get_business_days(dates=dates).index
         )
 
         for day, dow in zip(

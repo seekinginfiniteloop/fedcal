@@ -33,7 +33,7 @@ and so are also effectively singletons.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Self, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Self, Tuple
 
 from attrs import define, field
 from intervaltree import IntervalTree
@@ -244,7 +244,7 @@ class CRTreeGrower:
 
         for (start, end), departments in cr_departments.items():
             if _get_overlap_interval(start=start, end=end, date_range=date_range):
-                generated_departments = (
+                generated_departments: set[Dept] = (
                     self._filter_cr_department_sets(departments=departments).difference(
                         {Dept.DHS}
                     )
@@ -355,6 +355,7 @@ class AppropriationsGapsTreeGrower:
         return gap_tree
 
 
+@define(kw_only=True)
 class Tree:
 
     """
@@ -380,17 +381,20 @@ class Tree:
 
     Attributes
     ----------
-    _instance : The singleton instance of the class.
+    cr_instance : The CR tree grower instance.
 
     cr_tree : The continuing resolution tree.
+
+    gap_instance: The appropriations gaps tree grower instance.
 
     gap_tree : The appropriations gaps tree.
 
     tree : The union of the CR and gap trees.
 
-    _initialized : A boolean flag indicating if the instance has been
-    initialized. We use this flag to ensure the instance is only
-    initialized once.
+    Methods
+    -------
+    initialize_tree() -> IntervalTree
+        initializes the main tree class attribute
 
     Example
     -------
@@ -404,56 +408,24 @@ class Tree:
         Initializes the CR tree.
     _initialize_gap_tree() -> IntervalTree
         Initializes the gap tree.
+    _set_cr_tree() -> IntervalTree
+        sets the cr_tree attribute.
+    _set_gap_tree() -> IntervalTree
+        sets the gap_tree attribute.
 
     """
 
-    _instance = None
+    gap_instance: ClassVar[AppropriationsGapsTreeGrower] = None
+    cr_instance: ClassVar[CRTreeGrower] = None
+    cr_tree: ClassVar[IntervalTree] = None
+    gap_tree: ClassVar[IntervalTree] = None
+    tree: ClassVar[IntervalTree] = None
 
-    def __new__(cls) -> Self | "Tree":
-        """
-        We override __new__ to ensure only one Tree is created and make
-        creation intuitive.
-        """
-        if cls._instance is None:
-            cls._instance: Self = super(Tree, cls).__new__(cls)
-        return cls._instance
+    def __attrs_post_init__(self) -> None:
+        type(self).tree = type(self).initialize_tree()
 
-    def __init__(self) -> None:
-        """
-        We initialize the instance if one has not already been initialized.
-        We also initialize the feeder trees, CRTreeGrower and
-        AppropriationsGapsTreeGrower, if not already initialized.
-        We then union them together to form our tree, which enables efficient
-        time-based queries in O(n * log n).
-
-        Raises
-        ------
-        AttributeError
-            If the instance has already been initialized.
-
-        Notes
-        -----
-        See class attributes for a description of attributes initialized here.
-
-        This is a singleton class, so we ensure that only one instance is
-        created. We also initialize the feeder trees, CRTreeGrower and
-        AppropriationsGapsTreeGrower, if not already initialized.
-        We then union them together to form our tree, which enables
-        efficient time-based queries in O(n * log n).
-
-        See intervaltree documentation for usage examples:
-        https://github.com/chaimleib/intervaltree
-        """
-        if not hasattr(self, "_initialized"):
-            self.cr_instance: CRTreeGrower = self._initialize_cr_tree()
-            cr_tree = self.cr_instance.grow_cr_tree()
-            self.gap_instance: CRTreeGrower = self._initialize_gap_tree()
-            gap_tree = self.gap_instance.grow_appropriation_gaps_tree()
-            self.tree: IntervalTree = cr_tree.union(other=gap_tree)
-
-            self._initialized = True
-
-    def _initialize_cr_tree(self) -> CRTreeGrower:
+    @classmethod
+    def _initialize_cr_tree(cls) -> CRTreeGrower:
         """
         We initialize the CR tree if it has not already been initialized.
 
@@ -464,7 +436,8 @@ class Tree:
         """
         return CRTreeGrower()
 
-    def _initialize_gap_tree(self) -> AppropriationsGapsTreeGrower:
+    @classmethod
+    def _initialize_gap_tree(cls) -> AppropriationsGapsTreeGrower:
         """
         We initialize the appropriations gaps tree if it has not already been
         initialized.
@@ -474,3 +447,49 @@ class Tree:
         Initialized AppropriationsGapsTreeGrower()
         """
         return AppropriationsGapsTreeGrower()
+
+    @classmethod
+    def _set_cr_tree(cls) -> IntervalTree:
+        """
+        We set the CR tree if it has not already been set.
+
+        Returns
+        -------
+        Initialized IntervalTree()
+
+        """
+        return cls.cr_instance.tree
+
+    @classmethod
+    def _set_gap_tree(cls) -> IntervalTree:
+        """
+        We set the appropriations gaps tree if it has not already been set.
+
+        Returns
+        -------
+        Initialized IntervalTree()
+
+        """
+        return cls.gap_instance.tree
+
+    @classmethod
+    def initialize_tree(cls) -> IntervalTree:
+        """
+        We initialize the tree if it has not already been initialized.
+
+        Returns
+        -------
+        Initialized IntervalTree()
+        """
+        if cls.tree:
+            return cls.tree
+        if not cls.cr_instance:
+            cls.cr_instance = cls._initialize_cr_tree()
+        if not cls.gap_instance:
+            cls.gap_instance = cls._initialize_gap_tree()
+        if not cls.cr_tree:
+            cls.cr_tree = cls._set_cr_tree()
+        if not cls.gap_tree:
+            cls.gap_tree = cls._set_gap_tree()
+
+        return cls.cr_tree.union(other=cls.gap_tree)
