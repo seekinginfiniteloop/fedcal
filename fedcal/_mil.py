@@ -22,14 +22,16 @@ person-power:
 - `ProbableMilitaryPassday` heuristically calculates probable
 military passdays surrounding federal holidays.
 """
-
-from __future__ import annotations
+from typing import TYPE_CHECKING
 
 import pandas as pd
-import numpy as np
 from attrs import define, field
 
 from fedcal import _date_attributes, time_utils
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+    from pandas import DataFrame, DatetimeIndex, Series, Timestamp
 
 
 @define(order=True, kw_only=True)
@@ -47,13 +49,13 @@ class MilitaryPayDay:
 
     Methods
     -------
-    get_mil_paydays(dates=None) -> pd.Series[bool]
+    get_mil_paydays(dates=None) -> Series[bool]
         Determines if the given date/dates is a military payday.
 
     """
 
-    dates: pd.Timestamp | pd.DatetimeIndex | pd.Series = field(default=None)
-    paydays: np.ndarray | bool | None = field(default=None, init=False)
+    dates: Timestamp | DatetimeIndex | Series = field(default=None)
+    paydays: NDArray | bool | None = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
@@ -61,9 +63,11 @@ class MilitaryPayDay:
         """
         self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
 
-        self.paydays: np.ndarray | bool | None = self.get_mil_paydays(dates=self.dates)
+        self.paydays: NDArray | bool | None = self.get_mil_paydays(dates=self.dates)
 
-    def get_mil_paydays(self, dates: pd.DatetimeIndex | pd.Series = None) -> np.ndarray:
+    def get_mil_paydays(
+        self, dates: DatetimeIndex | Series[Timestamp] | Timestamp = None
+    ) -> NDArray:
         """
         Determines if the given date is a military payday.
 
@@ -79,7 +83,7 @@ class MilitaryPayDay:
         dates = pd.DatetimeIndex(data=self.dates if dates is None else dates)
         bizday_instance = _date_attributes.FedBusDay()
 
-        first_or_fifteenth_mask: pd.Series = pd.Series(
+        first_or_fifteenth_mask: Series = pd.Series(
             data=(dates.day.isin(values=[1, 15])), index=dates, dtype=bool
         )
 
@@ -91,23 +95,21 @@ class MilitaryPayDay:
             dtype=bool,
         )
 
-        payday_mask: pd.Series[bool] = first_or_fifteenth_mask & business_days_mask
+        payday_mask: Series[bool] = first_or_fifteenth_mask & business_days_mask
 
-        non_biz_1st_15th: pd.DatetimeIndex = dates[
+        non_biz_1st_15th: DatetimeIndex = dates[
             first_or_fifteenth_mask & ~business_days_mask
         ]
         for non_biz_date in non_biz_1st_15th:
-            prev_days: pd.DatetimeIndex = pd.date_range(
+            prev_days: DatetimeIndex = pd.date_range(
                 start=non_biz_date - pd.Timedelta(days=3),
                 end=non_biz_date - pd.Timedelta(days=1),
             )
             prev_business_days: bool | pd.Series[
                 bool
             ] = bizday_instance.get_business_days(dates=prev_days)
-            prev_business_day_mask: np.ndarray = prev_days.isin(
-                values=prev_business_days
-            )
-            recent_biz_day: pd.Timestamp = prev_days.to_series()[
+            prev_business_day_mask: NDArray = prev_days.isin(values=prev_business_days)
+            recent_biz_day: Timestamp = prev_days.to_series()[
                 prev_business_day_mask
             ].max()
             payday_mask.at[recent_biz_day] = recent_biz_day in dates
@@ -130,7 +132,7 @@ class ProbableMilitaryPassDay:
 
     Methods
     -------
-    get_probable_passdays(dates=None) -> np.ndarray
+    get_probable_passdays(dates=None) -> NDArray
         Leverages boolean masking operations to identify probable
         military passdays across a DatetimeIndex.
 
@@ -150,7 +152,7 @@ class ProbableMilitaryPassDay:
         enabling productivity and microeconomic analysis.
 
             Current rules set the following framework (in _likely_passday):
-    ]       - If Monday holiday, previous Fridayis the likely passday.
+    ]       - If Monday holiday, previous Friday is the likely passday.
             - If Friday is the holiday, following Monday is the likely passday.
             - If Tuesday, Monday.
             - If Thursday, Friday.
@@ -161,14 +163,14 @@ class ProbableMilitaryPassDay:
         Tuesday instead of Thursday).
 
     *Private Methods*:
-        _get_base_masks(dates) -> pd.DataFrame
+        _get_base_masks(dates) -> DataFrame
             a helper method for get_probable_passdays that generates a
             DataFrame of boolean masks for identifying passdays.
     """
 
-    dates: pd.DatetimeIndex | pd.Series | pd.Timestamp | None = field(default=None)
+    dates: DatetimeIndex | Series | Timestamp | None = field(default=None)
 
-    passdays: np.ndarray[bool] | None = field(default=None, init=False)
+    passdays: NDArray[bool] | None = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
@@ -178,8 +180,8 @@ class ProbableMilitaryPassDay:
         self.passdays = self.get_probable_passdays(dates=self.dates)
 
     def get_probable_passdays(
-        self, dates: pd.DatetimeIndex | pd.Series
-    ) -> np.ndarray[bool]:
+        self, dates: DatetimeIndex | Series[Timestamp]
+    ) -> NDArray[bool]:
         """
         Determines the likely passdays for the given dates.
 
@@ -189,7 +191,7 @@ class ProbableMilitaryPassDay:
 
         Returns
         -------
-        Boolean np.ndarray indicating whether the dates in the range are
+        Boolean NDArray indicating whether the dates in the range are
         probable passdays.
 
         """
@@ -201,15 +203,15 @@ class ProbableMilitaryPassDay:
                 if isinstance(dates, pd.Series)
                 else dates
             )
-        masks: pd.DataFrame = self._get_base_masks(dates=dates)
-        fri_mask: pd.Series[bool] = dates.isin(
+        masks: DataFrame = self._get_base_masks(dates=dates)
+        fri_mask: Series[bool] = dates.isin(
             dates[masks["monday_holidays"]] - pd.DateOffset(days=3)
         ) | dates.isin(dates[masks["thursday_holidays"]] + pd.DateOffset(days=1))
 
-        mon_mask: pd.Series[bool] = dates.isin(
+        mon_mask: Series[bool] = dates.isin(
             dates[masks["friday_holidays"]] + pd.DateOffset(days=3)
         ) | dates.isin(dates[masks["tuesday_holidays"]] - pd.DateOffset(days=1))
-        thurs_mask: pd.Series[bool] = dates.isin(
+        thurs_mask: Series[bool] = dates.isin(
             dates[masks["wednesday_holidays"]] + pd.DateOffset(days=1)
         )
 
@@ -217,8 +219,8 @@ class ProbableMilitaryPassDay:
 
     @staticmethod
     def _get_base_masks(
-        dates: pd.DatetimeIndex,
-    ) -> pd.DataFrame:
+        dates: DatetimeIndex,
+    ) -> DataFrame:
         """
         Retrieves the base masks for evaluating a DatetimeIndex for possible
         passdays. A helper method to `get_probable_passdays`.

@@ -26,21 +26,17 @@ from those queries, and can use `FedDepartment`'s properties to customize
 that output.
 """
 
-from __future__ import annotations
+from typing import TYPE_CHECKING
 
-from typing import TYPE_CHECKING, Any, Generator, Tuple
-
-from attrs import field, frozen, astuple
+from attrs import astuple, field, frozen
 
 from fedcal.constants import READABLE_STATUS_MAP
 
 if TYPE_CHECKING:
-    from .constants import (
-        Dept,
-        AppropsStatus,
-        OpsStatus,
-    )
+    from typing import Any, Generator, Tuple
+
     from ._typing import StatusDictType, StatusTupleType
+    from .constants import AppropsStatus, Dept, OpsStatus
 
 
 @frozen()
@@ -68,9 +64,9 @@ class FedDepartment:
 
     """
 
-    name: "Dept" = field()
-    approps_status: "AppropsStatus" = field()
-    ops_status: "OpsStatus" = field()
+    name: Dept = field()
+    approps_status: AppropsStatus = field()
+    ops_status: OpsStatus = field()
 
     def __str__(self) -> str:
         """We override attrs default to provide a meaningful string
@@ -84,7 +80,7 @@ class FedDepartment:
             {self.approps_status},
             {self.ops_status.value}"""
 
-    def __iter__(self) -> Generator["Dept" | "AppropsStatus" | "OpsStatus", Any, None]:
+    def __iter__(self) -> Generator[Dept | AppropsStatus | OpsStatus, Any, None]:
         """
         Implement a simple iter to make FedDepartment iterable.
 
@@ -167,7 +163,7 @@ class FedDepartment:
 
     def attrs_to_tuple(
         self,
-    ) -> Tuple["Dept", "AppropsStatus", "OpsStatus"]:
+    ) -> Tuple[Dept, AppropsStatus, OpsStatus]:
         """
         Return a tuple of FedDepartment attributes.
         Returns
@@ -178,7 +174,7 @@ class FedDepartment:
 
         return astuple(inst=self)
 
-    def to_status_tuple(self) -> "StatusTupleType":
+    def to_status_tuple(self) -> StatusTupleType:
         """
         Returns a StatusTupleType (Tuple[AppropsStatus, OpsStatus] for the FedDepartment instance
 
@@ -201,7 +197,7 @@ class FedDepartment:
         """
         return READABLE_STATUS_MAP[self.to_status_tuple()]
 
-    def to_dict(self) -> "StatusDictType":
+    def to_dict(self) -> StatusDictType:
         """
         Return a dictionary of FedDepartment attributes.
 

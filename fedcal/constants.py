@@ -25,15 +25,17 @@ The data are entirely within the public domain. I was unable to find a
 publicly available dataset with this information precompiled; so I made one.
 """
 
-from __future__ import annotations
-
 from enum import Enum, unique
-from typing import TYPE_CHECKING, Any, Generator, Literal
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from bidict import frozenbidict
 
 if TYPE_CHECKING:
+    from typing import Any, Generator, Literal, Self
+
+    from pandas import Timestamp
+
     from ._typing import (
         AppropriationsGapsMapType,
         CRMapType,
@@ -199,7 +201,7 @@ class Dept(Enum):
     VA = ("VA", "Department of Veterans Affairs", "Veterans Affairs")
 
     @classmethod
-    def from_short_name(cls, short_name: str) -> Dept:
+    def from_short_name(cls, short_name: str) -> Self:
         """
         Converts a short name of a department to an enum object.
         Raises a ValueError if the department is not found.
@@ -229,7 +231,7 @@ class Dept(Enum):
         raise ValueError(f"Department with short name {short_name} not found")
 
     @classmethod
-    def from_long_name(cls, long_name: str) -> Dept:
+    def from_long_name(cls, long_name: str) -> Self:
         """
             Converts a long name of a department to an enum object.
             Raises a ValueError if the department is not found.
@@ -254,7 +256,7 @@ class Dept(Enum):
         raise ValueError(f"Department with long name {long_name} not found")
 
     @classmethod
-    def from_abbrev(cls, abbrev: str) -> Dept:
+    def from_abbrev(cls, abbrev: str) -> Self:
         """
         Converts an abbrev of a department to an enum object.
         Raises a ValueError if the department is not found.
@@ -279,7 +281,7 @@ class Dept(Enum):
         raise ValueError(f"Department with abbrev {abbrev} not found")
 
 
-HISTORICAL_HOLIDAYS_BY_PROCLAMATION: list[pd.Timestamp] = [
+HISTORICAL_HOLIDAYS_BY_PROCLAMATION: list[Timestamp] = [
     pd.Timestamp(year=2020, month=12, day=24),
     pd.Timestamp(year=2019, month=12, day=24),
     pd.Timestamp(year=2018, month=12, day=24),
@@ -474,7 +476,7 @@ DHS_FORMED: int = 12016
 """DHS_FORMED: POSIX-day date of DHS formation (2003-11-25)"""
 
 
-STATUS_MAP: "StatusMapType" = frozenbidict(
+STATUS_MAP: StatusMapType = frozenbidict(
     {
         "DEFAULT_STATUS": (AppropsStatus.FULLY_APPROPRIATED, OpsStatus.OPEN),
         "CR_STATUS": (
@@ -509,7 +511,7 @@ READABLE_STATUSES: Simplified human-readable statuses for the default
 FedIndex behavior of outputing human-readable status.
 """
 
-READABLE_STATUS_MAP: frozenbidict["StatusTupleType", str] = frozenbidict(
+READABLE_STATUS_MAP: frozenbidict[StatusTupleType, str] = frozenbidict(
     zip(STATUS_MAP.values(), iter(READABLE_STATUSES))
 )
 
@@ -538,7 +540,7 @@ class ShutdownFlag(EnumDunderBase, Enum):
     SHUTDOWN = 1
 
 
-APPROPRIATIONS_GAPS: "AppropriationsGapsMapType" = {
+APPROPRIATIONS_GAPS: AppropriationsGapsMapType = {
     (2465, 2474): (
         DEPTS_SET.difference(
             {
@@ -689,7 +691,7 @@ Current cutoff is 1 October 1998, CR data is not currently in fedcal for
 any time before this.
 """
 
-CR_DEPARTMENTS: "CRMapType" = {
+CR_DEPARTMENTS: CRMapType = {
     (10500, 10506): set(),
     (10507, 10516): {Dept.DOE},
     (10517, 10520): {Dept.DOE, Dept.DOD},

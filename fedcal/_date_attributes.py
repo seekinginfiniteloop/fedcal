@@ -23,12 +23,10 @@ date attributes of the federal calendar:
 - fiscal years/quarters (`FedFiscalCal`)
 """
 
-from __future__ import annotations
-
-from typing import ClassVar, Generator
+import warnings
+from typing import TYPE_CHECKING
 
 import pandas as pd
-import numpy as np
 from attrs import define, field
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
@@ -36,7 +34,11 @@ from pandas.tseries.offsets import CustomBusinessDay
 from fedcal import constants
 from fedcal.time_utils import ensure_datetimeindex
 
-import warnings
+if TYPE_CHECKING:
+    from typing import ClassVar, Generator
+
+    from numpy.typing import NDArray
+    from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 
 
 @define(order=True, auto_attribs=True)
@@ -74,30 +76,30 @@ class FedBusDay:
 
     @classmethod
     def get_business_days(
-        cls, dates: pd.Timestamp | pd.Series | pd.DatetimeIndex
-    ) -> pd.Series[bool]:
+        cls, dates: Timestamp | Series | DatetimeIndex
+    ) -> NDArray[bool]:
         """
         Method for retrieving business days, adjusted for federal holidays.
 
         Parameters
         ----------
-        dates : either a single pd.Timestamp or a Series of pd.
+        dates : either a single pd.Timestamp or a Series of
         Timestamps for offsetting with fed_business_days.
 
         Returns
         -------
-        pd.Series of bool
+        ndarray of bool
             True if the date is a business day, False if not.
         """
-        dates = ensure_datetimeindex(dates=dates)
+        dates: DatetimeIndex = ensure_datetimeindex(dates=dates)
         with warnings.catch_warnings():
             warnings.simplefilter(action="ignore")
             next_business_days = dates + cls.fed_business_days
             return next_business_days == dates
 
     def get_prior_business_day(
-        self, date: pd.Timestamp
-    ) -> Generator[pd.Timestamp, None, None]:
+        self, date: Timestamp
+    ) -> Generator[Timestamp, None, None]:
         """
         Generates next earliest business day. Primarily for finding
         next-earliest business day before a military payday that doesn't
@@ -107,7 +109,7 @@ class FedBusDay:
         ------
         next nearest business day prior to the given date
         """
-        current_day: pd.Timestamp = date - CustomBusinessDay(
+        current_day: Timestamp = date - CustomBusinessDay(
             calendar=self.fed_business_days.calendar
         )
         while current_day < date:
@@ -130,12 +132,12 @@ class FedHolidays:
 
     Methods
     -------
-    get_holidays(date) -> pd.Series[bool]
+    get_holidays(date) -> Series[bool]
         Check if a given date is a federal holiday.
-    get_proclamation_holidays(date) -> pd.Series[bool]
+    get_proclamation_holidays(date) -> Series[bool]
         Check if a given date was a holiday by proclamation (most were
         Christmas Eve).
-    guess_proclamation_holidays(dates) -> pd.Series[bool]
+    guess_proclamation_holidays(dates) -> Series[bool]
         Guess if any future Christmas Eves in a pd.DatetimeIndex may be a
         holiday based on Christmas day
 
@@ -154,14 +156,14 @@ class FedHolidays:
         """
         if type(self).holidays is None:
             _base_cal = USFederalHolidayCalendar()
-            _holidays: pd.DatetimeIndex = _base_cal.holidays()
-            type(self).holidays: pd.DatetimeIndex = type(
-                self
-            ).proclaimed_holidays.union(other=_holidays)
+            _holidays: DatetimeIndex = _base_cal.holidays()
+            type(self).holidays: DatetimeIndex = type(self).proclaimed_holidays.union(
+                other=_holidays
+            )
 
     def get_holidays(
-        self, dates: pd.Timestamp | pd.DatetimeIndex | pd.Series[bool]
-    ) -> "np.ndarray" | bool:
+        self, dates: Timestamp | DatetimeIndex | Series[bool]
+    ) -> NDArray[bool] | bool:
         """
         Check if a given date is a federal holiday.
 
@@ -179,8 +181,8 @@ class FedHolidays:
         return dates.isin(values=type(self).holidays)
 
     def get_proclamation_holidays(
-        self, dates: pd.Timestamp | pd.DatetimeIndex | pd.Series[pd.Timestamp]
-    ) -> "np.ndarray"[bool]:
+        self, dates: Timestamp | DatetimeIndex | Series[Timestamp]
+    ) -> NDArray[bool]:
         """
         Check if a given date was a holiday proclaimed by executive order.
 
@@ -192,13 +194,13 @@ class FedHolidays:
         -------
         True if the date was a proclaimed holiday, False otherwise.
         """
-        dates = ensure_datetimeindex(dates=dates)
+        dates: DatetimeIndex = ensure_datetimeindex(dates=dates)
         return dates.isin(values=type(self).proclaimed_holidays)
 
     @staticmethod
     def guess_proclamation_holidays(
-        dates: pd.Timestamp | pd.Series[pd.Timestamp] | pd.DatetimeIndex,
-    ) -> "np.ndarray"[bool]:
+        dates: Timestamp | Series[Timestamp] | DatetimeIndex,
+    ) -> NDArray[bool]:
         """
         Guess if a future Christmas Eve may be proclaimed a holiday based on
         Christmas Day's weekday.
@@ -214,11 +216,11 @@ class FedHolidays:
 
         """
         dates = ensure_datetimeindex(dates=dates)
-        christmas_days: pd.DatetimeIndex = pd.to_datetime(
+        christmas_days: DatetimeIndex = pd.to_datetime(
             arg=dates.year.astype(dtype=str) + "-12-25"
         )
         christmas_eves = christmas_days - pd.DateOffset(normalize=True, days=1)
-        filtered_dates: pd.DatetimeIndex = dates[dates.year > 2023]
+        filtered_dates: DatetimeIndex = dates[dates.year > 2023]
         return christmas_days.weekday.isin(values=[1, 4]) & (
             filtered_dates == christmas_eves
         )
@@ -261,23 +263,21 @@ class FedFiscalCal:
         setting instance attrs.
     """
 
-    dates: pd.DatetimeIndex | pd.Series[pd.Timestamp] | pd.Timestamp | None = field(
-        default=None
-    )
+    dates: DatetimeIndex | Series[Timestamp] | Timestamp | None = field(default=None)
 
-    fys_fqs: pd.PeriodIndex | None = field(default=None, init=False)
+    fys_fqs: PeriodIndex | None = field(default=None, init=False)
 
-    fys: pd.Index[int] | None = field(default=None, init=False)
+    fys: Index[int] | None = field(default=None, init=False)
 
-    fqs: pd.Index[int] | None = field(default=None, init=False)
+    fqs: Index[int] | None = field(default=None, init=False)
 
-    fq_start: pd.PeriodIndex | None = field(default=None, init=False)
+    fq_start: PeriodIndex | None = field(default=None, init=False)
 
-    fq_end: pd.PeriodIndex | None = field(default=None, init=False)
+    fq_end: PeriodIndex | None = field(default=None, init=False)
 
-    fy_start: pd.PeriodIndex | None = field(default=None, init=False)
+    fy_start: PeriodIndex | None = field(default=None, init=False)
 
-    fy_end: pd.PeriodIndex | None = field(default=None, init=False)
+    fy_end: PeriodIndex | None = field(default=None, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
@@ -290,8 +290,8 @@ class FedFiscalCal:
 
     def _get_cal(
         self,
-        dates: pd.DatetimeIndex | pd.Series[pd.Timestamp] | pd.Timestamp | None = None,
-    ) -> tuple[pd.PeriodIndex, pd.Series[int], pd.Series[int]]:
+        dates: DatetimeIndex | pd.Series[Timestamp] | Timestamp | None = None,
+    ) -> tuple[PeriodIndex, Series[int], Series[int]]:
         """
         Calculate the fiscal year for each date in datetimeindex.
 
@@ -305,13 +305,13 @@ class FedFiscalCal:
         """
         dates = ensure_datetimeindex(dates=dates) if dates else self.dates
 
-        fy_fq_idx: pd.PeriodIndex = dates.to_period(freq="Q-SEP")
+        fy_fq_idx: PeriodIndex = dates.to_period(freq="Q-SEP")
 
-        fys: pd.Index[int] = fy_fq_idx.qyear
-        fqs: pd.Index[int] = fy_fq_idx.quarter
+        fys: Index[int] = fy_fq_idx.qyear
+        fqs: Index[int] = fy_fq_idx.quarter
         return fy_fq_idx, fys, fqs
 
-    def _get_fq_start_end(self) -> tuple[pd.PeriodIndex, pd.PeriodIndex]:
+    def _get_fq_start_end(self) -> tuple[PeriodIndex, PeriodIndex]:
         """
         Calculate the start and end dates of each fiscal quarter.
 
@@ -323,7 +323,7 @@ class FedFiscalCal:
             freq="D", how="E"
         )
 
-    def _get_fy_start_end(self) -> tuple[pd.PeriodIndex, pd.PeriodIndex]:
+    def _get_fy_start_end(self) -> tuple[PeriodIndex, PeriodIndex]:
         """
         Calculate the start and end dates of each fiscal year.
 
@@ -331,10 +331,10 @@ class FedFiscalCal:
         -------
         A tuple of two PeriodIndexes: fy_start and fy_end.
         """
-        fy_start: pd.DatetimeIndex = self.fys_fqs[self.fys_fqs.quarter == 1].asfreq(
+        fy_start: DatetimeIndex = self.fys_fqs[self.fys_fqs.quarter == 1].asfreq(
             "D", how="start"
         )
-        fy_end: pd.DatetimeIndex = self.fys_fqs[self.fys_fqs.quarter == 4].asfreq(
+        fy_end: DatetimeIndex = self.fys_fqs[self.fys_fqs.quarter == 4].asfreq(
             "D", how="end"
         )
 

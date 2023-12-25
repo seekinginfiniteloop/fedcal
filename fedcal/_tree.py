@@ -31,38 +31,28 @@ class -- we only want (and need) to build one. As designed,
 and so are also effectively singletons.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, ClassVar, Tuple
+from typing import TYPE_CHECKING
 
 from attrs import define, field
 from intervaltree import IntervalTree
 
 from fedcal import time_utils
-from fedcal.constants import (
-    APPROPRIATIONS_GAPS,
-    CR_DEPARTMENTS,
-    DEPTS_SET,
-    STATUS_MAP,
-    Dept,
-    ShutdownFlag,
-    DHS_FORMED,
-)
+from fedcal.constants import (APPROPRIATIONS_GAPS, CR_DEPARTMENTS, DEPTS_SET,
+                              DHS_FORMED, STATUS_MAP, Dept, ShutdownFlag)
 
 if TYPE_CHECKING:
-    import pandas as pd
-    from fedcal._typing import (
-        AppropriationsGapsMapType,
-        AssembledBudgetIntervalType,
-        CRMapType,
-        FedStampConvertibleTypes,
-    )
+    from typing import Any, ClassVar, Tuple
+
+    from pandas import Timestamp
+
+    from fedcal._typing import (AppropriationsGapsMapType,
+                                AssembledBudgetIntervalType, CRMapType,
+                                FedStampConvertibleTypes)
     from fedcal.time_utils import YearMonthDay
 
 
 def _get_date_interval(
-    dates: Tuple[int, int]
-    | Tuple["FedStampConvertibleTypes", "FedStampConvertibleTypes"]
+    dates: Tuple[int, int] | Tuple[FedStampConvertibleTypes, FedStampConvertibleTypes]
 ) -> tuple[int, int]:
     """
     Converts a tuple dates to a tuple of POSIX-day timestamps for use in our
@@ -81,17 +71,17 @@ def _get_date_interval(
         A tuple of POSIX-day timestamps representing the start and end dates.
 
     """
-    start: "pd.Timestamp" | int | "FedStampConvertibleTypes"
-    end: "pd.Timestamp" | int | "FedStampConvertibleTypes"
+    start: FedStampConvertibleTypes
+    end: FedStampConvertibleTypes
     start, end = dates
     if start is not isinstance(start, int):
-        start_timestamp: "pd.Timestamp" = time_utils.to_timestamp(start)
-        start = time_utils.pdtimestamp_to_posix_day(timestamp=start_timestamp)
-    if end is not isinstance(end, int):
-        end_timestamp: "pd.Timestamp" = time_utils.to_timestamp(end)
-        end: "pd.Timestamp" = time_utils.pdtimestamp_to_posix_day(
-            timestamp=end_timestamp
+        start_timestamp: Timestamp = time_utils.to_timestamp(start)
+        start: Timestamp = time_utils.pdtimestamp_to_posix_day(
+            timestamp=start_timestamp
         )
+    if end is not isinstance(end, int):
+        end_timestamp: Timestamp = time_utils.to_timestamp(end)
+        end: Timestamp = time_utils.pdtimestamp_to_posix_day(timestamp=end_timestamp)
     if start == end:
         end = end
     return start, end
@@ -101,7 +91,7 @@ def _get_overlap_interval(
     start: int,
     end: int,
     date_range: Tuple[int, int]
-    | Tuple["FedStampConvertibleTypes", "FedStampConvertibleTypes"]
+    | Tuple[FedStampConvertibleTypes, FedStampConvertibleTypes]
     | None = None,
 ) -> Tuple[int, int] | None:
     """
@@ -180,7 +170,7 @@ class CRTreeGrower:
     """
 
     depts_set: set[Dept] = field(default=DEPTS_SET)
-    cr_departments: "CRMapType" = field(default=CR_DEPARTMENTS)
+    cr_departments: CRMapType = field(default=CR_DEPARTMENTS)
     tree: IntervalTree = field(factory=IntervalTree)
 
     def __attrs_post_init__(self) -> None:
@@ -191,7 +181,7 @@ class CRTreeGrower:
 
     @staticmethod
     def _filter_cr_department_sets(
-        departments: set[Dept] | set[None],
+        departments: set[Dept] | None,
     ) -> set[Dept]:
         """
         Filters input sets from constants.py to produce actual set of
@@ -211,8 +201,8 @@ class CRTreeGrower:
 
     def grow_cr_tree(
         self,
-        cr_departments: "CRMapType" | None = None,
-        dates: Tuple["YearMonthDay", "YearMonthDay"] | None = None,
+        cr_departments: CRMapType | None = None,
+        dates: Tuple[YearMonthDay, YearMonthDay] | None = None,
     ) -> IntervalTree:
         """
         Grows an interval tree based on the provided CR intervals and affected
@@ -288,9 +278,7 @@ class AppropriationsGapsTreeGrower:
     """
 
     tree: IntervalTree = field(factory=IntervalTree)
-    appropriations_gaps: "AppropriationsGapsMapType" = field(
-        default=APPROPRIATIONS_GAPS
-    )
+    appropriations_gaps: AppropriationsGapsMapType = field(default=APPROPRIATIONS_GAPS)
     dates: Any | None = field(default=None)
 
     def __attrs_post_init__(self) -> None:
@@ -302,8 +290,8 @@ class AppropriationsGapsTreeGrower:
 
     def grow_appropriation_gaps_tree(
         self,
-        appropriations_gaps: "AppropriationsGapsMapType" | None = None,
-        dates: "FedStampConvertibleTypes" = None,
+        appropriations_gaps: AppropriationsGapsMapType | None = None,
+        dates: FedStampConvertibleTypes = None,
     ) -> IntervalTree:
         """
         Grows an interval tree based on the provided data for appropriations

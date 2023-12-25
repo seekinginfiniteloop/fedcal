@@ -19,13 +19,15 @@ through `FedIndex` and `FedStamp`.
 `FedPayDay` calculates and provides federal civilian biweekly paydays
 and outputs them in a variety of formats.
 """
-
-from __future__ import annotations
+from typing import TYPE_CHECKING
 
 import pandas as pd
 from attrs import define, field
 
 from fedcal import constants, time_utils
+
+if TYPE_CHECKING:
+    from pandas import DatetimeIndex, Series, Timestamp
 
 
 @define(order=True)
@@ -65,23 +67,21 @@ class FedPayDay:
 
     """
 
-    reference_date: pd.Timestamp = field(
+    reference_date: Timestamp = field(
         default=constants.FEDPAYDAY_REFERENCE_DATE,
         converter=time_utils.to_timestamp,
     )
-    end_date: pd.Timestamp = field(
+    end_date: Timestamp = field(
         default=pd.Timestamp(year=2040, month=9, day=30),
         converter=time_utils.to_timestamp,
     )
 
-    paydays: pd.DatetimeIndex = field(init=False)
+    paydays: DatetimeIndex = field(init=False)
 
     def __attrs_post_init__(self) -> None:
-        self.paydays: pd.DatetimeIndex = self._generate_paydays()
+        self.paydays: DatetimeIndex = self._generate_paydays()
 
-    def _generate_paydays(
-        self, end_date: pd.Timestamp | None = None
-    ) -> pd.DatetimeIndex:
+    def _generate_paydays(self, end_date: Timestamp | None = None) -> DatetimeIndex:
         """
         Generates federal paydays between the reference date and the specified
         end date.
@@ -92,15 +92,15 @@ class FedPayDay:
 
         Returns
         -------
-        pd.DatetimeIndex of generated paydays.
+        DatetimeIndex of generated paydays.
 
         """
-        end_date: pd.Timestamp = end_date or self.end_date
+        end_date: Timestamp = end_date or self.end_date
         if end_date > self.reference_date:
             return pd.date_range(start=self.reference_date, end=end_date, freq="2W-FRI")
         raise ValueError("fedcal only supports dates after 1970-1-1.")
 
-    def is_fed_payday(self, date: pd.Timestamp | None = None) -> bool:
+    def is_fed_payday(self, date: Timestamp | None = None) -> bool:
         """
         Checks if a given date is a federal payday.
 
@@ -120,9 +120,9 @@ class FedPayDay:
 
     def get_paydays_as_index(
         self,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> pd.DatetimeIndex:
+        start: Timestamp | None = None,
+        end: Timestamp | None = None,
+    ) -> DatetimeIndex:
         """
         Returns a DatetimeIndex of paydays between the start and end dates.
 
@@ -145,9 +145,9 @@ class FedPayDay:
 
     def get_paydays_as_list(
         self,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> list[pd.Timestamp]:
+        start: Timestamp | None = None,
+        end: Timestamp | None = None,
+    ) -> list[Timestamp]:
         """
         Returns a list of federal paydays between the start and end dates.
 
@@ -167,9 +167,9 @@ class FedPayDay:
 
     def get_paydays_as_series(
         self,
-        start: pd.Timestamp | None = None,
-        end: pd.Timestamp | None = None,
-    ) -> pd.Series:
+        start: Timestamp | None = None,
+        end: Timestamp | None = None,
+    ) -> Series:
         """
         Returns a list of federal paydays between the start and end dates.
 

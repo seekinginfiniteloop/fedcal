@@ -27,36 +27,25 @@ for reuse, using a flyweight pattern.
 of interval data from `_tree.Tree()`
 """
 
-from __future__ import annotations
-
 from itertools import product
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING
 
 from attrs import define
 
 from fedcal import time_utils
-from fedcal.depts import FedDepartment
 from fedcal._tree import Tree
-
-from fedcal.constants import (
-    Dept,
-    DEPTS_SET,
-    CR_DATA_CUTOFF_DATE,
-    STATUS_MAP,
-    DHS_FORMED,
-)
+from fedcal.constants import (CR_DATA_CUTOFF_DATE, DEPTS_SET, DHS_FORMED,
+                              STATUS_MAP, Dept)
+from fedcal.depts import FedDepartment
 
 if TYPE_CHECKING:
-    import pandas as pd
-    from intervaltree import IntervalTree
-    from fedcal._typing import (
-        StatusDictType,
-        StatusGeneratorType,
-        StatusMapType,
-        StatusPoolType,
-        StatusTupleType,
-    )
+    from typing import ClassVar
 
+    from intervaltree import IntervalTree
+    from pandas import Timestamp
+
+    from fedcal._typing import (StatusDictType, StatusGeneratorType,
+                                StatusMapType, StatusPoolType, StatusTupleType)
 
 @define(order=True, auto_attribs=True)
 class DepartmentStatus:
@@ -86,8 +75,8 @@ class DepartmentStatus:
         Class method that creates the status_pool class attribute.
     """
 
-    status_map: ClassVar["StatusMapType"] = STATUS_MAP
-    status_pool: ClassVar["StatusPoolType"] = None
+    status_map: ClassVar[StatusMapType] = STATUS_MAP
+    status_pool: ClassVar[StatusPoolType] = None
 
     def __attrs_post_init(self) -> None:
         """
@@ -124,7 +113,7 @@ class DepartmentStatus:
         return status_pool
 
     @classmethod
-    def get_status_pool(cls) -> "StatusPoolType":
+    def get_status_pool(cls) -> StatusPoolType:
         """
         A singleton flyweight method. Retrieves the singleton status pool,
         initializing it if needed. This framework ensures our status pool
@@ -136,7 +125,7 @@ class DepartmentStatus:
         instances for each status combination.
         """
         if cls.status_pool is None:
-            cls.status_pool: "StatusPoolType" = cls._initialize_status_pool()
+            cls.status_pool: StatusPoolType = cls._initialize_status_pool()
         return cls.status_pool
 
 
@@ -185,7 +174,7 @@ class DepartmentState:
         Determines the default status key for a given date.
     """
 
-    tree: ClassVar["IntervalTree"] | None = None
+    tree: ClassVar[IntervalTree] | None = None
     max_default_date: ClassVar[int] | None = None
 
     def __attrs_post_init(self) -> None:
@@ -236,10 +225,10 @@ class DepartmentState:
         _tree_instance = Tree()
         if not _tree_instance.tree:
             _tree_instance.initialize_tree()
-        cls.tree = _tree_instance.tree.copy()
+        cls.tree: IntervalTree = _tree_instance.tree.copy()
 
     @classmethod
-    def get_state_tree(cls) -> "IntervalTree":
+    def get_state_tree(cls) -> IntervalTree:
         """
         Retrieves the singleton tree.
 
@@ -255,7 +244,7 @@ class DepartmentState:
 
     @staticmethod
     def get_depts_set_at_time(
-        date: "pd.Timestamp" | int,
+        date: Timestamp | int,
     ) -> set[Dept]:
         """
         Retrieves set of Depts enum objects based on time input; a helper
@@ -293,7 +282,7 @@ class DepartmentState:
         return "DEFAULT_STATUS"
 
     @classmethod
-    def get_state(cls, date: "pd.Timestamp") -> "StatusDictType":
+    def get_state(cls, date: Timestamp) -> StatusDictType:
         """
         Retrieves the status of all departments for a specific date.
 
@@ -315,8 +304,8 @@ class DepartmentState:
         date.
 
         """
-        status_pool: "StatusPoolType" = DepartmentStatus.get_status_pool()
-        tree: "IntervalTree" = (
+        status_pool: StatusPoolType = DepartmentStatus.get_status_pool()
+        tree: IntervalTree = (
             cls.tree if cls.tree is not None else cls.get_state_tree()
         )
         status_map: "StatusMapType" = STATUS_MAP
@@ -346,9 +335,9 @@ class DepartmentState:
     @classmethod
     def get_state_for_range_generator(
         cls,
-        start: "pd.Timestamp",
-        end: "pd.Timestamp",
-    ) -> "StatusGeneratorType":
+        start: Timestamp,
+        end: Timestamp,
+    ) -> StatusGeneratorType:
         """
         Yields a generator of statuses for a given date range.
 
@@ -380,7 +369,7 @@ class DepartmentState:
 
         """
         status_pool: "StatusPoolType" = DepartmentStatus.get_status_pool()
-        tree: "IntervalTree" = cls.get_state_tree()
+        tree: IntervalTree = cls.get_state_tree()
         start_posix: int = time_utils.pdtimestamp_to_posix_day(timestamp=start)
         end_posix: int = time_utils.pdtimestamp_to_posix_day(timestamp=end)
 

@@ -18,25 +18,29 @@ data, with the goal of seamlessly building on `pd.DatetimeIndex` and
 integrating fedcal data into pandas analyses.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, Callable, KeysView
+from typing import TYPE_CHECKING
 
 import pandas as pd
-from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
+
+from fedcal import (_civpay, _date_attributes, _dept_status, _mil, constants,
+                    time_utils)
 from fedcal._meta import MagicDelegator
-from fedcal._cls_utils import to_series
 
 if TYPE_CHECKING:
-    import numpy as np
-    from fedcal._typing import (
-        ExtractedStatusDataGeneratorType,
-        FedIndexConvertibleTypes,
-        FedStampConvertibleTypes,
-        StatusCacheType,
-        StatusGeneratorType,
-        StatusTupleType,
-    )
+    from typing import Any, Callable, KeysView
+
+    from numpy import int64
+    from numpy.typing import NDArray
+    from pandas import (DataFrame, DatetimeIndex, Index, MultiIndex,
+                        PeriodIndex, Series, Timestamp)
+
+    from fedcal._civpay import FedPayDay
+    from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
+    from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
+    from fedcal._typing import (ExtractedStatusDataGeneratorType,
+                                FedIndexConvertibleTypes,
+                                FedStampConvertibleTypes, StatusCacheType,
+                                StatusGeneratorType, StatusTupleType)
     from fedcal.constants import AppropsStatus, Dept, OpsStatus
     from fedcal.time_utils import YearMonthDay
 
@@ -58,79 +62,79 @@ class FedIndex(
 
     Attributes
     ----------
-    business_days : pd.Series
+    business_days : Series
         pd.Series indicating business days.
 
-    fys : pd.Series
+    fys : Series
         pd.Series representing fiscal years.
 
-    fqs : pd.Series
+    fqs : Series
         pd.Series for fiscal quarters.
 
-    holidays : pd.Series
+    holidays : Series
         pd.Series indicating holidays.
 
-    proclaimed_holidays : np.ndarray
+    proclaimed_holidays : NDArray
         Array of boolean values for proclaimed holidays.
 
-    possible_proclamation_holidays : np.ndarray
+    possible_proclamation_holidays : NDArray
         Array of boolean values for possible proclamation holidays.
 
-    probable_mil_passdays : pd.Series
+    probable_mil_passdays : Series
         pd.Series indicating probable military pass days.
 
-    mil_paydays : pd.Series
+    mil_paydays : Series
         pd.Series of military paydays.
 
-    civ_paydays : pd.Series
+    civ_paydays : Series
         pd.Series of civilian paydays.
 
-    departments : pd.DataFrame
+    departments : DataFrame
         pd.DataFrame of departments.
 
-    departments_bool : pd.DataFrame
+    departments_bool : DataFrame
         pd.DataFrame indicating department existence per date.
 
-    all_depts_status : pd.DataFrame
+    all_depts_status : DataFrame
         pd.DataFrame with status for all departments.
 
-    all_depts_full_approps : pd.Series
+    all_depts_full_approps : Series
         pd.Series for departments with full appropriations.
 
-    all_depts_cr : pd.Series
+    all_depts_cr : Series
         pd.Series for departments under a continuing resolution.
 
-    all_depts_funded : pd.Series
+    all_depts_funded : Series
         pd.Series for departments under full appropriations or a CR.
 
-    all_depts_unfunded : pd.Series
+    all_depts_unfunded : Series
         pd.Series for all unfunded departments.
 
-    gov_cr : pd.Series
+    gov_cr : Series
         pd.Series indicating any department under a CR.
 
-    gov_shutdown : pd.Series
+    gov_shutdown : Series
         pd.Series indicating any department in a shutdown.
 
-    gov_unfunded : pd.Series
+    gov_unfunded : Series
         pd.Series for any unfunded department.
 
-    full_op_depts : pd.DataFrame
+    full_op_depts : DataFrame
         pd.DataFrame of fully operational departments.
 
-    funded_depts : pd.DataFrame
+    funded_depts : DataFrame
         pd.DataFrame of departments fully funded or under a CR.
 
-    cr_depts : pd.DataFrame
+    cr_depts : DataFrame
         pd.DataFrame of departments under a CR.
 
-    gapped_depts : pd.DataFrame
+    gapped_depts : DataFrame
         pd.DataFrame of departments in a funding gap.
 
-    shutdown_depts : pd.DataFrame
+    shutdown_depts : DataFrame
         pd.DataFrame of departments in a shutdown.
 
-    unfunded_depts : pd.DataFrame
+    unfunded_depts : DataFrame
         pd.DataFrame of unfunded departments.
 
     Methods
@@ -191,27 +195,26 @@ class FedIndex(
 
     def __init__(
         self,
-        datetimeindex: pd.DatetimeIndex | None = None,
+        datetimeindex: DatetimeIndex | None = None,
         dates: FedIndexConvertibleTypes | None = None,
     ) -> None:
         if isinstance(datetimeindex, pd.DatetimeIndex):
-            self.datetimeindex: pd.DatetimeIndex = datetimeindex
+            self.datetimeindex: DatetimeIndex = datetimeindex
         elif datetimeindex or dates:
             self.datetimeindex = self._convert_input(
                 time_input=datetimeindex
             ) or self._convert_input(time_input=dates)
         else:
-            self.datetimeindex: pd.DatetimeIndex = self._set_default_index()
-        self.start: pd.Timestamp
-        self.end: pd.Timestamp
+            self.datetimeindex: DatetimeIndex = self._set_default_index()
+        self.start: Timestamp
+        self.end: Timestamp
         self.start, self.end = self.set_self_date_range()
 
         # define caches; only created if accessed
-        self._mil_cache = None
-        self._status_gen = None
-        self._status_cache = None
-        self._holidays = None
-        self._fiscalcal = None
+        self._status_gen: StatusGeneratorType | None = None
+        self._status_cache: StatusCacheType | None = None
+        self._holidays: FedHolidays | None = None
+        self._fiscalcal: FedFiscalCal = None
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -234,6 +237,7 @@ class FedIndex(
         AttributeError
             if attribute can't be found
         """
+        # this shouldn't be necessary, but... seems to be until I can work it out.
         if name in type(self).__dict__:
             return type(self).__dict__[name].__get__(self, type(self))
 
@@ -262,7 +266,7 @@ class FedIndex(
 
     # Methods for caching and other internal use to the class
     @staticmethod
-    def _convert_input(time_input: FedIndexConvertibleTypes) -> pd.DatetimeIndex:
+    def _convert_input(time_input: FedIndexConvertibleTypes) -> DatetimeIndex:
         """
         Routes input to converter methods in time_utils module for
         conversion and normalization.
@@ -279,7 +283,7 @@ class FedIndex(
         return time_utils.to_datetimeindex(time_input)
 
     @staticmethod
-    def _set_default_index() -> pd.DatetimeIndex:
+    def _set_default_index() -> DatetimeIndex:
         """
         Sets the default index range if no date input is provided
 
@@ -294,7 +298,7 @@ class FedIndex(
         return time_utils.to_datetimeindex(default_range)
 
     @staticmethod
-    def _reverse_human_readable_status(status_str: str) -> "StatusTupleType":
+    def _reverse_human_readable_status(status_str: str) -> StatusTupleType:
         """
         Convert a human-readable status string to its corresponding status
         tuple.
@@ -316,7 +320,7 @@ class FedIndex(
         """
         return constants.READABLE_STATUS_MAP.inv[status_str]
 
-    def set_self_date_range(self) -> tuple[pd.Timestamp, pd.Timestamp]:
+    def set_self_date_range(self) -> tuple[Timestamp, Timestamp]:
         """
         Set the start and end date range of the FedIndex instance.
 
@@ -339,11 +343,11 @@ class FedIndex(
         nothing. Otherwise, it uses `_get_status_gen` to generate and set the
         status generator.
         """
-        self._status_gen: "StatusGeneratorType" = (
+        self._status_gen: StatusGeneratorType = (
             self._status_gen or self._get_status_gen()
         )
 
-    def _get_status_gen(self) -> "StatusGeneratorType":
+    def _get_status_gen(self) -> StatusGeneratorType:
         """
         Retrieve the status generator for the current date range. This is
         `FedIndex`'s primary means of retrieving statuses for Federal
@@ -381,11 +385,11 @@ class FedIndex(
         """
 
         self._set_status_gen()
-        self._status_cache: "StatusCacheType" = (
+        self._status_cache: StatusCacheType = (
             self._status_cache or self._generate_status_cache()
         )
 
-    def _generate_status_cache(self) -> "StatusCacheType":
+    def _generate_status_cache(self) -> StatusCacheType:
         """
         Generate a status cache based on the current status generator.
 
@@ -400,14 +404,14 @@ class FedIndex(
         existing one or initializing it. It then creates a dictionary from the
         status generator to serve as the status cache.
         """
-        gen: "StatusGeneratorType" = self._status_gen or self._set_status_gen()
+        gen: StatusGeneratorType = self._status_gen or self._set_status_gen()
         return dict(gen)
 
     def _extract_status_data(
         self,
         statuses: set[str] | None = None,
-        department_filter: set["Dept"] | None = None,
-    ) -> "ExtractedStatusDataGeneratorType":
+        department_filter: set[Dept] | None = None,
+    ) -> ExtractedStatusDataGeneratorType:
         """
         Extract status data based on specified statuses and department filters.
         This is a helper/retriever method for `construct_status_dataframe`. It
@@ -437,12 +441,12 @@ class FedIndex(
         """
 
         self._set_status_gen()
-        data_input: "StatusCacheType" | "StatusGeneratorType" = (
+        data_input: StatusCacheType | StatusGeneratorType = (
             self._status_cache or self._status_gen
         )
 
         statuses: set[str] | KeysView[str] = statuses or constants.STATUS_MAP.keys()
-        department_filter = department_filter or constants.DEPTS_SET
+        department_filter: set[Dept] = department_filter or constants.DEPTS_SET
 
         data_check_statuses: set[str] = {"DEFAULT_STATUS", "CR_STATUS"}
 
@@ -476,7 +480,7 @@ class FedIndex(
 
     def _check_dept_status(
         self, statuses: set[str], check_any: bool = False
-    ) -> pd.Series:
+    ) -> Series[bool]:
         """
         Check department statuses against specified statuses and aggregation
         logic. By default, checks if passed statuses apply to all departments
@@ -491,11 +495,12 @@ class FedIndex(
             keys to `STATUS_MAP`.
         check_any : bool, optional
             If True, checks if any department matches the statuses. If False,
-            checks if all departments match. Defaults to False.
+            checks if all departments match. Defaults to False. Used for
+            switching between property methods.
 
         Returns
         -------
-        pd.Series
+        Series
             A boolean Pandas pd.Series indicating whether each date matches the
             criteria.
 
@@ -506,10 +511,10 @@ class FedIndex(
         the departments match the given statuses for each date.
         """
 
-        status_df: pd.DataFrame = self.construct_status_dataframe(
+        status_df: DataFrame = self.construct_status_dataframe(
             statuses=statuses
         ).set_index(keys="Date")
-        dept_df: pd.DataFrame = self.departments.set_index(keys="Date")
+        dept_df: DataFrame = self.departments.set_index(keys="Date")
 
         dept_df["Departments"] = dept_df["Departments"].apply(
             func=lambda x: set(x.split(", "))
@@ -524,36 +529,30 @@ class FedIndex(
                 func=lambda d: d == depts
             )
 
-        comparison_df: pd.DataFrame = status_df["Departments"].apply(
-            func=comparison_func
-        )
+        comparison_df: DataFrame = status_df["Departments"].apply(func=comparison_func)
 
         return comparison_df.any(axis=1) if check_any else comparison_df.all(axis=1)
 
     # utility methods
 
-    def to_posix_day(self) -> pd.Series:
+    def to_posix_day(self) -> NDArray[int64]:
         """
-        Convert the dates in the index to POSIX-day timestamps normalized to midnight.
+        Convert the dates in the index to POSIX-day timestamps normalized to
+        midnight.
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series containing integer POSIX-day timestamps.
+        ndarray
+            A numpy array of integer POSIX-day timestamps.
 
         Notes
         -----
         This method normalizes each date in the index to midnight and then
         converts them to POSIX-day timestamps (seconds since the Unix epoch).
         """
+        return self.datetimeindex.normalize().asi8 // (24 * 60 * 60 * 1_000_000_000)
 
-        return (
-            self.datetimeindex.to_series()
-            .apply(func=lambda x: time_utils.pdtimestamp_to_posix_day(timestamp=x))
-            .astype(dtype=int)
-        )
-
-    def contains_date(self, date: "FedStampConvertibleTypes") -> bool:
+    def contains_date(self, date: FedStampConvertibleTypes) -> bool:
         """
         Check if the index contains a specified date.
 
@@ -572,10 +571,10 @@ class FedIndex(
         This method converts the input date to a `FedStamp`, if necessary,
         and then checks if it exists in the index.
         """
-        date: pd.Timestamp = time_utils.to_timestamp(date)
+        date: Timestamp = time_utils.to_timestamp(date)
         return date in self.datetimeindex
 
-    def contains_index(self, other_index: "FedIndexConvertibleTypes") -> bool:
+    def contains_index(self, other_index: FedIndexConvertibleTypes) -> bool:
         """
         Check if the index wholly contains another index..
 
@@ -623,13 +622,13 @@ class FedIndex(
             if isinstance(other_index, FedIndex)
             else time_utils.to_datetimeindex(other_index)
         )
-        return other_index.isin(values=self.datetimeindex.any())
+        return other_index.isin(values=self.datetimeindex).any()
 
     def construct_status_dataframe(
         self,
         statuses: set[str] | None = None,
-        department_filter: set["Dept"] | None = None,
-    ) -> pd.DataFrame:
+        department_filter: set[Dept] | None = None,
+    ) -> DataFrame:
         """
         Primary constructor method for `FedIndex`s department status
         properties. Outputs a human readable pd.DataFrame of data for the given
@@ -659,12 +658,12 @@ class FedIndex(
         date-department-status trio.
         """
 
-        extracted_data: "ExtractedStatusDataGeneratorType" = self._extract_status_data(
+        extracted_data: ExtractedStatusDataGeneratorType = self._extract_status_data(
             statuses=statuses, department_filter=department_filter
         )
         rows: list[Any] = []
         for date, fed_department_instance in extracted_data:
-            row: dict[str, Any] = {
+            row: dict[str, Timestamp | str] = {
                 "Date": date,
                 "Department": fed_department_instance.name.short,
                 "Status": fed_department_instance.status,
@@ -672,14 +671,14 @@ class FedIndex(
             rows.append(row)
         return pd.DataFrame(data=rows)
 
-    def status_dataframe_to_multiindex(self, df: pd.DataFrame) -> pd.DataFrame:
+    def status_dataframe_to_multiindex(self, df: DataFrame) -> DataFrame:
         """
         Convert a status dataframe generated by construct_status_dataframe to
         a multi-indexed dataframe.
 
         Parameters
         ----------
-        df : pd.DataFrame
+        df : DataFrame
             The dataframe with status information to convert.
 
         Returns
@@ -696,28 +695,28 @@ class FedIndex(
         """
         multiindex_data: list[Any] = []
         for _, row in df.iterrows():
-            date: pd.Timestamp = row["Date"]
+            date: Timestamp = row["Date"]
             department_short: str = row["Department"]
             human_readable_status: str = row["Status"]
 
-            department_enum: "Dept" = constants.Dept.from_short_name(
+            department_enum: Dept = constants.Dept.from_short_name(
                 short_name=department_short
             )
-            approps_status: "AppropsStatus"
-            ops_status: "OpsStatus"
+            approps_status: AppropsStatus
+            ops_status: OpsStatus
             approps_status, ops_status = self._reverse_human_readable_status(
                 status_str=human_readable_status
             )
 
             multiindex_data.append((date, department_enum, approps_status, ops_status))
 
-        multiindex: pd.MultiIndex = pd.MultiIndex.from_tuples(
+        multiindex: MultiIndex = pd.MultiIndex.from_tuples(
             tuples=multiindex_data,
             names=["Date", "Department", "FundingStatus", "OperationalStatus"],
         )
         return pd.DataFrame(index=multiindex).reset_index()
 
-    def status_dataframe_to_all_bool(self, df: pd.DataFrame) -> pd.DataFrame:
+    def status_dataframe_to_all_bool(self, df: DataFrame) -> DataFrame:
         """
         Convert a pd.DataFrame generated by construct_status_dataframe() with
         departments and statuses into a boolean pd.DataFrame.
@@ -728,7 +727,7 @@ class FedIndex(
 
         Parameters
         ----------
-        df : pd.DataFrame
+        df : DataFrame
             A pd.DataFrame containing 'Date', 'Department', and 'Status'
             columns.
 
@@ -740,20 +739,20 @@ class FedIndex(
             of each department-status pair.
         """
 
-        unique_departments: "np.ndarray"[str] = df["Department"].unique()
-        unique_statuses: "np.ndarray"[str] = df["Status"].unique()
+        unique_departments: NDArray[str] = df["Department"].unique()
+        unique_statuses: NDArray[str] = df["Status"].unique()
 
         columns: list[str] = [
             f"{dept}-{status}"
             for dept in unique_departments
             for status in unique_statuses
         ]
-        bool_df: pd.DataFrame = pd.DataFrame(index=df.index, columns=columns).fillna(
+        bool_df: DataFrame = pd.DataFrame(index=df.index, columns=columns).fillna(
             value=False
         )
 
         for index, row in df.iterrows():
-            date: pd.Timestamp = row["Date"]
+            date: Timestamp = row["Date"]
             department_short: str = row["Department"]
             human_readable_status: str = row["Status"]
 
@@ -762,7 +761,7 @@ class FedIndex(
 
         return bool_df.reset_index(drop=True)
 
-    def get_departments_status(self, departments: set["Dept"]) -> pd.DataFrame:
+    def get_departments_status(self, departments: set[Dept]) -> DataFrame:
         """
         Generate a pd.DataFrame of department statuses for a given set of
         departments.
@@ -794,7 +793,9 @@ class FedIndex(
         Sets the _fiscalcal attribute for fy/fq retrievals.
         """
         if not hasattr(_date_attributes.FedFiscalCal, "fqs") or self._fiscalcal is None:
-            self._fiscalcal = _date_attributes.FedFiscalCal(dates=self.datetimeindex)
+            self._fiscalcal: FedFiscalCal = _date_attributes.FedFiscalCal(
+                dates=self.datetimeindex
+            )
 
     def _set_holidays(self) -> None:
         """
@@ -804,13 +805,13 @@ class FedIndex(
             not hasattr(_date_attributes.FedHolidays, "holidays")
             or self._holidays is None
         ):
-            self._holidays = _date_attributes.FedHolidays()
+            self._holidays: FedHolidays = _date_attributes.FedHolidays()
 
     # Begin date attribute property methods
     @property
     def business_days(
         self,
-    ) -> "np.ndarray"[bool]:
+    ) -> NDArray[bool]:
         """
         Determine if the dates in the index are Federal business days.
 
@@ -819,19 +820,19 @@ class FedIndex(
 
         Returns
         -------
-        np.ndarray
-            An np.ndarray of boolean values, where True indicates a
+        NDArray
+            An NDArray of boolean values, where True indicates a
             business day.
 
         """
-        bizdays = _date_attributes.FedBusDay()
+        bizdays: FedBusDay = _date_attributes.FedBusDay()
         next_business_days = self.datetimeindex + bizdays.get_business_days(
             dates=self.datetimeindex
         )
         return self.datetimeindex.isin(values=next_business_days)
 
     @property
-    def fys(self) -> pd.Index[int]:
+    def fys(self) -> Index[int]:
         """
         Retrieve the fiscal years for each date in the index.
 
@@ -848,7 +849,7 @@ class FedIndex(
         return self._fiscalcal.fys
 
     @property
-    def fqs(self) -> pd.Index[int]:
+    def fqs(self) -> Index[int]:
         """
         Obtain the fiscal quarters for each date in the index.
 
@@ -866,7 +867,7 @@ class FedIndex(
         return self._fiscalcal.fqs
 
     @property
-    def fys_fqs(self) -> pd.PeriodIndex:
+    def fys_fqs(self) -> PeriodIndex:
         """
         Retrieve the fiscal year and quarter for each date in the index.
 
@@ -884,7 +885,7 @@ class FedIndex(
         return self._fiscalcal.fys_fqs
 
     @property
-    def fq_start(self) -> pd.PeriodIndex:
+    def fq_start(self) -> PeriodIndex:
         """
         Identify the first day of each fiscal quarter.
 
@@ -900,7 +901,7 @@ class FedIndex(
         return self._fiscalcal.fq_start
 
     @property
-    def fq_end(self) -> pd.PeriodIndex:
+    def fq_end(self) -> PeriodIndex:
         """
         Identify the last day of each fiscal quarter.
 
@@ -916,7 +917,7 @@ class FedIndex(
         return self._fiscalcal.fq_end
 
     @property
-    def fy_start(self) -> pd.PeriodIndex:
+    def fy_start(self) -> PeriodIndex:
         """
         Identify the first day of each fiscal year.
 
@@ -932,7 +933,7 @@ class FedIndex(
         return self._fiscalcal.fy_start
 
     @property
-    def fy_end(self) -> pd.PeriodIndex:
+    def fy_end(self) -> PeriodIndex:
         """
         Identify the last day of each fiscal year.
 
@@ -948,7 +949,7 @@ class FedIndex(
         return self._fiscalcal.fy_end
 
     @property
-    def holidays(self) -> "np.ndarray"[bool]:
+    def holidays(self) -> NDArray[bool]:
         """
         Identify federal holidays in the index.
 
@@ -957,15 +958,15 @@ class FedIndex(
 
         Returns
         -------
-        np.ndarray
-            An np.ndarray of boolean values, where True indicates a federal
+        NDArray
+            An NDArray of boolean values, where True indicates a federal
             holiday.
         """
         self._set_holidays()
         return self.datetimeindex.isin(values=self._holidays.holidays)
 
     @property
-    def proclaimed_holidays(self) -> "np.ndarray":
+    def proclaimed_holidays(self) -> NDArray[bool]:
         """
         Check for proclaimed federal holidays in the index.
 
@@ -974,8 +975,8 @@ class FedIndex(
 
         Returns
         -------
-        np.ndarray
-            An np.ndarray of boolean values, where True indicates a proclaimed
+        NDArray
+            An NDArray of boolean values, where True indicates a proclaimed
             federalholiday.
         """
         self._set_holidays()
@@ -984,15 +985,15 @@ class FedIndex(
         )
 
     @property
-    def possible_proclamation_holidays(self) -> "np.ndarray":
+    def possible_proclamation_holidays(self) -> NDArray[bool]:
         """
         Guesses if the dates in the index are possible *future* proclamation
         federal holidays.
 
         Returns
         -------
-        np.ndarray
-        np.ndarray of boolean values indicating possible proclamation
+        NDArray
+        NDArray of boolean values indicating possible proclamation
         holidays.
 
         Notes
@@ -1006,7 +1007,7 @@ class FedIndex(
         )
 
     @property
-    def probable_mil_passdays(self) -> "np.ndarray"[bool]:
+    def probable_mil_passdays(self) -> NDArray[bool]:
         """
         Estimate military pass days within the index's date range.
 
@@ -1017,17 +1018,19 @@ class FedIndex(
 
         Returns
         -------
-        np.ndarray
+        NDArray
             An array of boolean values, where True indicates a probable
             military pass day.
         """
 
-        passdays = _mil.ProbableMilitaryPassDay(dates=self.datetimeindex)
+        passdays: ProbableMilitaryPassDay = _mil.ProbableMilitaryPassDay(
+            dates=self.datetimeindex
+        )
         return passdays.passdays
 
     # Payday properties
     @property
-    def mil_paydays(self) -> "np.ndarray"[bool]:
+    def mil_paydays(self) -> NDArray[bool]:
         """
         Identify military payday dates within the index.
 
@@ -1036,14 +1039,14 @@ class FedIndex(
 
         Returns
         -------
-        np.ndarray
+        NDArray
             A boolean array indicating military payday dates as True.
         """
-        milpays = _mil.MilitaryPayDay(dates=self.datetimeindex)
+        milpays: MilitaryPayDay = _mil.MilitaryPayDay(dates=self.datetimeindex)
         return milpays.paydays
 
     @property
-    def civ_paydays(self) -> pd.Series:
+    def civ_paydays(self) -> Series[bool]:
         """
         Determine civilian payday dates within the index's date range.
 
@@ -1058,11 +1061,11 @@ class FedIndex(
         """
 
         self.set_self_date_range()
-        pays = _civpay.FedPayDay()
+        pays: FedPayDay = _civpay.FedPayDay()
         return pays.get_paydays_as_series(start=self.start, end=self.end)
 
     @property
-    def departments(self) -> pd.DataFrame:
+    def departments(self) -> DataFrame:
         """
         Create a pd.DataFrame of departments active on each date in the index.
 
@@ -1082,7 +1085,7 @@ class FedIndex(
             [dept.short for dept in constants.DEPTS_SET.difference(constants.Dept.DHS)]
         )
 
-        dept_df: pd.DataFrame = self.datetimeindex.to_frame(name="Departments")
+        dept_df: DataFrame = self.datetimeindex.to_frame(name="Departments")
         dept_df["Departments"] = dept_df.index.map(
             mapper=lambda date: all_depts
             if date >= constants.DHS_FORMED
@@ -1091,7 +1094,7 @@ class FedIndex(
         return dept_df
 
     @property
-    def departments_bool(self) -> pd.DataFrame:
+    def departments_bool(self) -> DataFrame:
         """
         Generates a pd.DataFrame indicating whether each department exists on
         each date in the index.
@@ -1109,20 +1112,18 @@ class FedIndex(
         """
 
         dept_columns: list[str] = [dept.short for dept in constants.Dept]
-        df: pd.DataFrame = pd.DataFrame(
+        df: DataFrame = pd.DataFrame(
             index=self.datetimeindex, columns=dept_columns
         ).fillna(value=True)
 
         # Adjust for DHS
-        dhs_start_date: pd.Timestamp | None = time_utils.to_timestamp(
-            constants.DHS_FORMED
-        )
+        dhs_start_date: Timestamp | None = time_utils.to_timestamp(constants.DHS_FORMED)
         df.loc[df.index < dhs_start_date, "DHS"] = False
 
         return df
 
     @property
-    def all_depts_status(self) -> pd.DataFrame:
+    def all_depts_status(self) -> DataFrame:
         """
         Provides a status pd.DataFrame for all departments over the entire
         date range.
@@ -1143,7 +1144,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"all"})
 
     @property
-    def all_depts_full_approps(self) -> pd.Series[bool]:
+    def all_depts_full_approps(self) -> Series[bool]:
         """
         Determines if all departments have full appropriations on each date.
 
@@ -1161,7 +1162,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"DEFAULT_STATUS"})
 
     @property
-    def all_depts_cr(self) -> pd.Series[bool]:
+    def all_depts_cr(self) -> Series[bool]:
         """
         Checks if all departments are under a continuing resolution (CR) on
         each date.
@@ -1180,7 +1181,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"CR_STATUS"})
 
     @property
-    def all_depts_funded(self) -> pd.Series[bool]:
+    def all_depts_funded(self) -> Series[bool]:
         """
         Determines if all departments have either full appropriations or are
         under a continuing resolution on each date.
@@ -1199,7 +1200,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"DEFAULT_STATUS", "CR_STATUS"})
 
     @property
-    def all_depts_unfunded(self) -> pd.Series[bool]:
+    def all_depts_unfunded(self) -> Series[bool]:
         """
         Assesses if all departments are unfunded on each date.
 
@@ -1218,7 +1219,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"GAP_STATUS", "SHUTDOWN_STATUS"})
 
     @property
-    def gov_cr(self) -> pd.Series[bool]:
+    def gov_cr(self) -> Series[bool]:
         """
         Checks if any department is under a continuing resolution (CR) on each
         date.
@@ -1235,7 +1236,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"CR_STATUS"}, check_any=True)
 
     @property
-    def gov_shutdown(self) -> pd.Series[bool]:
+    def gov_shutdown(self) -> Series[bool]:
         """
         Determines if any department is in a shutdown status on each date.
 
@@ -1252,7 +1253,7 @@ class FedIndex(
         return self._check_dept_status(statuses={"SHUTDOWN_STATUS"}, check_any=True)
 
     @property
-    def gov_unfunded(self) -> pd.Series[bool]:
+    def gov_unfunded(self) -> Series[bool]:
         """
         Evaluates if any department is unfunded on each date.
 
@@ -1273,7 +1274,7 @@ class FedIndex(
         )
 
     @property
-    def full_op_depts(self) -> pd.DataFrame:
+    def full_op_depts(self) -> DataFrame:
         """
         Generates a pd.DataFrame detailing departments with full operational
         status on each date in the index.
@@ -1295,7 +1296,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"DEFAULT_STATUS"})
 
     @property
-    def funded_depts(self) -> pd.DataFrame:
+    def funded_depts(self) -> DataFrame:
         """
         Compiles a pd.DataFrame of departments either fully funded or under a
         continuing resolution.
@@ -1315,7 +1316,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"DEFAULT_STATUS", "CR_STATUS"})
 
     @property
-    def cr_depts(self) -> pd.DataFrame:
+    def cr_depts(self) -> DataFrame:
         """
         Creates a pd.DataFrame listing departments under a continuing
         resolution (CR).
@@ -1335,7 +1336,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"CR_STATUS"})
 
     @property
-    def gapped_depts(self) -> pd.DataFrame:
+    def gapped_depts(self) -> DataFrame:
         """
         Generates a pd.DataFrame of departments in a funding gap period.
 
@@ -1353,7 +1354,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"GAP_STATUS"})
 
     @property
-    def shutdown_depts(self) -> pd.DataFrame:
+    def shutdown_depts(self) -> DataFrame:
         """
         Produces a pd.DataFrame of departments affected by a shutdown.
 
@@ -1371,7 +1372,7 @@ class FedIndex(
         return self.construct_status_dataframe(statuses={"SHUTDOWN_STATUS"})
 
     @property
-    def unfunded_depts(self) -> pd.DataFrame:
+    def unfunded_depts(self) -> DataFrame:
         """
         Creates a pd.DataFrame highlighting departments with no current
         funding.
@@ -1404,7 +1405,7 @@ def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:
         `FedIndexConvertibleTypes`:
             tuple[FedStampConvertibleTypes, FedStampConvertibleTypes],
             tuple[pd.Timestamp, pd.Timestamp],
-            "np.ndarray",
+            NDArray,
             "pd.Series",
             "pd.DatetimeIndex",
             "pd.Index",
