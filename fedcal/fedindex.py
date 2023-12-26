@@ -17,32 +17,38 @@ for pandas' `pd.DatetimeIndex` with additional functionality for fedcal
 data, with the goal of seamlessly building on `pd.DatetimeIndex` and
 integrating fedcal data into pandas analyses.
 """
+from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, Callable, KeysView
 
 import pandas as pd
+from numpy import int64
+from numpy.typing import NDArray
+from pandas import (
+    DataFrame,
+    DatetimeIndex,
+    Index,
+    MultiIndex,
+    PeriodIndex,
+    Series,
+    Timestamp,
+)
 
-from fedcal import (_civpay, _date_attributes, _dept_status, _mil, constants,
-                    time_utils)
+from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
+from fedcal._civpay import FedPayDay
+from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
 from fedcal._meta import MagicDelegator
-
-if TYPE_CHECKING:
-    from typing import Any, Callable, KeysView
-
-    from numpy import int64
-    from numpy.typing import NDArray
-    from pandas import (DataFrame, DatetimeIndex, Index, MultiIndex,
-                        PeriodIndex, Series, Timestamp)
-
-    from fedcal._civpay import FedPayDay
-    from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
-    from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
-    from fedcal._typing import (ExtractedStatusDataGeneratorType,
-                                FedIndexConvertibleTypes,
-                                FedStampConvertibleTypes, StatusCacheType,
-                                StatusGeneratorType, StatusTupleType)
-    from fedcal.constants import AppropsStatus, Dept, OpsStatus
-    from fedcal.time_utils import YearMonthDay
+from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
+from fedcal._typing import (
+    ExtractedStatusDataGeneratorType,
+    FedIndexConvertibleTypes,
+    FedStampConvertibleTypes,
+    StatusCacheType,
+    StatusGeneratorType,
+    StatusTupleType,
+)
+from fedcal.constants import AppropsStatus, Dept, OpsStatus
+from fedcal.time_utils import YearMonthDay
 
 
 class FedIndex(
@@ -62,6 +68,9 @@ class FedIndex(
 
     Attributes
     ----------
+    posix_day
+        Converts dates to a numpy array of POSIX-day timestamps.
+
     business_days : Series
         pd.Series indicating business days.
 
@@ -139,8 +148,6 @@ class FedIndex(
 
     Methods
     -------
-    to_posix_day
-        Converts dates to POSIX-day timestamps.
 
     contains_date
         Checks if a date is in the index.
@@ -535,23 +542,6 @@ class FedIndex(
 
     # utility methods
 
-    def to_posix_day(self) -> NDArray[int64]:
-        """
-        Convert the dates in the index to POSIX-day timestamps normalized to
-        midnight.
-
-        Returns
-        -------
-        ndarray
-            A numpy array of integer POSIX-day timestamps.
-
-        Notes
-        -----
-        This method normalizes each date in the index to midnight and then
-        converts them to POSIX-day timestamps (seconds since the Unix epoch).
-        """
-        return self.datetimeindex.normalize().asi8 // (24 * 60 * 60 * 1_000_000_000)
-
     def contains_date(self, date: FedStampConvertibleTypes) -> bool:
         """
         Check if the index contains a specified date.
@@ -808,6 +798,24 @@ class FedIndex(
             self._holidays: FedHolidays = _date_attributes.FedHolidays()
 
     # Begin date attribute property methods
+    @property
+    def posix_day(self) -> NDArray[int64]:
+        """
+        Convert the dates in the index to POSIX-day timestamps normalized to
+        midnight.
+
+        Returns
+        -------
+        ndarray
+            A numpy array of integer POSIX-day timestamps.
+
+        Notes
+        -----
+        This method normalizes each date in the index to midnight and then
+        converts them to POSIX-day timestamps (seconds since the Unix epoch).
+        """
+        return self.datetimeindex.normalize().asi8 // (24 * 60 * 60 * 1_000_000_000)
+
     @property
     def business_days(
         self,

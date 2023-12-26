@@ -22,23 +22,20 @@ date attributes of the federal calendar:
 - holidays (`FedHolidays`)
 - fiscal years/quarters (`FedFiscalCal`)
 """
+from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import ClassVar, Generator
 
 import pandas as pd
 from attrs import define, field
+from numpy.typing import NDArray
+from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.holiday import USFederalHolidayCalendar
 from pandas.tseries.offsets import CustomBusinessDay
 
 from fedcal import constants
 from fedcal.time_utils import ensure_datetimeindex
-
-if TYPE_CHECKING:
-    from typing import ClassVar, Generator
-
-    from numpy.typing import NDArray
-    from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 
 
 @define(order=True, auto_attribs=True)

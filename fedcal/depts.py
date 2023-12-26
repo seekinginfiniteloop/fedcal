@@ -25,18 +25,14 @@ We expose this publicly because users will receive FedDepartment objects
 from those queries, and can use `FedDepartment`'s properties to customize
 that output.
 """
+from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, Generator, Tuple
 
 from attrs import astuple, field, frozen
 
-from fedcal.constants import READABLE_STATUS_MAP
-
-if TYPE_CHECKING:
-    from typing import Any, Generator, Tuple
-
-    from ._typing import StatusDictType, StatusTupleType
-    from .constants import AppropsStatus, Dept, OpsStatus
+from fedcal._typing import StatusDictType, StatusTupleType
+from fedcal.constants import READABLE_STATUS_MAP, AppropsStatus, Dept, OpsStatus
 
 
 @frozen()

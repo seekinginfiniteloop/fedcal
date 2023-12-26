@@ -26,26 +26,33 @@ for reuse, using a flyweight pattern.
 - `DepartmentState` queries and retrieves points and ranges
 of interval data from `_tree.Tree()`
 """
+from __future__ import annotations
 
 from itertools import product
-from typing import TYPE_CHECKING
+from typing import ClassVar
 
 from attrs import define
+from intervaltree import IntervalTree
+from pandas import Timestamp
 
 from fedcal import time_utils
 from fedcal._tree import Tree
-from fedcal.constants import (CR_DATA_CUTOFF_DATE, DEPTS_SET, DHS_FORMED,
-                              STATUS_MAP, Dept)
+from fedcal._typing import (
+    StatusDictType,
+    StatusGeneratorType,
+    StatusMapType,
+    StatusPoolType,
+    StatusTupleType,
+)
+from fedcal.constants import (
+    CR_DATA_CUTOFF_DATE,
+    DEPTS_SET,
+    DHS_FORMED,
+    STATUS_MAP,
+    Dept,
+)
 from fedcal.depts import FedDepartment
 
-if TYPE_CHECKING:
-    from typing import ClassVar
-
-    from intervaltree import IntervalTree
-    from pandas import Timestamp
-
-    from fedcal._typing import (StatusDictType, StatusGeneratorType,
-                                StatusMapType, StatusPoolType, StatusTupleType)
 
 @define(order=True, auto_attribs=True)
 class DepartmentStatus:
@@ -305,9 +312,7 @@ class DepartmentState:
 
         """
         status_pool: StatusPoolType = DepartmentStatus.get_status_pool()
-        tree: IntervalTree = (
-            cls.tree if cls.tree is not None else cls.get_state_tree()
-        )
+        tree: IntervalTree = cls.tree if cls.tree is not None else cls.get_state_tree()
         status_map: "StatusMapType" = STATUS_MAP
 
         posix_date: int = time_utils.pdtimestamp_to_posix_day(timestamp=date)

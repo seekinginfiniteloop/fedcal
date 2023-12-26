@@ -50,25 +50,21 @@ After conversion, tupled start/end dates are passed through
 through `_normalize_datetimeindex` to normalize timezone aware
 input to U.S. Eastern, as with `to_timestamp`.
 """
+from __future__ import annotations
 
 import datetime
 from functools import singledispatch, wraps
-from typing import TYPE_CHECKING
+from typing import Any, Callable, Self
 
 import numpy as np
 import pandas as pd
 from attrs import astuple, define, field
+from numpy import datetime64, int64
+from numpy.typing import NDArray
+from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.frequencies import to_offset
 
-if TYPE_CHECKING:
-    from typing import Any, Self
-
-    from numpy import datetime64, int64
-    from numpy.typing import NDArray
-    from pandas import DatetimeIndex, Series, Timestamp
-
-    from fedcal._typing import (FedIndexConvertibleTypes,
-                                FedStampConvertibleTypes)
+from fedcal._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
 
 
 def get_today_in_posix_day() -> int:
@@ -293,7 +289,7 @@ def _posix_to_timestamp(date_input: int | int64 | float) -> Timestamp:
     second-based POSIX time) we assume are posix-days. Since the start of
     posix time is zero either way, we don't have to worry about this two hour
     period. We follow the pandas convention of terminating at year 2200 (84000
-    posix-days is a few days past that, but it's round).
+    posix-days is actually 2199-12-26, but it's round).
     """
     if date_input < 84000:
         return _normalize_timestamp(pd.to_datetime(date_input, unit="D"))
@@ -304,9 +300,7 @@ def _posix_to_timestamp(date_input: int | int64 | float) -> Timestamp:
 def _str_to_timestamp(date_input: str) -> Timestamp:
     """
     Conversion for string dates.
-    Tries ISO-formatted strings first, then falls back to American formats.
-    Assumes Python 3.11 functionality for handling multiple ISO formats.
-    If ISO format fails, we try American date formats -- this being an
+    If normal attempts fail, we try American date formats -- this being an
     American calendar -- and then European date formats.
 
     Raises
@@ -327,7 +321,9 @@ def _str_to_timestamp(date_input: str) -> Timestamp:
         raise ValueError(
             f"""Date string '{date_input}' is not in a recognized format. All
             reasonable attempts to parse it failed. Are you trying to use an
-            alien date format? Please use an ISO 8601 format"""
+            alien date format? If you communicate in timelessness like those
+            aliens in Arrival we're at an impasse. Please use an ISO 8601
+            format"""
         ) from e
 
 
@@ -362,7 +358,7 @@ def _timetuple_to_timestamp(date_input: tuple) -> Timestamp:
             converted to integers."""
         ) from e
 
-    if not 1970 <= year <= 9999:
+    if not 1970 <= year <= 2200:
         raise ValueError("Year must be a four-digit number, and not before 1970.")
 
     return _normalize_timestamp(
@@ -370,9 +366,7 @@ def _timetuple_to_timestamp(date_input: tuple) -> Timestamp:
     )
 
 
-def _check_year(
-    dates: Timestamp | DatetimeIndex,
-) -> Timestamp | DatetimeIndex:
+def _check_year(dates: Timestamp | DatetimeIndex) -> Timestamp | DatetimeIndex:
     if isinstance(dates, pd.Timestamp):
         if 1969 < dates.year < 2200:
             return dates
@@ -393,7 +387,7 @@ def _check_year(
 
 def check_timestamp(
     func,
-):
+) -> Callable[..., Any] | Any | Timestamp | None:
     """
     Since _normalize_timestamp is designed to normalize Timestamps, to avoid
     repeating ourselves with conversions to Timestamps in most of our
@@ -461,7 +455,7 @@ def _normalize_timestamp(timestamp: Timestamp | None = None) -> Timestamp:
 
 def wrap_tuple(
     func,
-):
+) -> Callable[..., Any] | Any | tuple[Any, ...] | DatetimeIndex | None:
     """
     To avoid repeating ourselves with date converters that handle two
     arguments for FedIndex, we instead wrap the singledispatch
@@ -485,7 +479,7 @@ def wrap_tuple(
     """
 
     @wraps(wrapped=func)
-    def wrapper(*args) -> tuple | Any | None:
+    def wrapper(*args) -> Callable | tuple[Any] | Any | None:
         """Our to-tuple handling wrapper."""
         if count := len(args) in {1, 2}:
             return func(args[0]) if count == 1 else func((args[0], args[1]))
@@ -496,9 +490,7 @@ def wrap_tuple(
 
 @wrap_tuple
 @singledispatch
-def to_datetimeindex(
-    *input_dates: FedIndexConvertibleTypes,
-) -> DatetimeIndex | None:
+def to_datetimeindex(*input_dates: FedIndexConvertibleTypes) -> DatetimeIndex | None:
     """
     A singledispatch function for handling date conversions to DatetimeIndex.
     Most types are pushed into tuples by wrap_tuple and funneled to our
@@ -531,7 +523,7 @@ def to_datetimeindex(
 
 
 @to_datetimeindex.register(cls=tuple)
-def _from_tuple(input_dates) -> DatetimeIndex:
+def _from_tuple(input_dates: tuple[Any]) -> DatetimeIndex:
     """
     We reuse `to_timestamp` to efficiently handle tuples of supported types.
     Even if not provided as a tuple, any two arguments will be funneled into
@@ -542,7 +534,7 @@ def _from_tuple(input_dates) -> DatetimeIndex:
 
 
 @to_datetimeindex.register(cls=pd.DatetimeIndex)
-def _from_datetimeindex(input_dates) -> DatetimeIndex:
+def _from_datetimeindex(input_dates: DatetimeIndex) -> DatetimeIndex:
     """We catch and release DatetimeIndexes"""
     return _normalize_datetimeindex(datetimeindex=_check_year(dates=input_dates))
 
@@ -550,7 +542,7 @@ def _from_datetimeindex(input_dates) -> DatetimeIndex:
 @to_datetimeindex.register(cls=pd.Series)
 @to_datetimeindex.register(cls=pd.Index)
 @to_datetimeindex.register(cls=np.ndarray)
-def _from_array_like(input_dates) -> DatetimeIndex:
+def _from_array_like(input_dates: Series | Index | NDArray) -> DatetimeIndex:
     """
     We try to convert array-like objects to pd.DatetimeIndex
 
@@ -574,7 +566,7 @@ def _from_array_like(input_dates) -> DatetimeIndex:
 
 
 @to_datetimeindex.register(cls=pd.PeriodIndex)
-def _from_periodindex(input_dates) -> DatetimeIndex:
+def _from_periodindex(input_dates: PeriodIndex) -> DatetimeIndex:
     """
     Simple conversion routing for PeriodIndex.
     """

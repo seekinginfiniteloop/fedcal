@@ -19,15 +19,13 @@ through `FedIndex` and `FedStamp`.
 `FedPayDay` calculates and provides federal civilian biweekly paydays
 and outputs them in a variety of formats.
 """
-from typing import TYPE_CHECKING
+from __future__ import annotations
 
 import pandas as pd
 from attrs import define, field
+from pandas import DatetimeIndex, Series, Timestamp
 
 from fedcal import constants, time_utils
-
-if TYPE_CHECKING:
-    from pandas import DatetimeIndex, Series, Timestamp
 
 
 @define(order=True)

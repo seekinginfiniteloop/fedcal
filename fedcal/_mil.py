@@ -22,16 +22,14 @@ person-power:
 - `ProbableMilitaryPassday` heuristically calculates probable
 military passdays surrounding federal holidays.
 """
-from typing import TYPE_CHECKING
+from __future__ import annotations
 
 import pandas as pd
 from attrs import define, field
+from numpy.typing import NDArray
+from pandas import DataFrame, DatetimeIndex, Series, Timestamp
 
 from fedcal import _date_attributes, time_utils
-
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
-    from pandas import DataFrame, DatetimeIndex, Series, Timestamp
 
 
 @define(order=True, kw_only=True)
@@ -168,7 +166,7 @@ class ProbableMilitaryPassDay:
             DataFrame of boolean masks for identifying passdays.
     """
 
-    dates: DatetimeIndex | Series | Timestamp | None = field(default=None)
+    dates: DatetimeIndex | Series[Timestamp] | Timestamp | None = field(default=None)
 
     passdays: NDArray[bool] | None = field(default=None, init=False)
 

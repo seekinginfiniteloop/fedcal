@@ -19,9 +19,9 @@ primary API modules, `FedIndex` and `FedStamp` and their helper functions,
 `to_fedstamp` and `to_fedindex`. This makes them easy to import and use, like:
 
 ```python
-from fedcal import to_fedindex
-dates = ((1999,10,1), (2040,9,30))
-index = to_fedindex(dates)
+import fedcal as fc
+dates = (1999,10,1), (2040,9,30)
+fdx = fc.to_fedindex(dates)
 ```
 
 We also import the `FedDepartment` class and the `Dept` enum, which are used

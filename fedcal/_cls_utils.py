@@ -22,21 +22,18 @@ Where we planned to use this, the output is currently in property methods
 (i.e. FedIndex); which interferes with the wrapper and we probably need to
 rethink the approach.
 """
+from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 import numpy as np
 import pandas as pd
 from attr import define, field
 from funcy import decorator
+from numpy.typing import NDArray
+from pandas import DatetimeIndex, Series
 
 from fedcal._meta import MagicDelegator
-
-if TYPE_CHECKING:
-    from typing import Any
-
-    from numpy.typing import NDArray
-    from pandas import DatetimeIndex, Series
 
 
 class NPArrayImposter(

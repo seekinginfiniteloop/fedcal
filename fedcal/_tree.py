@@ -30,25 +30,31 @@ class -- we only want (and need) to build one. As designed,
 `CRTreeGrower` and `AppropriationsTreeGrower` are initialized by `Tree`,
 and so are also effectively singletons.
 """
+from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any, ClassVar, Tuple
 
 from attrs import define, field
 from intervaltree import IntervalTree
+from pandas import Timestamp
 
 from fedcal import time_utils
-from fedcal.constants import (APPROPRIATIONS_GAPS, CR_DEPARTMENTS, DEPTS_SET,
-                              DHS_FORMED, STATUS_MAP, Dept, ShutdownFlag)
-
-if TYPE_CHECKING:
-    from typing import Any, ClassVar, Tuple
-
-    from pandas import Timestamp
-
-    from fedcal._typing import (AppropriationsGapsMapType,
-                                AssembledBudgetIntervalType, CRMapType,
-                                FedStampConvertibleTypes)
-    from fedcal.time_utils import YearMonthDay
+from fedcal._typing import (
+    AppropriationsGapsMapType,
+    AssembledBudgetIntervalType,
+    CRMapType,
+    FedStampConvertibleTypes,
+)
+from fedcal.constants import (
+    APPROPRIATIONS_GAPS,
+    CR_DEPARTMENTS,
+    DEPTS_SET,
+    DHS_FORMED,
+    STATUS_MAP,
+    Dept,
+    ShutdownFlag,
+)
+from fedcal.time_utils import YearMonthDay
 
 
 def _get_date_interval(

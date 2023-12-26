@@ -17,28 +17,22 @@ for pandas' `pd.Timestamp` with additional functionality for fedcal
 data, with the goal of seamlessly building on `pd.Timestamp` and
 integrating fedcal data into pandas analyses.
 """
+from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Any
 
 import pandas as pd
+from pandas import Timestamp
 
-from fedcal import (_civpay, _date_attributes, _dept_status, _mil, constants,
-                    time_utils)
+from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
+from fedcal._civpay import FedPayDay
+from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
 from fedcal._meta import MagicDelegator
-
-if TYPE_CHECKING:
-    from typing import Any
-
-    from pandas import Timestamp
-
-    from fedcal._civpay import FedPayDay
-    from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
-    from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
-    from fedcal._typing import (FedStampConvertibleTypes, StatusDictType,
-                                StatusTupleType)
-    from fedcal.constants import Dept
-    from fedcal.depts import FedDepartment
-    from fedcal.time_utils import YearMonthDay
+from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
+from fedcal._typing import FedStampConvertibleTypes, StatusDictType, StatusTupleType
+from fedcal.constants import Dept
+from fedcal.depts import FedDepartment
+from fedcal.time_utils import YearMonthDay
 
 
 class FedStamp(

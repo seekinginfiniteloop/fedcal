@@ -24,24 +24,21 @@ cross-referenced with Wikipedia, and the Government Accountability Office
 The data are entirely within the public domain. I was unable to find a
 publicly available dataset with this information precompiled; so I made one.
 """
+from __future__ import annotations
 
 from enum import Enum, unique
-from typing import TYPE_CHECKING
+from typing import Any, Generator, Literal, Self
 
 import pandas as pd
 from bidict import frozenbidict
+from pandas import Timestamp
 
-if TYPE_CHECKING:
-    from typing import Any, Generator, Literal, Self
-
-    from pandas import Timestamp
-
-    from ._typing import (
-        AppropriationsGapsMapType,
-        CRMapType,
-        StatusMapType,
-        StatusTupleType,
-    )
+from fedcal._typing import (
+    AppropriationsGapsMapType,
+    CRMapType,
+    StatusMapType,
+    StatusTupleType,
+)
 
 
 @unique
