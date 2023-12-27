@@ -819,7 +819,7 @@ class FedIndex(
     @property
     def business_days(
         self,
-    ) -> NDArray[bool]:
+    ) -> DatetimeIndex:
         """
         Determine if the dates in the index are Federal business days.
 
@@ -828,16 +828,11 @@ class FedIndex(
 
         Returns
         -------
-        NDArray
-            An NDArray of boolean values, where True indicates a
-            business day.
-
+        Datetimeindex
+            Datetimeindex of dates that are business days.
         """
-        bizdays: FedBusDay = _date_attributes.FedBusDay()
-        next_business_days = self.datetimeindex + bizdays.get_business_days(
-            dates=self.datetimeindex
-        )
-        return self.datetimeindex.isin(values=next_business_days)
+        bdays: FedBusDay = _date_attributes.FedBusDay()
+        return self.datetimeindex[bdays.get_business_days(dates=self.datetimeindex)]
 
     @property
     def fys(self) -> Index[int]:
@@ -957,7 +952,7 @@ class FedIndex(
         return self._fiscalcal.fy_end
 
     @property
-    def holidays(self) -> NDArray[bool]:
+    def holidays(self) -> DatetimeIndex:
         """
         Identify federal holidays in the index.
 
@@ -966,15 +961,16 @@ class FedIndex(
 
         Returns
         -------
-        NDArray
-            An NDArray of boolean values, where True indicates a federal
-            holiday.
+        DatetimeIndex
+            DatetimeIndex reflecting dates of holidays
         """
         self._set_holidays()
-        return self.datetimeindex.isin(values=self._holidays.holidays)
+        return self.datetimeindex[
+            self.datetimeindex.isin(values=self._holidays.holidays)
+        ]
 
     @property
-    def proclaimed_holidays(self) -> NDArray[bool]:
+    def proclaimed_holidays(self) -> DatetimeIndex:
         """
         Check for proclaimed federal holidays in the index.
 
@@ -983,26 +979,27 @@ class FedIndex(
 
         Returns
         -------
-        NDArray
-            An NDArray of boolean values, where True indicates a proclaimed
-            federalholiday.
+        DatetimeIndex
+            DatetimeIndex reflecting dates of proclaimed holidays.
         """
         self._set_holidays()
-        return self.datetimeindex.isin(
-            values=pd.DatetimeIndex(data=self._holidays.proclaimed_holidays)
-        )
+        return self.datetimeindex[
+            self.datetimeindex.isin(
+                values=pd.DatetimeIndex(data=self._holidays.proclaimed_holidays)
+            )
+        ]
 
     @property
-    def possible_proclamation_holidays(self) -> NDArray[bool]:
+    def possible_proclamation_holidays(self) -> DatetimeIndex:
         """
         Guesses if the dates in the index are possible *future* proclamation
         federal holidays.
 
         Returns
         -------
-        NDArray
-        NDArray of boolean values indicating possible proclamation
-        holidays.
+        DatetimeIndex
+            A DatetimeIndex reflecting possible *future* dates that could see a
+            proclaimed holiday.
 
         Notes
         -----
@@ -1010,12 +1007,12 @@ class FedIndex(
 
         """
         self._set_holidays()
-        return self._holidays.guess_proclamation_holidays(
-            datetimeindex=self.datetimeindex
-        )
+        return self.datetimeindex[
+            self._holidays.guess_proclamation_holidays(dates=self.datetimeindex)
+        ]
 
     @property
-    def probable_mil_passdays(self) -> NDArray[bool]:
+    def probable_mil_passdays(self) -> DatetimeIndex:
         """
         Estimate military pass days within the index's date range.
 
@@ -1026,19 +1023,18 @@ class FedIndex(
 
         Returns
         -------
-        NDArray
-            An array of boolean values, where True indicates a probable
-            military pass day.
+        DatetimeIndex
+        A datetimeindex reflecting probable dates for military passdays.
         """
 
         passdays: ProbableMilitaryPassDay = _mil.ProbableMilitaryPassDay(
             dates=self.datetimeindex
         )
-        return passdays.passdays
+        return self.datetimeindex[passdays.passdays]
 
     # Payday properties
     @property
-    def mil_paydays(self) -> NDArray[bool]:
+    def mil_paydays(self) -> DatetimeIndex:
         """
         Identify military payday dates within the index.
 
@@ -1047,11 +1043,11 @@ class FedIndex(
 
         Returns
         -------
-        NDArray
-            A boolean array indicating military payday dates as True.
+        DatetimeIndex
+            A datetimeindex reflecting military payday dates.
         """
         milpays: MilitaryPayDay = _mil.MilitaryPayDay(dates=self.datetimeindex)
-        return milpays.paydays
+        return self.datetimeindex[milpays.paydays]
 
     @property
     def civ_paydays(self) -> Series[bool]:
@@ -1094,10 +1090,9 @@ class FedIndex(
         )
 
         dept_df: DataFrame = self.datetimeindex.to_frame(name="Departments")
+        dhs_formed: Timestamp = time_utils.to_timestamp(constants.DHS_FORMED)
         dept_df["Departments"] = dept_df.index.map(
-            mapper=lambda date: all_depts
-            if date >= constants.DHS_FORMED
-            else pre_dhs_depts
+            mapper=lambda date: all_depts if date >= dhs_formed else pre_dhs_depts
         )
         return dept_df
 

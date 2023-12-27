@@ -396,4 +396,7 @@ class DepartmentState:
                             last_known_status[department] = status_pool[
                                 (department, status_key)
                             ]
-                    yield (str(key_date), last_known_status)
+                    yield (
+                        time_utils.to_timestamp(key_date).strftime(format="%Y-%m-%d"),
+                        last_known_status,
+                    )

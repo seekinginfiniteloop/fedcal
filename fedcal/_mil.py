@@ -79,40 +79,21 @@ class MilitaryPayDay:
         """
 
         dates = pd.DatetimeIndex(data=self.dates if dates is None else dates)
-        bizday_instance = _date_attributes.FedBusDay()
-
-        first_or_fifteenth_mask: Series = pd.Series(
-            data=(dates.day.isin(values=[1, 15])), index=dates, dtype=bool
-        )
-
-        business_days_mask = pd.Series(
-            data=dates.isin(
-                values=bizday_instance.get_business_days(dates=dates).index
-            ),
+        bday = _date_attributes.FedBusDay()
+        bdays = pd.Series(data=(bday.get_business_days(dates=dates)), index=dates)
+        pays = pd.Series(
+            data=(dates.day.isin(values=[1, 15]) & bdays),
             index=dates,
-            dtype=bool,
+            name="mil_paydays",
         )
-
-        payday_mask: Series[bool] = first_or_fifteenth_mask & business_days_mask
-
-        non_biz_1st_15th: DatetimeIndex = dates[
-            first_or_fifteenth_mask & ~business_days_mask
-        ]
-        for non_biz_date in non_biz_1st_15th:
-            prev_days: DatetimeIndex = pd.date_range(
-                start=non_biz_date - pd.Timedelta(days=3),
-                end=non_biz_date - pd.Timedelta(days=1),
+        non_std: DatetimeIndex = dates[dates.day.isin(values=[1, 15]) & ~pays]
+        for non_std_date in non_std:
+            closest_bday: Timestamp = bday.get_prior_business_day(
+                date=non_std_date - pd.Timedelta(days=1)
             )
-            prev_business_days: bool | pd.Series[
-                bool
-            ] = bizday_instance.get_business_days(dates=prev_days)
-            prev_business_day_mask: NDArray = prev_days.isin(values=prev_business_days)
-            recent_biz_day: Timestamp = prev_days.to_series()[
-                prev_business_day_mask
-            ].max()
-            payday_mask.at[recent_biz_day] = recent_biz_day in dates
-
-        return payday_mask
+            if closest_bday in dates:
+                pays.at[closest_bday] = True
+        return pays
 
 
 @define(order=True, kw_only=True)
@@ -213,7 +194,7 @@ class ProbableMilitaryPassDay:
             dates[masks["wednesday_holidays"]] + pd.DateOffset(days=1)
         )
 
-        return (fri_mask | mon_mask | thurs_mask) & masks["eligible_days"]
+        return (fri_mask | mon_mask | thurs_mask) & masks["business_days"]
 
     @staticmethod
     def _get_base_masks(
@@ -233,18 +214,15 @@ class ProbableMilitaryPassDay:
         A dataframe of boolean masks, and date information
         """
 
-        bizday_instance = _date_attributes.FedBusDay()
-        holidays_instance = _date_attributes.FedHolidays()
+        bday = _date_attributes.FedBusDay()
+        holiday = _date_attributes.FedHolidays()
 
         mask_frame = pd.DataFrame(index=dates)
 
         mask_frame["dates"] = dates.to_series(index=dates)
-        mask_frame["holidays"] = dates.isin(values=holidays_instance.holidays)
+        mask_frame["holidays"] = dates.isin(values=holiday.holidays)
         mask_frame["holiday_days_of_week"] = dates.dayofweek
-
-        mask_frame["business_days"] = dates.isin(
-            values=bizday_instance.get_business_days(dates=dates).index
-        )
+        mask_frame["business_days"] = bday.get_business_days(dates=dates)
 
         for day, dow in zip(
             ["monday", "tuesday", "wednesday", "thursday", "friday"], range(5)
@@ -252,9 +230,4 @@ class ProbableMilitaryPassDay:
             mask_frame[f"{day}_holidays"] = (
                 mask_frame["holiday_days_of_week"] == dow
             ) & mask_frame["holidays"]
-
-        mask_frame["eligible_days"] = (
-            mask_frame["business_days"] & ~mask_frame["holidays"]
-        )
-
         return mask_frame

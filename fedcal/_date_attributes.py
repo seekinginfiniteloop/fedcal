@@ -25,8 +25,9 @@ date attributes of the federal calendar:
 from __future__ import annotations
 
 import warnings
-from typing import ClassVar, Generator
+from typing import ClassVar
 
+import numpy as np
 import pandas as pd
 from attrs import define, field
 from numpy.typing import NDArray
@@ -68,7 +69,8 @@ class FedBusDay:
         if not type(self).fed_business_days:
             hol_instance = FedHolidays()
             type(self).fed_business_days = CustomBusinessDay(
-                normalize=True, calendar=hol_instance.holidays
+                normalize=True,
+                holidays=hol_instance.holidays,
             )
 
     @classmethod
@@ -91,27 +93,19 @@ class FedBusDay:
         dates: DatetimeIndex = ensure_datetimeindex(dates=dates)
         with warnings.catch_warnings():
             warnings.simplefilter(action="ignore")
-            next_business_days = dates + cls.fed_business_days
-            return next_business_days == dates
+            return dates.isin(values=(dates+cls.fed_business_days))
 
-    def get_prior_business_day(
-        self, date: Timestamp
-    ) -> Generator[Timestamp, None, None]:
+    def get_prior_business_day(self, date: Timestamp) -> Timestamp:
         """
         Generates next earliest business day. Primarily for finding
         next-earliest business day before a military payday that doesn't
         fall on a business day.
 
-        Yields
-        ------
+        Returns
+        -------
         next nearest business day prior to the given date
         """
-        current_day: Timestamp = date - CustomBusinessDay(
-            calendar=self.fed_business_days.calendar
-        )
-        while current_day < date:
-            yield current_day
-            current_day += CustomBusinessDay(calendar=self.fed_business_days.calendar)
+        return self.fed_business_days.rollback(dt=date)
 
 
 @define(order=True, auto_attribs=True)
@@ -218,8 +212,13 @@ class FedHolidays:
         )
         christmas_eves = christmas_days - pd.DateOffset(normalize=True, days=1)
         filtered_dates: DatetimeIndex = dates[dates.year > 2023]
-        return christmas_days.weekday.isin(values=[1, 4]) & (
-            filtered_dates == christmas_eves
+        return (
+            None
+            if filtered_dates.empty
+            else (
+                christmas_days.weekday.isin(values=[1, 4])
+                & (filtered_dates == christmas_eves)
+            )
         )
 
 
