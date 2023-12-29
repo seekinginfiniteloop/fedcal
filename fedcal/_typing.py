@@ -18,17 +18,15 @@ clean but well-typed.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Generator, Mapping, Union
+from typing import TYPE_CHECKING, Union
 
-from bidict import frozenbidict
 from numpy import datetime64, int64
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 
 if TYPE_CHECKING:
-    from fedcal.constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
-    from fedcal.depts import FedDepartment
     from fedcal.time_utils import YearMonthDay
+    from fedcal.constants import Dept, DeptStatus
 
 FedStampConvertibleTypes = Union[
     Timestamp,
@@ -54,26 +52,4 @@ FedIndexConvertibleTypes = Union[
     PeriodIndex,
 ]
 
-AppropriationsGapsMapType = Mapping[tuple[int, int], tuple[set["Dept"], "ShutdownFlag"]]
-
-CRMapType = Mapping[tuple[int, int], set["Dept"]]
-
-StatusTupleType = tuple["AppropsStatus", "OpsStatus"]
-
-AssembledBudgetIntervalType = tuple[set["Dept"], StatusTupleType]
-
-DateStampStatusMapType = Mapping["Dept", StatusTupleType]
-
-StatusMapType = frozenbidict[str, StatusTupleType]
-
-StatusPoolType = Mapping[tuple["Dept", str], "FedDepartment"]
-
-StatusDictType = dict["Dept", "FedDepartment"]
-
-StatusGeneratorType = Generator[tuple[str, StatusDictType], None, None]
-
-StatusCacheType = dict[str, StatusDictType]
-
-ExtractedStatusDataGeneratorType = Generator[
-    tuple[Timestamp, "FedDepartment"], None, None
-]
+IntervalConstantStoreType = list[tuple[str, str, Dept, DeptStatus]]

@@ -12,36 +12,20 @@
 # accompanying copyright notice.
 
 """
-The constants data here primarily concern historical appropriations data to
-enable queries of executive department funding and operations statuses over
-time. Shifts in appropriations status can have profound impacts on the
-effectiveness of federal departments, and so these data enable analyses of the
-impacts on not just federal services, but national and local economies.
-
-Budget data were primarily accumulated from from Congressional Research
-Service: https://crsreports.congress.gov/AppropriationsStatusTable and
-cross-referenced with Wikipedia, and the Government Accountability Office
-The data are entirely within the public domain. I was unable to find a
-publicly available dataset with this information precompiled; so I made one.
+----TODO: update me please---
 """
 from __future__ import annotations
 
 from enum import Enum, unique
+from functools import total_ordering
 from typing import Any, Generator, Literal, Self
 
 import pandas as pd
-from bidict import frozenbidict
 from pandas import Timestamp
-
-from fedcal._typing import (
-    AppropriationsGapsMapType,
-    CRMapType,
-    StatusMapType,
-    StatusTupleType,
-)
 
 
 @unique
+@total_ordering
 class Dept(Enum):
     """
     Dept enums represent federal departments and are used throughout fedcal to
@@ -145,22 +129,6 @@ class Dept(Enum):
             else False
         )
 
-    def __gt__(self, other: Any) -> bool:
-        """
-        Customized greater than comparison for enum
-
-        Returns
-        -------
-        Returns True if other is a Dept enum and its abbrev is greater than
-        self.abbrev
-        """
-        return (
-            (self.abbrev, self.full, self.short)
-            > (other.abbrev, other.full, other.short)
-            if isinstance(other, Dept)
-            else False
-        )
-
     def __hash__(self) -> int:
         """
         Customized hash function for enum
@@ -198,84 +166,29 @@ class Dept(Enum):
     VA = ("VA", "Department of Veterans Affairs", "Veterans Affairs")
 
     @classmethod
-    def from_short_name(cls, short_name: str) -> Self:
+    def reverse_lookup(cls, value: str) -> Dept | None:
         """
-        Converts a short name of a department to an enum object.
-        Raises a ValueError if the department is not found.
+        Reverse lookup for Dept enum object from value.
 
         Parameters
         ----------
-            short_name (str): The short name of the department.
+        value
+            value to lookup
 
         Returns
         -------
-            Dept: The enum object representing the department.
-
-        Raises
-        ------
-            ValueError: If the department is not found.
-
-        Example
-        -------
-            >>> from fedcal.constants import Dept
-            >>> Dept.from_short_name("Homeland Security")
-            Dept.DHS
+            Dept object if found, None otherwise.
 
         """
-        for dept in cls:
-            if dept.short == short_name:
-                return dept
-        raise ValueError(f"Department with short name {short_name} not found")
-
-    @classmethod
-    def from_long_name(cls, long_name: str) -> Self:
-        """
-            Converts a long name of a department to an enum object.
-            Raises a ValueError if the department is not found.
-
-            Returns
-            -------
-                Dept: The enum object representing the department.
-
-            Raises
-            ------
-            ValueError : if the department is not found.
-
-            Example
-            -------
-        >>> from fedcal.constants import Dept
-        >>> Dept.from_long_name("Department of the Interior")
-            Dept.DOI
-        """
-        for dept in cls:
-            if dept.full == long_name:
-                return dept
-        raise ValueError(f"Department with long name {long_name} not found")
-
-    @classmethod
-    def from_abbrev(cls, abbrev: str) -> Self:
-        """
-        Converts an abbrev of a department to an enum object.
-        Raises a ValueError if the department is not found.
-
-        Returns
-        -------
-            Dept: The enum object representing the department.
-
-        Raises
-        ------
-        ValueError : if the department is not found.
-
-        Example
-        -------
-        >>> from fedcal.constants import Dept
-        >>> Dept.from_abbrev("DoI")
-        Dept.DOI
-        """
-        for dept in cls:
-            if dept.abbrev == abbrev:
-                return dept
-        raise ValueError(f"Department with abbrev {abbrev} not found")
+        return next(
+            (
+                dept
+                for dept in cls
+                if isinstance(value, str)
+                and (dept.abbrev == value or dept.full == value or dept.short == value)
+            ),
+            None,
+        )
 
 
 HISTORICAL_HOLIDAYS_BY_PROCLAMATION: list[Timestamp] = [
@@ -311,6 +224,7 @@ first payday of the epoch).
 """
 
 
+@total_ordering
 class EnumDunderBase:
     """
     A base class for defining dunder methods for most of fedcal's
@@ -377,71 +291,6 @@ class EnumDunderBase:
         """
         return isinstance(other, type(self)) and self.value < other.value
 
-    def __gt__(self, other) -> bool:
-        """
-        custom gt representation of enum object
-
-        Parameters
-        ----------
-        other
-            other object for comparison
-
-        Returns
-        -------
-            bool -- True if isinstance of same class and has same value
-        """
-        return isinstance(other, type(self)) and self.value > other.value
-
-
-@unique
-class AppropsStatus(EnumDunderBase, Enum):
-    """
-    An enum class for setting appropriations status for executive departments
-    - Fully Appropriated denotes departments operating under a full-year
-    appropriations.
-    - Temporarily Appropriated denotes departments operating
-    under a continuing resolution.
-    - Fully or Temporarily Appropriated is used for departments prior to FY99
-    with appropriations of some kind, but for which data is not yet included
-    in the library.
-    No Appropriations denotes departments with no appropriations -- either in
-    a gapped or shutdown status. Gap/shutdown data are complete to FY75.
-    - Future indicates an unknown future status.
-    """
-
-    FULLY_APPROPRIATED = "Fully Appropriated"
-    TEMPORARILY_APPROPRIATED = "Temporarily Appropriated"
-    FULLY_OR_TEMPORARILY_APPROPRIATED = (
-        "Data Incomplete: Fully or Temporarily Appropriated"
-    )
-    NO_APPROPRIATIONS = "No Appropriations"
-    FUTURE = "Future Unknown"
-
-
-@unique
-class OpsStatus(EnumDunderBase, Enum):
-    """
-    An enum class for setting operating status for executive departments.
-    - Open denotes departments operating under a full-year appropriation.
-    - Open With Limitations denotes departments operating under a continuing
-    resolution.
-    - Open or Open With Limitations is used for departments prior to FY99 with
-    appropriations of some kind, but for which data is not yet included in the
-    library.
-    - Minimally Open denotes departments with no appropriations -- in a gapped
-    status but not shutdown.
-    - Shutdown denotes departments with no appropriations and shutdown.
-    Gap/shutdown data are complete to FY75.
-    - Future indicates an unknown future status.
-    """
-
-    OPEN = "Open"
-    OPEN_WITH_LIMITATIONS = "Open With Limitations"
-    OPEN_OR_OPEN_WITH_LIMITATIONS = "Data Incomplete: Open or Open with Limitations"
-    MINIMALLY_OPEN = "Minimally Open"
-    SHUTDOWN = "Shutdown"
-    FUTURE = "Future Unknown"
-
 
 DEPTS_SET: set[Dept] = {
     Dept.DHS,
@@ -469,400 +318,125 @@ objects. Data currently omit judiciary and legislative budgets (federal courts
 and Congress).
 """
 
-DHS_FORMED: int = 12016
-"""DHS_FORMED: POSIX-day date of DHS formation (2003-11-25)"""
+DHS_FORMED: int = pd.Timestamp(year=2003, month=11, day=25)
 
 
-STATUS_MAP: StatusMapType = frozenbidict(
-    {
-        "DEFAULT_STATUS": (AppropsStatus.FULLY_APPROPRIATED, OpsStatus.OPEN),
-        "CR_STATUS": (
-            AppropsStatus.TEMPORARILY_APPROPRIATED,
-            OpsStatus.OPEN_WITH_LIMITATIONS,
-        ),
-        "CR_DATA_CUTOFF_DEFAULT_STATUS": (
-            AppropsStatus.FULLY_OR_TEMPORARILY_APPROPRIATED,
-            OpsStatus.OPEN_OR_OPEN_WITH_LIMITATIONS,
-        ),
-        "GAP_STATUS": (AppropsStatus.NO_APPROPRIATIONS, OpsStatus.MINIMALLY_OPEN),
-        "SHUTDOWN_STATUS": (AppropsStatus.NO_APPROPRIATIONS, OpsStatus.SHUTDOWN),
-        "FUTURE_STATUS": (AppropsStatus.FUTURE, OpsStatus.FUTURE),
-    }
-)
-
-"""
-STATUS_MAP: We map possible AppropsStatus, OpsStatus combinations to string
-descriptions so we can simplify manipulations _dept_status.py.
-"""
-READABLE_STATUSES: list[str] = [
-    "open, full year approps",
-    "open with limits, continuing resolution",
-    "unknown open, either CR or full approps",
-    "minimally open, no approps",
-    "closed, shutdown",
-    "future unknown",
-]
-
-"""
-READABLE_STATUSES: Simplified human-readable statuses for the default
-FedIndex behavior of outputing human-readable status.
-"""
-
-READABLE_STATUS_MAP: frozenbidict[StatusTupleType, str] = frozenbidict(
-    zip(STATUS_MAP.values(), iter(READABLE_STATUSES))
-)
-
-"""
-READABLE_STATUS_MAP: An immutable bidict mapping human-readable statuses to
-their enum status tuples (AppropsStatus, OpsStatus). We use this for
-FedDepartments' .status property and for converting FedIndex
-human-readable statuses to more detailed output for power users.
-"""
-
-
-class ShutdownFlag(EnumDunderBase, Enum):
-    """ShutdownFlag: An enum object denoting whether an appropriations gap
-    caused a shutdown."""
-
-    def __str__(
+@unique
+@total_ordering
+class DeptStatus(Enum):
+    def __init__(
         self,
-    ) -> str:
-        return (
-            f"{type(self).__name__}: shutdown"
-            if self.value == 1
-            else f"{type(self).__name__}: not shutdown"
+        value: int,
+        variable_string: str,
+        appropriations_status: str,
+        operational_status: str,
+        simple_status: str,
+    ) -> None:
+        self.val: int = value
+        self.var: str = variable_string
+        self.approps: str = appropriations_status
+        self.ops: str = operational_status
+        self.simple: str = simple_status
+
+    def __iter__(self) -> Generator[int, str, Any, None]:
+        """
+        Iterates through the enum object's attributes.
+        Returns a generator that yields the enum object's attributes.
+
+        Yields
+        ------
+            int | str: The enum object's attributes.
+        """
+        yield self.val
+        yield self.var
+        yield self.approps
+        yield self.ops
+        yield self.simple
+
+    def __str__(self) -> str:
+        """
+        Customized string representation of enum
+
+        Returns
+        -------
+        Returns simple status string with object name
+        """
+        return f"{type(self).__name__}: {self.simple}"
+
+    def __eq__(self, other: Any) -> bool:
+        """
+        Customized equality comparison for enum
+
+        Returns
+        -------
+        Returns True if other is a DeptStatus enum and its value matches self.
+        """
+        return self.val == other.val if isinstance(other, DeptStatus) else False
+
+    def __lt__(self, other: Any) -> bool:
+        """
+        Customized less than comparison for enum
+
+        Returns
+        -------
+        Returns True if other DeptStatus enum has a lower integer value
+        """
+        return self.val < other.val if isinstance(other, DeptStatus) else False
+
+    FA = (4, "full_approps", "full appropriations", "open", "appropriated")
+    ND = (
+        3,
+        "approps_cr_or_full",
+        "appropriated but unknown if full_year or cr",
+        "open, unknown capacity",
+        "cr or full",
+    )
+    CR = (2, "cont_res", "continuing resolution", "open with limitations", "cr")
+    GAP = (
+        1,
+        "approps_gap",
+        "no appropriations",
+        "minimally open",
+        "appropriations gap",
+    )
+    SD = (0, "shutdown", "no appropriations and shutdown", "shutdown", "shutdown")
+    FUT = (
+        -1,
+        "future_unknown",
+        "future status unknown",
+        "future status unknown",
+        "future",
+    )
+
+    @classmethod
+    def reverse_lookup(cls, value: int | str) -> DeptStatus | None:
+        """
+        Reverse lookup for status enum object from value.
+
+        Parameters
+        ----------
+        value
+            value to lookup
+
+        Returns
+        -------
+            DeptStatus object if found, None otherwise.
+
+        """
+        return next(
+            (
+                dept
+                for dept in cls
+                if (isinstance(value, int) and dept.val == value)
+                or (
+                    isinstance(value, str)
+                    and (
+                        dept.var == value
+                        or dept.approps == value
+                        or dept.ops == value
+                        or dept.simple == value
+                    )
+                )
+            ),
+            None,
         )
-
-    NO_SHUTDOWN = 0
-    SHUTDOWN = 1
-
-
-APPROPRIATIONS_GAPS: AppropriationsGapsMapType = {
-    (2465, 2474): (
-        DEPTS_SET.difference(
-            {
-                Dept.DOI,
-                Dept.DOE,
-                Dept.DHS,
-                Dept.DOJ,
-                Dept.DOC,
-                Dept.DOT,
-                Dept.USDA,
-                Dept.USDT,
-                Dept.VA,
-                Dept.HUD,
-                Dept.DOD,
-                Dept.PRES,
-                Dept.IA,
-                Dept.DOS,
-            }
-        ),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (2830, 2841): (
-        DEPTS_SET.difference(
-            {
-                Dept.DOI,
-                Dept.DOE,
-                Dept.DHS,
-                Dept.DOJ,
-                Dept.DOC,
-                Dept.DOT,
-                Dept.USDA,
-                Dept.USDT,
-                Dept.VA,
-                Dept.HUD,
-                Dept.DOD,
-                Dept.PRES,
-                Dept.IA,
-                Dept.DOS,
-            }
-        ),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (2870, 2889): (
-        DEPTS_SET.difference(
-            {
-                Dept.DOI,
-                Dept.DOE,
-                Dept.DHS,
-                Dept.DOJ,
-                Dept.DOC,
-                Dept.DOT,
-                Dept.USDA,
-                Dept.USDT,
-                Dept.VA,
-                Dept.HUD,
-                Dept.DOD,
-                Dept.PRES,
-                Dept.IA,
-                Dept.DOS,
-            }
-        ),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (3195, 3211): (
-        DEPTS_SET.difference(
-            {
-                Dept.DOI,
-                Dept.DOT,
-                Dept.USDA,
-                Dept.USDT,
-                Dept.VA,
-                Dept.DOE,
-                Dept.HUD,
-                Dept.DHS,
-                Dept.PRES,
-                Dept.IA,
-                Dept.DOJ,
-                Dept.DOS,
-                Dept.DOC,
-            }
-        ),
-        ShutdownFlag.NO_SHUTDOWN,
-    ),
-    (3560, 3570): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
-    (4342, 4342): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.SHUTDOWN),
-    (4734, 4736): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
-    (5062, 5064): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
-    (5390, 5401): (
-        DEPTS_SET.difference(
-            {
-                Dept.DOI,
-                Dept.DOL,
-                Dept.DOD,
-                Dept.HHS,
-                Dept.DOT,
-                Dept.USDA,
-                Dept.USDT,
-                Dept.ED,
-                Dept.VA,
-                Dept.DOE,
-                Dept.PRES,
-                Dept.DHS,
-                Dept.DOC,
-            }
-        ),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (6133, 6133): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.SHUTDOWN),
-    (6561, 6561): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
-    (7583, 7585): (DEPTS_SET.difference({Dept.DHS}), ShutdownFlag.NO_SHUTDOWN),
-    (9448, 9452): (
-        DEPTS_SET.difference({Dept.USDA, Dept.DOE, Dept.DHS}),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (9480, 9500): (
-        DEPTS_SET.difference({Dept.USDA, Dept.USDT, Dept.DHS, Dept.DOE, Dept.DOD}),
-        ShutdownFlag.SHUTDOWN,
-    ),
-    (15979, 15994): (DEPTS_SET, ShutdownFlag.SHUTDOWN),
-    (17552, 17552): (DEPTS_SET, ShutdownFlag.SHUTDOWN),
-    (17887, 17936): (
-        DEPTS_SET.difference(
-            {Dept.DOL, Dept.HHS, Dept.ED, Dept.VA, Dept.DOE, Dept.DOD}
-        ),
-        ShutdownFlag.SHUTDOWN,
-    ),
-}
-# (3773, 3773): ({"Federal Trade Commission"}, ShutdownFlag.
-# SHUTDOWN), for now, we omit FTC since it is not a Department-level entity;
-# agency-level data is on the to-do list
-"""
-APPROPRIATIONS_GAPS:
-A mapping of federal appropriations gaps. Each key is a tuple of the for
-(integer start date in unix timestamp), (integer end date in unix timestamp)
-({set of affected agencies}, Tuple of AppropsStatus, OpsStatus enum
-objects)
-
-Two 2020 appropriations gaps are not included because they lasted less than a
-day and had no substantial impact on government operations.
-"""
-
-
-CR_DATA_CUTOFF_DATE: int = 10227
-
-"""
-CR_DATA_CUTOFF_DATE: POSIX-day date of the beginning of the data cutoff period.
-Current cutoff is 1 October 1998, CR data is not currently in fedcal for
-any time before this.
-"""
-
-CR_DEPARTMENTS: CRMapType = {
-    (10500, 10506): set(),
-    (10507, 10516): {Dept.DOE},
-    (10517, 10520): {Dept.DOE, Dept.DOD},
-    (10865, 10873): {Dept.USDT, Dept.DOE},
-    (10874, 10884): {Dept.USDT, Dept.DOE, Dept.DOT},
-    (10885, 10885): {Dept.HUD, Dept.DOT, Dept.USDT, Dept.VA, Dept.DOE},
-    (10887, 10889): {Dept.USDA, Dept.HUD, Dept.DOT, Dept.USDT, Dept.VA, Dept.DOE},
-    (10890, 10924): {
-        Dept.DOD,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.DOT,
-        Dept.USDT,
-        Dept.VA,
-        Dept.DOE,
-    },
-    (11231, 11241): {Dept.DOD},
-    (11242, 11253): {Dept.DOE, Dept.DOI, Dept.DOD, Dept.DOT},
-    (11254, 11257): {Dept.DOD, Dept.HUD, Dept.DOT, Dept.VA, Dept.DOE, Dept.DOI},
-    (11258, 11267): {
-        Dept.DOD,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.DOT,
-        Dept.VA,
-        Dept.DOE,
-        Dept.DOI,
-    },
-    (11268, 11312): {
-        Dept.DOD,
-        Dept.DOE,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.DOT,
-        Dept.VA,
-        Dept.DOS,
-        Dept.DOI,
-    },
-    (11596, 11631): set(),
-    (11632, 11638): {Dept.DOI},
-    (11639, 11652): {Dept.USDT, Dept.DOI, Dept.DOE},
-    (11653, 11653): {Dept.HUD, Dept.USDT, Dept.VA, Dept.DOE, Dept.DOI},
-    (11655, 11674): {
-        Dept.DOE,
-        Dept.DOC,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.USDT,
-        Dept.VA,
-        Dept.DOS,
-        Dept.DOJ,
-        Dept.DOI,
-    },
-    (11675, 11697): {
-        Dept.DOE,
-        Dept.DOC,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.DOT,
-        Dept.USDT,
-        Dept.VA,
-        Dept.DOS,
-        Dept.DOJ,
-        Dept.DOI,
-    },
-    (11961, 11982): set(),
-    (11983, 12016): {Dept.DOD},
-    (11983, 12103): {Dept.DOD},
-    (12016, 12103): {Dept.DOD},
-    (12326, 12366): {Dept.DHS, Dept.DOD},
-    (12367, 12387): {Dept.DHS, Dept.DOI, Dept.DOD},
-    (12388, 12440): {Dept.DHS, Dept.DOE, Dept.DOI, Dept.DOD},
-    (12692, 12709): {Dept.DOD},
-    (12710, 12760): {Dept.DHS, Dept.DOD},
-    (13057, 13074): {Dept.DOI},
-    (13075, 13097): {Dept.DHS, Dept.DOI},
-    (13098, 13101): {Dept.DHS, Dept.DOI, Dept.USDA},
-    (13102, 13106): {Dept.DHS, Dept.DOS, Dept.DOI, Dept.USDA},
-    (13107, 13109): {Dept.DOE, Dept.USDA, Dept.DHS, Dept.DOS, Dept.DOI},
-    (13110, 13117): {
-        Dept.DOE,
-        Dept.DOC,
-        Dept.USDA,
-        Dept.DHS,
-        Dept.DOS,
-        Dept.DOJ,
-        Dept.DOI,
-    },
-    (13118, 13147): {
-        Dept.DOE,
-        Dept.DOC,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.DOT,
-        Dept.DHS,
-        Dept.USDT,
-        Dept.VA,
-        Dept.DOS,
-        Dept.DOJ,
-        Dept.DOI,
-    },
-    (13422, 13425): {Dept.DOD},
-    (13426, 13786): {Dept.DHS, Dept.DOD},
-    (13787, 13830): set(),
-    (13831, 13873): {Dept.DOD},
-    (14153, 14314): {Dept.DHS, Dept.DOD, Dept.VA},
-    (14518, 14538): set(),
-    (14539, 14545): {Dept.USDA},
-    (14546, 14546): {Dept.DHS, Dept.DOE, Dept.USDA},
-    (14548, 14596): {Dept.DHS, Dept.DOE, Dept.DOI, Dept.USDA},
-    (14597, 14597): {
-        Dept.DOL,
-        Dept.DOE,
-        Dept.DOC,
-        Dept.USDA,
-        Dept.IA,
-        Dept.HUD,
-        Dept.ED,
-        Dept.DOT,
-        Dept.DHS,
-        Dept.USDT,
-        Dept.PRES,
-        Dept.VA,
-        Dept.DOS,
-        Dept.DOJ,
-        Dept.DOI,
-    },
-    (14883, 15079): set(),
-    (14883, 15296): set(),
-    (15297, 15331): {Dept.USDA, Dept.DOC, Dept.HUD, Dept.DOT, Dept.DOJ},
-    (15614, 15790): set(),
-    (15791, 15978): {Dept.DOD, Dept.DOC, Dept.USDA, Dept.DHS, Dept.VA, Dept.DOJ},
-    (15995, 16087): set(),
-    (16344, 16420): set(),
-    (16421, 16498): {
-        Dept.DOL,
-        Dept.DOD,
-        Dept.DOE,
-        Dept.DOC,
-        Dept.USDA,
-        Dept.HUD,
-        Dept.IA,
-        Dept.ED,
-        Dept.DOT,
-        Dept.USDT,
-        Dept.PRES,
-        Dept.VA,
-        Dept.DOS,
-        Dept.DOJ,
-        Dept.DOI,
-    },
-    (16709, 16787): set(),
-    (17075, 17291): {Dept.VA},
-    (17440, 17551): set(),
-    (17553, 17613): set(),
-    (17805, 17886): {Dept.DOL, Dept.DOD, Dept.ED, Dept.VA, Dept.HHS, Dept.DOE},
-    (17937, 17942): {Dept.DOL, Dept.DOD, Dept.ED, Dept.VA, Dept.HHS, Dept.DOE},
-    (18170, 18250): set(),
-    (18536, 18623): set(),
-    (18901, 19066): set(),
-    (19266, 19355): set(),
-    (19631, 19741): set(),
-}
-"""
-CR_DEPARTMENTS: A mapping of arguments that craft the continuing resolution
-calendar. Current data begin with FY99. Each key is a tuple of unix
-timestamp for the start and end of the time interval. **Intervals represent
-periods where there were no changes in affected agencies.**
-
-**Each value is a set of UNAFFECTED departments as Dept enum
-objects, which will be subtracted from the set of executive departments for
-the period. Consequently, an empty set indicates all executive departments
-were affected.**
-
-This format allows optimal input into our interval tree, which we use for
-time-series queries.
-"""
