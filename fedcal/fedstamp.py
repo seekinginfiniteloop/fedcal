@@ -24,14 +24,13 @@ from typing import Any
 import pandas as pd
 from pandas import Timestamp
 
-from fedcal import _civpay, _date_attributes, _dept_status, _mil, constants, time_utils
+from fedcal import _civpay, _date_attributes, _mil, constants, time_utils
 from fedcal._civpay import FedPayDay
 from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
 from fedcal._meta import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
-from fedcal._typing import FedStampConvertibleTypes, StatusDictType, StatusTupleType
+from fedcal._typing import FedStampConvertibleTypes
 from fedcal.constants import Dept
-from fedcal.depts import FedDepartment
 from fedcal.time_utils import YearMonthDay
 
 
@@ -260,7 +259,6 @@ class FedStamp(
         else:
             pd.Timestamp.utcnow().normalize()
 
-        self._status_cache: StatusDictType | None = None
         self._holidays: FedHolidays | None = None
         self._fiscalcal: FedFiscalCal | None = None
 
@@ -306,158 +304,6 @@ class FedStamp(
         return object.__getattribute__(self, name)
 
     # static utility methods
-    @staticmethod
-    def dict_to_dept_set(status_dict: StatusDictType) -> set[Dept]:
-        """
-        Convert a status dictionary to a set of executive departments.
-
-        Parameters
-        ----------
-        status_dict : A dictionary mapping departments to their statuses from
-        a dictionary structure (StatusDictType) supplied by most of
-        FedStamp's status-related property methods.
-
-        Returns
-        -------
-        A set representing the departments.
-
-        """
-        return set(status_dict.keys())
-
-    @staticmethod
-    def dict_to_feddept_set(status_dict: StatusDictType) -> set[FedDepartment]:
-        """
-        Convert a status dictionary to a set of FedDepartment objects.
-
-        Parameters
-        ----------
-        status_dict
-            A dictionary mapping departments to their statuses.
-
-        Returns
-        -------
-        A sorted list representing FedDepartments.
-
-        """
-        return set((status_dict.values()))
-
-    @staticmethod
-    def dict_to_dept_list(
-        status_dict: StatusDictType,
-    ) -> list[Dept]:
-        """
-        Convert a status dictionary to a sorted list of executive departments.
-
-        Parameters
-        ----------
-        status_dict
-            A dictionary mapping departments to their statuses.
-
-        Returns
-        -------
-        A sorted list representing the departments.
-
-        """
-        return sorted(list(status_dict.keys()))
-
-    @staticmethod
-    def dict_to_feddept_list(status_dict: StatusDictType) -> list[FedDepartment]:
-        """
-        Convert a status dictionary to a sorted list of FedDepartment objects.
-
-        Parameters
-        ----------
-        status_dict
-            A dictionary mapping departments to their FedDepartment objects.
-
-        Returns
-        -------
-        A sorted list of FedDepartment objects.
-
-        """
-        return sorted(list(status_dict.values()))
-
-    # caching methods
-    def _get_status_cache(self) -> StatusDictType:
-        """
-        Retrieve the current status cache.
-
-        Returns
-        -------
-        The current status cache, mapping departments to their statuses.
-
-        """
-        if not _dept_status.DepartmentState.tree:
-            state = _dept_status.DepartmentState()
-            state.get_state_tree()
-        return state.get_state(date=self.pdtimestamp)
-
-    def _set_status_cache(self) -> None:
-        """
-        Set the status cache if not already set.
-        """
-        self._status_cache: StatusDictType = (
-            self._status_cache or self._get_status_cache()
-        )
-
-    # getter methods for retrieving from cache by department and by status
-
-    def get_departments_by_status(self, status_key: str) -> StatusDictType:
-        """
-        Retrieve departments matching a specific status. This is the primary
-        getter method for FedStamp's status-related property methods.
-
-        Parameters
-        ----------
-        status_key
-            The key representing the status to filter departments by.
-
-        Returns
-        -------
-        A dictionary of departments and their status, filtered by the
-        specified status key.
-
-        """
-        self._set_status_cache()
-        cache: StatusDictType | None = self._status_cache
-
-        if self.posix_day < constants.CR_DATA_CUTOFF_DATE and status_key in {
-            "DEFAULT_STATUS",
-            "CR_STATUS",
-        }:
-            status_key = "CR_DATA_CUTOFF_DEFAULT_STATUS"
-
-        target_status: StatusTupleType | None = constants.STATUS_MAP.get(status_key)
-
-        if cache is None or target_status is None:
-            return {}
-
-        return {
-            dept: fed_dept
-            for dept, fed_dept in cache.items()
-            if fed_dept.to_status_tuple() == target_status
-        }
-
-    def get_feddepts_status(
-        self, departments: list[Dept] | set[Dept]
-    ) -> set[FedDepartment]:
-        """
-        Retrieve the status for a list of departments.
-
-        Parameters
-        ----------
-        departments
-            A list of departments to retrieve status for.
-
-        Returns
-        -------
-        A set of FedDepartment objects representing the status of the
-        specified departments.
-
-        """
-        self._set_status_cache()
-        cache: StatusDictType | None = self._status_cache
-        return {cache.get(dept) for dept in departments}
 
     # utility properties
     @property
@@ -688,7 +534,7 @@ class FedStamp(
         return self._fiscalcal.fys_fqs.to_series().iat[0]
 
     @property
-    def is_ffq_start(self) -> bool:
+    def is_fq_start(self) -> bool:
         """
         Checks if the date is the start of a fiscal quarter.
 
@@ -704,7 +550,7 @@ class FedStamp(
         )
 
     @property
-    def is_ffq_end(self) -> bool:
+    def is_fq_end(self) -> bool:
         """
         Checks if the date is the end of a fiscal quarter.
 
@@ -746,236 +592,6 @@ class FedStamp(
         return self.is_ffq_end and self.fq == 4
 
     # department and appropriations related status properties
-    @property
-    def departments(self) -> set[Dept]:
-        """
-        Retrieves the set of executive departments active on the date.
-
-        Returns
-        -------
-        A set of Dept enums.
-
-        """
-        return _dept_status.DepartmentState.get_depts_set_at_time(date=self.pdtimestamp)
-
-    @property
-    def all_depts_status(self) -> StatusDictType:
-        """
-        Retrieves the status of all departments.
-
-        Returns
-        -------
-        A StatusDictType mapping each department to its status on the date.
-
-        """
-        self._set_status_cache()
-        return self._status_cache
-
-    @property
-    def all_depts_full_approps(self) -> bool:
-        """
-        Checks if all departments were/are fully appropriated on the date.
-
-        Returns
-        -------
-        True if all departments are fully appropriated, False otherwise.
-
-        """
-        self._set_status_cache()
-        return self.dict_to_dept_set(status_dict=self.full_op_depts) == self.departments
-
-    @property
-    def all_depts_cr(self) -> bool:
-        """
-        Checks if all departments are/were under a continuing resolution on
-        the date.
-
-        Returns
-        -------
-        True if all departments are under a continuing resolution, False
-        otherwise.
-        """
-        self._set_status_cache()
-        return (
-            self.dict_to_dept_set(
-                status_dict=self.get_departments_by_status(status_key="CR_STATUS")
-            )
-            == self.departments
-        )
-
-    @property
-    def all_depts_funded(self) -> bool:
-        """
-        Checks if all departments were/are either fully appropriated or under
-        a continuing resolution on the date.
-
-        Returns
-        -------
-        True if all departments are either fully appropriated or under a
-        continuing resolution, False otherwise.
-        """
-        self._set_status_cache()
-        return self.dict_to_dept_set(status_dict=self.funded_depts) == self.departments
-
-    @property
-    def all_unfunded(self) -> bool:
-        """
-        Checks if all departments were/are unfunded (appropriations gap or
-        shutdown) on the date.
-
-        Returns
-        -------
-        True if all departments are unfunded, False otherwise.
-
-        """
-        self._set_status_cache()
-        return (
-            self.dict_to_dept_set(status_dict=self.unfunded_depts) == self.departments
-        )
-
-    @property
-    def gov_cr(self) -> bool:
-        """
-        Checks if *any* departments were/are under a continuing resolution on
-        the date.
-
-        Returns
-        -------
-        True if the pdtimestamp is during a continuing resolution, False
-        otherwise.
-
-
-        """
-        self._set_status_cache()
-        return bool(self.cr_depts)
-
-    @property
-    def gov_shutdown(self) -> bool:
-        """
-        Checks if *any* departments were/are shutdown on the date.
-
-        Returns
-        -------
-        True if the pdtimestamp is during a shutdown, False otherwise.
-
-        """
-        self._set_status_cache()
-        return bool(self.shutdown_depts)
-
-    @property
-    def gov_approps_gap(self) -> bool:
-        """
-        Checks if the date was/is during an appropriations gap for *any*
-        departments.
-
-        Returns
-        -------
-        True if the date is during an appropriations gap, False otherwise.
-
-        """
-        self._set_status_cache()
-        return bool(self.gapped_depts)
-
-    @property
-    def gov_unfunded(self) -> bool:
-        """
-        Checks if any departments were/are either subject to a gap in
-        appropriations or shutdown on the date.
-
-        Returns
-        -------
-        True if the date is during a funding gap.
-
-        """
-        self._set_status_cache()
-        return bool(self.gapped_depts | self.shutdown_depts)
-
-    @property
-    def full_op_depts(self) -> StatusDictType | None:
-        """
-        Retrieves departments that were/are fully operational (i.e. had
-        full-year appropriations) on the date.
-
-        Returns
-        -------
-        A StatusDictType dictionary representing departments that are fully
-        operational.
-
-        """
-        self._set_status_cache()
-        return self.get_departments_by_status(status_key="DEFAULT_STATUS")
-
-    @property
-    def funded_depts(self) -> StatusDictType | None:
-        """
-        Retrieves departments that were/are either fully operational or under
-        a continuing resolution on the date.
-
-        Returns
-        -------
-        A StatusDictType dictionary representing departments that are either
-        fully operational or under a continuing resolution.
-
-        """
-        return self.get_departments_by_status(
-            status_key="DEFAULT_STATUS"
-        ) | self.get_departments_by_status(status_key="CR_STATUS")
-
-    @property
-    def cr_depts(self) -> "StatusDictType" | None:
-        """
-        Retrieves departments that were/are under a continuing resolution on
-        the date.
-
-        Returns
-        -------
-        A StatusDictType dictionary representing departments that are under a
-        continuing resolution.
-
-        """
-        return self.get_departments_by_status(status_key="CR_STATUS")
-
-    @property
-    def gapped_depts(self) -> StatusDictType | None:
-        """
-        Retrieves departments that were/are under an appropriations gap on the
-        date (but not shutdown).
-
-        Returns
-        -------
-        A StatusDictType dictionary representing departments that are in an
-        appropriations gap.
-
-        """
-        return self.get_departments_by_status(status_key="GAP_STATUS")
-
-    @property
-    def shutdown_depts(self) -> StatusDictType | None:
-        """
-        Retrieves departments that were/are shut down for the date.
-
-        Returns
-        -------
-        A StatusDictType dictionary representing departments that are shut
-        down.
-
-        """
-        return self.get_departments_by_status(status_key="SHUTDOWN_STATUS")
-
-    @property
-    def unfunded_depts(self) -> StatusDictType | None:
-        """
-        Retrieves departments that were/are unfunded for the date
-        (either under an appropriations gap or fully shutdown).
-
-        Returns
-        -------
-        A StatusDictType dictionary representing departments that are unfunded.
-
-        """
-        return self.get_departments_by_status(
-            status_key="SHUTDOWN_STATUS"
-        ) | self.get_departments_by_status(status_key="GAP_STATUS")
 
 
 def to_fedstamp(*date: FedStampConvertibleTypes) -> FedStamp:

@@ -17,7 +17,7 @@ generating federal department status intervals.
 import pandas as pd
 
 from fedcal.constants import Dept, DeptStatus
-from fedcal._typing import IntervalConstantStoreType
+from fedcal._typing import RawIntervalType
 
 
 cr_data_cutoff = pd.Timestamp(year=1998, month=10, day=1)
@@ -29,7 +29,7 @@ Shutdowns and funding gaps, on the other hand, are compiled to the start of
 the Epoch, 1970-1-1.
 """
 
-intervals: IntervalConstantStoreType = [
+intervals: list[RawIntervalType] = [
     ("1976-10-01 00:00:00", "1976-10-10 23:59:59", Dept.DHS, DeptStatus.ND),
     ("1976-10-01 00:00:00", "1976-10-10 23:59:59", Dept.DOC, DeptStatus.ND),
     ("1976-10-01 00:00:00", "1976-10-10 23:59:59", Dept.DOD, DeptStatus.ND),

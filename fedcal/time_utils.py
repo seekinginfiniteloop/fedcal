@@ -67,6 +67,24 @@ from pandas.tseries.frequencies import to_offset
 from fedcal._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
 
 
+def to_dt(t: str, fmt: str | None = None) -> Timestamp:
+    """
+    Short and quick string to datetime conversion specifically for
+    loading intervals.
+
+    Parameters
+    ----------
+    t : str
+        The string to convert.
+    fmt : str, optional, defaults to
+    Returns
+    -------
+    Timestamp
+    """
+    t_fmt: str = fmt or "%Y-%m-%d %H:%M:%S"
+    return pd.to_datetime(arg=t, format=t_fmt)
+
+
 def get_today_in_posix_day() -> int:
     """
     Returns the current date in POSIX-day format.

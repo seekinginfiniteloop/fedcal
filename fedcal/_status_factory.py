@@ -11,42 +11,32 @@
 # terms of that license, but must be accompanied by the license and the
 # accompanying copyright notice.
 
-    """
-    TODO: update
-    """
+"""
+This module replaces multiple modules in the previous back-end that employed
+a complex series of interval trees, generators, and objects. Instead, we now
+have a simple factory pipeline to reliably pipe our time series department
+status data into fedcal using native pandas objects. It processes and returns
+our data as a pandas MultiIndex layered by time-based Interval Index at the
+top level (level-0), and string representations of and Dept and DeptStatus
+objects on the next levels.)
+"""
 
 from bisect import bisect_left, bisect_right
-from typing import Any, Generator, Iterable, Tuple
+from typing import Any, Generator
 
 import pandas as pd
-from fedcal import _interval_store as store
-from fedcal._typing import IntervalConstantStoreType
-from fedcal.constants import Dept, DeptStatus
-from pandas import Interval, MultiIndex, Timestamp
-
-
-def to_dt(t: str, fmt: str | None = None) -> Timestamp:
-    """
-    Short and quick string to datetime conversion for loading intervals.
-
-    Parameters
-    ----------
-    t : str
-        The string to convert.
-    fmt : str, optional, defaults to
-    Returns
-    -------
-    Timestamp
-    """
-    t_fmt = fmt or "%Y-%m-%d %H:%M:%S"
-    return pd.to_datetime(arg=t, format=t_fmt)
+from fedcal import _status_store as store
+from fedcal._typing import DTIntervalType, RawIntervalType, RefinedIntervalType
+from fedcal.time_utils import to_dt
+from pandas import MultiIndex, Timestamp
 
 
 def filter_intervals(
-    raw_intervals: IntervalConstantStoreType, start_date: Timestamp, end_date: Timestamp
-) -> Generator[Tuple[Iterable[Timestamp], Dept, DeptStatus], Any, None]:
+    raw_intervals: list[RawIntervalType], start_date: Timestamp, end_date: Timestamp
+) -> Generator[DTIntervalType, Any, None]:
     """
-    Filters input intervals, bisecting dates go
+    Filters input intervals, bisecting dates to efficiently identify the range
+    to process.
 
     Parameters
     ----------
@@ -59,8 +49,7 @@ def filter_intervals(
 
     Yields
     ------
-        Generator form of IntervalConstantStoreType if start and end were
-        converted to Timestamp
+    Generator form of list[DTIntervalType]
     """
 
     start: int = bisect_left(
@@ -77,7 +66,9 @@ def filter_intervals(
         yield map(to_dt, i[1:]), i[2], i[3]
 
 
-def process_interval(interval_data) -> Tuple[Interval[Timestamp], Dept, DeptStatus]:
+def process_interval(
+    interval_data: RawIntervalType | DTIntervalType,
+) -> RefinedIntervalType:
     """
     Processes interval data from filter_intervals into Interval, Dept, and
     DeptStatus.
@@ -85,18 +76,26 @@ def process_interval(interval_data) -> Tuple[Interval[Timestamp], Dept, DeptStat
     Parameters
     ----------
     interval_data
-        IntervalConstantStoreType from filter_intervals
+        Raw or datetime-processed intervals
 
     Returns
     -------
-    Tuple[Interval[Timestamp], Dept, DeptStatus]; our intervals ready to load i
-    nto an index
+    RefinedIntervalType; our intervals ready to load
+    into an index
     """
     s, e, dept, status = interval_data
-    return Interval(left=s if isinstance(s, Timestamp) else to_dt(t=s), right=e if isinstance(e, Timestamp) else to_dt(t=e), closed="both"), dept, status
+    return (
+        pd.Interval(
+            left=s if isinstance(s, Timestamp) else to_dt(t=s),
+            right=e if isinstance(e, Timestamp) else to_dt(t=e),
+            closed="both",
+        ),
+        dept.short,
+        status.var,
+    )
 
 
-def to_multi_index(interval_list) -> MultiIndex:
+def to_multi_index(interval_list: list[RefinedIntervalType]) -> MultiIndex:
     """
     Converts our intervals to a MultiIndex.
 
@@ -115,28 +114,36 @@ def to_multi_index(interval_list) -> MultiIndex:
     )
 
 
-def fetch_index(intervals: IntervalConstantStoreType | None = None, dates: Timestamp | None = None) -> MultiIndex:
+def fetch_index(
+    intervals: list[RawIntervalType] | None = None,
+    dates: tuple[Timestamp] | None = None,
+) -> MultiIndex:
     """
     Fetches intervals from _interval_store.
 
     Parameters
     ----------
-    intervals : IntervalConstantStoreType, optional
+    intervals : list[RawIntervalType], optional
         intervals to use, by default None
-    dates : Iterable[str], optional
+    dates : Ite, optional
         dates to filter intervals by, by default None
 
     Returns
     -------
     MultiIndex with intervals, departments, and statuses as levels
     """
-    raw_intervals = intervals or store.intervals
+    raw_intervals: list[RawIntervalType] = intervals or store.intervals
     if dates:
-        start_date, end_date = min(dates), max(dates)
-        filtered_intervals: Generator[Tuple[Iterable[Timestamp], Dept, DeptStatus], Any, None] = filter_intervals(
+        start_date, end_date = dates
+        filtered_intervals: Generator[DTIntervalType, None] = filter_intervals(
             raw_intervals=raw_intervals,
             start_date=start_date,
             end_date=end_date,
         )
-    processed_intervals = map(process_interval, filtered_intervals or raw_intervals)
-        return to_multi_index(interval_list=list(processed_intervals))
+    else:
+        filtered_intervals = raw_intervals
+
+    processed_intervals: map[RefinedIntervalType] = map(
+        process_interval, filtered_intervals
+    )
+    return to_multi_index(interval_list=list(processed_intervals))

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from enum import Enum, unique
 from functools import total_ordering
-from typing import Any, Generator, Literal, Self
+from typing import Any, Generator, Literal
 
 import pandas as pd
 from pandas import Timestamp
@@ -190,6 +190,28 @@ class Dept(Enum):
             None,
         )
 
+    @classmethod
+    def swap_attr(
+        cls, val: int | str, rtn_attr: Literal["val", "var", "approps", "ops", "simple"]
+    ) -> int | str:
+        """
+        Receives the attribute value of a status enum object and returns the
+        desired property of that object. Short hand for reverse
+        lookup-to-attribute.
+
+        Parameters
+        ----------
+        val
+            Dept object value to lookup
+        rtn_attr:
+            attribute to return for the object
+
+        Returns
+        -------
+            attribute if found, None otherwise.
+        """
+        return cls.reverse_lookup(value=val).__getattribute__(rtn_attr)
+
 
 HISTORICAL_HOLIDAYS_BY_PROCLAMATION: list[Timestamp] = [
     pd.Timestamp(year=2020, month=12, day=24),
@@ -222,75 +244,6 @@ gain. We use the payday before the first payday of the unix epoch to keep
 calculations straightforward (such that the first calculated payday is the
 first payday of the epoch).
 """
-
-
-@total_ordering
-class EnumDunderBase:
-    """
-    A base class for defining dunder methods for most of fedcal's
-    enumerations.
-    """
-
-    def __iter__(self) -> Literal:
-        """
-        Custom iter method for enums
-
-        Returns
-        -------
-            enum object's value
-        """
-        return self.value
-
-    def __str__(self) -> str:
-        """
-        Custom string representation of enum object
-
-        Returns
-        -------
-            str: a string in the form :ClassName: value"
-        """
-        return f"{type(self).__name__}: {self.value}"
-
-    def __eq__(self, other) -> bool:
-        """
-        custom eq representation of enum object
-
-        Parameters
-        ----------
-        other
-            other object for comparison
-
-        Returns
-        -------
-            bool -- True if isinstance of same class and has same value
-        """
-        return isinstance(other, type(self)) and self.value == other.value
-
-    def __hash__(self) -> int:
-        """
-        custom hash representation of enum object
-
-        Returns
-        -------
-            int -- hash of enum object's value
-        """
-        return hash(self.value)
-
-    def __lt__(self, other) -> bool:
-        """
-        custom lt representation of enum object
-
-        Parameters
-        ----------
-        other
-            other object for comparison
-
-        Returns
-        -------
-            bool -- True if isinstance of same class and has same value
-        """
-        return isinstance(other, type(self)) and self.value < other.value
-
 
 DEPTS_SET: set[Dept] = {
     Dept.DHS,
@@ -362,6 +315,16 @@ class DeptStatus(Enum):
         Returns simple status string with object name
         """
         return f"{type(self).__name__}: {self.simple}"
+
+    def __hash__(self) -> int:
+        """
+        Customized hash function for enum
+
+        Returns
+        -------
+        Returns hash of value.
+        """
+        return hash((self.val, self.var, self.approps, self.ops, self.simple))
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -440,3 +403,25 @@ class DeptStatus(Enum):
             ),
             None,
         )
+
+    @classmethod
+    def swap_attr(
+        cls, val: int | str, rtn_attr: Literal["val", "var", "approps", "ops", "simple"]
+    ) -> int | str:
+        """
+        Receives the attribute value of a status enum object and returns the
+        desired property of that object. Short hand for reverse
+        lookup-to-attribute.
+
+        Parameters
+        ----------
+        val
+            DeptStatus object value to lookup
+        rtn_attr:
+            attribute to return for the object
+
+        Returns
+        -------
+            attribute if found, None otherwise.
+        """
+        return cls.reverse_lookup(value=val).__getattribute__(rtn_attr)

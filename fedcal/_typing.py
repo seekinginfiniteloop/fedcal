@@ -18,11 +18,11 @@ clean but well-typed.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Union
+from typing import TYPE_CHECKING, Iterable, Union
 
 from numpy import datetime64, int64
 from numpy.typing import NDArray
-from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
+from pandas import DatetimeIndex, Index, Interval, PeriodIndex, Series, Timestamp
 
 if TYPE_CHECKING:
     from fedcal.time_utils import YearMonthDay
@@ -52,4 +52,13 @@ FedIndexConvertibleTypes = Union[
     PeriodIndex,
 ]
 
-IntervalConstantStoreType = list[tuple[str, str, Dept, DeptStatus]]
+RawIntervalType = tuple[str, str, "Dept", "DeptStatus"]
+
+DTIntervalType = Union[
+    tuple[Timestamp, Timestamp, "Dept", "DeptStatus"]
+    | tuple[Iterable[Timestamp], "Dept", "DeptStatus"]
+]
+
+RefinedIntervalType = tuple[Interval, "Dept", "DeptStatus"]
+
+IntervalFactoryType = list[RefinedIntervalType]
