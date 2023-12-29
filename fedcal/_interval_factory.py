@@ -1,3 +1,20 @@
+# fedcal _interval_factory.py
+#
+# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+    """
+    TODO: update
+    """
+
 from bisect import bisect_left, bisect_right
 from typing import Any, Generator, Iterable, Tuple
 
@@ -75,8 +92,8 @@ def process_interval(interval_data) -> Tuple[Interval[Timestamp], Dept, DeptStat
     Tuple[Interval[Timestamp], Dept, DeptStatus]; our intervals ready to load i
     nto an index
     """
-    start, end, dept, status = interval_data
-    return Interval(left=start, right=end, closed="both"), dept, status
+    s, e, dept, status = interval_data
+    return Interval(left=s if isinstance(s, Timestamp) else to_dt(t=s), right=e if isinstance(e, Timestamp) else to_dt(t=e), closed="both"), dept, status
 
 
 def to_multi_index(interval_list) -> MultiIndex:
@@ -98,7 +115,7 @@ def to_multi_index(interval_list) -> MultiIndex:
     )
 
 
-def fetch_index(intervals=None, dates=None) -> MultiIndex:
+def fetch_index(intervals: IntervalConstantStoreType | None = None, dates: Timestamp | None = None) -> MultiIndex:
     """
     Fetches intervals from _interval_store.
 
@@ -113,20 +130,13 @@ def fetch_index(intervals=None, dates=None) -> MultiIndex:
     -------
     MultiIndex with intervals, departments, and statuses as levels
     """
-    if not dates:
-        return to_multi_index(interval_list=store.intervals)
-    dates = map(to_dt, dates)
-
-    raw_intervals: IntervalConstantStoreType = intervals or store.intervals
-    filtered_intervals = (
-        filter_intervals(
+    raw_intervals = intervals or store.intervals
+    if dates:
+        start_date, end_date = min(dates), max(dates)
+        filtered_intervals: Generator[Tuple[Iterable[Timestamp], Dept, DeptStatus], Any, None] = filter_intervals(
             raw_intervals=raw_intervals,
-            start_date=min(dates),
-            end_date=max(dates),
+            start_date=start_date,
+            end_date=end_date,
         )
-        if dates
-        else raw_intervals
-    )
-    processed_intervals = map(process_interval, filtered_intervals)
-
-    return to_multi_index(interval_list=list(processed_intervals))
+    processed_intervals = map(process_interval, filtered_intervals or raw_intervals)
+        return to_multi_index(interval_list=list(processed_intervals))
