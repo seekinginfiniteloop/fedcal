@@ -25,7 +25,19 @@ import pandas as pd
 from attrs import define, field
 from pandas import DatetimeIndex, Series, Timestamp
 
-from fedcal import constants, time_utils
+from fedcal import time_utils
+
+
+fedpay_ref_date = pd.Timestamp(year=1969, month=12, day=19)
+"""
+fedpay_ref_date:
+Our reference date for Federal civilian payday calculations. I believe it's
+possible to calculate using gregorian calendar patterns without using a known
+payday for reference, but that approach adds complexity without meaningful
+gain. We use the payday before the first payday of the unix epoch to keep
+calculations straightforward (such that the first calculated payday is the
+first payday of the epoch).
+"""
 
 
 @define(order=True)
@@ -66,7 +78,7 @@ class FedPayDay:
     """
 
     reference_date: Timestamp = field(
-        default=constants.FEDPAYDAY_REFERENCE_DATE,
+        default=pd.Timestamp(year=1969, month=12, day=19),
         converter=time_utils.to_timestamp,
     )
     end_date: Timestamp = field(

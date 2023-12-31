@@ -32,14 +32,24 @@ import pandas as pd
 from attrs import define, field
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
-from pandas.tseries.holiday import USFederalHolidayCalendar
+from pandas.tseries.holiday import (
+    USFederalHolidayCalendar,
+    USMartinLutherKingJr,
+    USColumbusDay,
+    USLaborDay,
+    USPresidentsDay,
+    USMemorialDay,
+    USThanksgivingDay,
+    AbstractHolidayCalendar,
+    Holiday,
+    nearest_workday,
+)
 from pandas.tseries.offsets import CustomBusinessDay
 
-from fedcal import constants
 from fedcal.time_utils import ensure_datetimeindex
 
 
-@define(order=True, auto_attribs=True)
+@define(order=True, hash=True, kw_only=True)
 class FedBusDay:
 
     """
@@ -93,7 +103,7 @@ class FedBusDay:
         dates: DatetimeIndex = ensure_datetimeindex(dates=dates)
         with warnings.catch_warnings():
             warnings.simplefilter(action="ignore")
-            return dates.isin(values=(dates+cls.fed_business_days))
+            return dates.isin(values=(dates + cls.fed_business_days))
 
     def get_prior_business_day(self, date: Timestamp) -> Timestamp:
         """
@@ -108,12 +118,41 @@ class FedBusDay:
         return self.fed_business_days.rollback(dt=date)
 
 
-@define(order=True, auto_attribs=True)
-class FedHolidays:
+# Custom Holiday objects; it bothers me that only half of the rules in
+# USFederalHolidayCalendar have their own variable. I know why, but... no.
+NewYearsDay = Holiday(name="New Year's Day", month=1, day=1, observance=nearest_workday)
+MartinLutherKingJr: Holiday = USMartinLutherKingJr
+PresidentsDay: Holiday = USPresidentsDay
+MemorialDay: Holiday = USMemorialDay
+Juneteenth = Holiday(
+    name="Juneteenth National Independence Day",
+    month=6,
+    day=19,
+    start_date=pd.Timestamp(year=2021, month=6, day=18),
+    observance=nearest_workday,
+)
+IndependenceDay = Holiday(
+    name="Independence Day", month=7, day=4, observance=nearest_workday
+)
+LaborDay: Holiday = USLaborDay
+ColumbusDay: Holiday = USColumbusDay
+VeteransDay = Holiday(name="Veterans Day", month=11, day=11, observance=nearest_workday)
+ThanksgivingDay: Holiday = USThanksgivingDay
+ChristmasDay = Holiday(
+    name="Christmas Day", month=12, day=25, observance=nearest_workday
+)
+
+@define(slots=False)
+class FedHolidays(AbstractHolidayCalendar):
 
     """
-    Class representing federal holidays, including historically proclaimed
-    holidays and optionally guessed future Christmas Eve proclamation holidays.
+    Custom implementation based on pandas' USFederalHolidayCalendar and using
+    pandas' AbstractHolidayCalendar base/meta calendar.
+
+    Customized to add additional functionality and supply proclaimed holidays.
+
+    US Federal Government Holiday Calendar based on rules specified by:
+    https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/
 
     Attributes
     ----------
@@ -132,44 +171,90 @@ class FedHolidays:
         Guess if any future Christmas Eves in a pd.DatetimeIndex may be a
         holiday based on Christmas day
 
-    #TODO: Implement as pd.AbstractHolidayCalendar
     """
+    rules: ClassVar[list[Holiday]] = [
+        NewYearsDay,
+        MartinLutherKingJr,
+        PresidentsDay,
+        MemorialDay,
+        Juneteenth,
+        IndependenceDay,
+        LaborDay,
+        ColumbusDay,
+        VeteransDay,
+        ThanksgivingDay,
+        ChristmasDay,
+        # now for proclamation holidays:
+        Holiday(
+            name="2020 Christmas Eve proclamation (Trump)", year=2020, month=12, day=24
+        ),
+        Holiday(
+            name="2019 Christmas Eve proclamation (Trump)", year=2019, month=12, day=24
+        ),
+        Holiday(
+        name="2018 Christmas Eve by proclamation (Trump)",
+            year=2018,
+            month=12,
+            day=24,
+        ),
+        Holiday(
+            name="2015 Christmas Eve proclamation (Obama)", year=2015, month=12, day=24
+        ),
+        Holiday(
+            name="2014 Christmas Eve proclamation (Obama)", year=2014, month=12, day=26
+        ),
+        Holiday(
+            name="2012 Christmas Eve proclamation (Obama)", year=2012, month=12, day=24
+        ),
+        Holiday(
+            name="2007 Christmas Eve proclamation (GW Bush)",
+            year=2007,
+            month=12,
+            day=24,
+        ),
+        Holiday(
+            name="2001 Christmas Eve proclamation (GW Bush)",
+            year=2001,
+            month=12,
+            day=24,
+        ),
+        Holiday(
+            name="1979 Christmas Eve proclamation (Carter)", year=1979, month=12, day=24
+        ),
+        Holiday(
+            name="1973 Christmas Eve proclamation (Nixon)", year=1973, month=12, day=24
+        ),
+        Holiday(
+            name="1973 New Year's Eve proclamation (Nixon)", year=1973, month=12, day=31
+        ),
+    ]
 
-    proclaimed_holidays: ClassVar[pd.DatetimeIndex] = pd.DatetimeIndex(
-        data=(constants.HISTORICAL_HOLIDAYS_BY_PROCLAMATION), name="proclaimed_holidays"
-    )
+    def __attrs_pre_init(self) -> None
+        super().__init__(rules=type(self).rules)
 
-    holidays: ClassVar[pd.DataFrame] = None
-
-    def __attrs_post_init__(self) -> None:
+    def holidays(self, start: Timestamp = None, end: Timestamp = None, return_name: bool = False) -> DatetimeIndex | Series:
         """
-        We initialize holidays if it's not already there.
-        """
-        if type(self).holidays is None:
-            _base_cal = USFederalHolidayCalendar()
-            _holidays: DatetimeIndex = _base_cal.holidays()
-            type(self).holidays: DatetimeIndex = type(self).proclaimed_holidays.union(
-                other=_holidays
-            )
-
-    def get_holidays(
-        self, dates: Timestamp | DatetimeIndex | Series[bool]
-    ) -> NDArray[bool] | bool:
-        """
-        Check if a given date is a federal holiday.
+        Implements parent classes's method of the same name. Returns
+        DatetimeIndex of holidays for either given dates or cls dates
+        (1970-2199). Optional return flag returns a series with holidays
+        named.
 
         Parameters
         ----------
-        dates : The dates to check.
+        start : start date for the range, defaults to cls dates if None.
+        end : end date for the range, defaults to cls dates if None.
+        return_name : whether to return a series with holidays named.
+        Defaults to False.
 
         Returns
         -------
-        boolean array or bool; True if the date is a federal holiday, False
-        otherwise.
-
+        DatetimeIndex of holidays between the start and end dates, or
+        Series of holidays with names of holidays if return_name flag.
         """
-        dates = ensure_datetimeindex(dates=dates)
-        return dates.isin(values=type(self).holidays)
+        return super().holidays(start=start, end=end, return_name=return_name)
+
+    
+
 
     def get_proclamation_holidays(
         self, dates: Timestamp | DatetimeIndex | Series[Timestamp]
@@ -185,6 +270,7 @@ class FedHolidays:
         -------
         True if the date was a proclaimed holiday, False otherwise.
         """
+        proc_holidays =
         dates: DatetimeIndex = ensure_datetimeindex(dates=dates)
         return dates.isin(values=type(self).proclaimed_holidays)
 

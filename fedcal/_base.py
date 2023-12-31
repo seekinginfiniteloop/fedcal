@@ -1,4 +1,4 @@
-# fedcal _meta.py
+# fedcal _base.py
 #
 # Copyright (c) 2023 Adam Poulemanos. All rights reserved.
 #
@@ -12,19 +12,23 @@
 # accompanying copyright notice.
 
 """
-_meta is an internal support module containing the `MagicDelegator`
-metaclass, which facilitates cloning magic/dunder methods from the
-underlying target class, which is `pd.Timestamp` for `FedStamp` and
-`pd.DatetimeIndex` for `FedIndex`.
+_base is an internal support module containing the meta and base classes.
 """
 
+from functools import total_ordering
 import inspect
-from typing import Any, Callable
+from typing import Any, Callable, Generator, Iterable, Type
+
+from fedcal._typing import EnumType
 
 
 class MagicDelegator(type):
 
     """
+    Right now this is a machete vice scalpel approach. As we implement
+    the pandas extension API, we may not need this or can scale it down
+    considerably.
+
     `MagicDelegator` is a metaclass that facilitates cloning magic/dunder
     methods from the target class, which is `pd.Timestamp` for `FedStamp`
     and `pd.DatetimeIndex` for `FedIndex`. This allows us to maintain
@@ -175,3 +179,105 @@ class MagicDelegator(type):
                 dct[method_name] = create_magic_method(method_name=method_name)
 
         return super().__new__(mcs, name, bases, dct)
+
+
+@total_ordering
+class EnumBase:
+    """
+    EnumBase is a base class for enum classes that inherit from
+    `EnumBase` and defines magic methods and common class methods for lookups
+    and comparisons.
+    """
+
+    def __eq__(self, other: Any) -> bool:
+        """
+        Magic method to compare two enum values.
+
+        Parameters
+        ----------
+        other
+            The other enum value to compare to.
+
+        Returns
+        -------
+        bool
+            True if the enum values are equal, False otherwise.
+        """
+        return self.value == other.value and isinstance(other, type(self).__name__)
+
+    def __lt__(self, other: Any) -> bool:
+        """
+        Magic method to compare two enum values.
+
+        Parameters
+        ----------
+        other
+            The other enum value to compare to.
+
+        Returns
+        -------
+        bool
+            True if the enum value is less than the other value, False
+            otherwise.
+        """
+        return self.value < other.value and isinstance(other, type(self).__name__)
+
+    def __hash__(self) -> int:
+        """
+        Simple hash implementation.
+
+        Returns
+        -------
+            hash
+        """
+        return hash(self.value)
+
+    @classmethod
+    def _lookup_attributes(cls: Type[EnumType]) -> Iterable[str]:
+        """
+        Child classes should override this method to return the attribute names
+        that should be considered in the reverse lookup.
+        """
+        raise NotImplementedError("This method should be implemented by child classes.")
+
+    def __iter__(self) -> Generator[str, Any, None]:
+        """
+        Iterates through the enum object's attributes.
+        Returns a generator that yields the enum object's attributes.
+        Requires _lookup_attributes to be implemented.
+
+        Yields
+        ------
+            str | int: The enum object's attributes.
+
+        """
+        for attr in type(self)._lookup_attributes():
+            yield getattr(self, attr)
+
+    @classmethod
+    def reverse_lookup(
+        cls: Type[EnumType], value: str | int, attributes: Iterable[str] = None
+    ) -> EnumType | None:
+        """
+        Reverse lookup for enum object member from an attribute value. Child
+        classes must implement cls._lookup_attributes().
+        """
+        attributes = attributes or cls._lookup_attributes()
+        return next(
+            (
+                member
+                for member in cls
+                if any(getattr(member, attr, None) == value for attr in attributes)
+            ),
+            None,
+        )
+
+    @classmethod
+    def swap_attr(cls: Type[EnumType], val: Any, rtn_attr: str) -> Any:
+        """
+        Method to swap one attribute value for another. Child
+        classes must implement cls._lookup_attributes().
+        """
+        member = cls.reverse_lookup(val, attributes=cls._lookup_attributes())
+        return getattr(member, rtn_attr, None) if member else None
+

@@ -81,7 +81,7 @@ def to_dt(t: str, fmt: str | None = None) -> Timestamp:
     -------
     Timestamp
     """
-    t_fmt: str = fmt or "%Y-%m-%d %H:%M:%S"
+    t_fmt: str = fmt or "ISO8601"
     return pd.to_datetime(arg=t, format=t_fmt)
 
 

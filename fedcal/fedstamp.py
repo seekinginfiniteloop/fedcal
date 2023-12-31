@@ -24,13 +24,13 @@ from typing import Any
 import pandas as pd
 from pandas import Timestamp
 
-from fedcal import _civpay, _date_attributes, _mil, constants, time_utils
+from fedcal import _civpay, _date_attributes, _mil, time_utils
 from fedcal._civpay import FedPayDay
 from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
-from fedcal._meta import MagicDelegator
+from fedcal._base import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
 from fedcal._typing import FedStampConvertibleTypes
-from fedcal.constants import Dept
+from fedcal.enum import Dept
 from fedcal.time_utils import YearMonthDay
 
 

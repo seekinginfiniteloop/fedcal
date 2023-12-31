@@ -34,17 +34,17 @@ from pandas import (
     Timestamp,
 )
 
-from fedcal import _civpay, _date_attributes, _mil, constants, time_utils
+from fedcal import _civpay, _date_attributes, _mil, _status_factory, time_utils
 from fedcal._civpay import FedPayDay
 from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
-from fedcal._meta import MagicDelegator
+from fedcal._base import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
 from fedcal._typing import (
     FedIndexConvertibleTypes,
     FedStampConvertibleTypes,
 
 )
-from fedcal.constants import Dept
+from fedcal.enum import Dept, depts_set
 from fedcal.time_utils import YearMonthDay
 
 
@@ -320,7 +320,7 @@ class FedIndex(
         This method uses the `READABLE_STATUS_MAP` to reverse map
         human-readable status strings to their internal tuple representations.
         """
-        return constants.READABLE_STATUS_MAP.inv[status_str]
+        return READABLE_STATUS_MAP.inv[status_str]
 
     def set_self_date_range(self) -> tuple[Timestamp, Timestamp]:
         """
@@ -718,13 +718,13 @@ class FedIndex(
             departments
             on that date.
         """
-        all_depts: list[str] = ", ".join([dept.short for dept in constants.DEPTS_SET])
+        all_depts: list[str] = ", ".join([dept.short for dept in enum.depts_set])
         pre_dhs_depts: list[str] = ", ".join(
-            [dept.short for dept in constants.DEPTS_SET.difference(constants.Dept.DHS)]
+            [dept.short for dept in depts_set.difference(Dept.DHS)]
         )
 
         dept_df: DataFrame = self.datetimeindex.to_frame(name="Departments")
-        dhs_formed: Timestamp = time_utils.to_timestamp(constants.DHS_FORMED)
+        dhs_formed: Timestamp = _status_factory.dhs_formed
         dept_df["Departments"] = dept_df.index.map(
             mapper=lambda date: all_depts if date >= dhs_formed else pre_dhs_depts
         )
@@ -748,13 +748,13 @@ class FedIndex(
             date, except for DHS before its formation date, which is False.
         """
 
-        dept_columns: list[str] = [dept.short for dept in constants.Dept]
+        dept_columns: list[str] = [dept.short for dept in Dept]
         df: DataFrame = pd.DataFrame(
             index=self.datetimeindex, columns=dept_columns
         ).fillna(value=True)
 
         # Adjust for DHS
-        dhs_start_date: Timestamp | None = time_utils.to_timestamp(constants.DHS_FORMED)
+        dhs_start_date: Timestamp | None = status_factory.dhs_formed
         df.loc[df.index < dhs_start_date, "DHS"] = False
 
         return df

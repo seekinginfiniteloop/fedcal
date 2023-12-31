@@ -18,7 +18,7 @@ clean but well-typed.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Iterable, Union
+from typing import TYPE_CHECKING, Iterable, TypeVar, Union
 
 from numpy import datetime64, int64
 from numpy.typing import NDArray
@@ -26,7 +26,10 @@ from pandas import DatetimeIndex, Index, Interval, PeriodIndex, Series, Timestam
 
 if TYPE_CHECKING:
     from fedcal.time_utils import YearMonthDay
-    from fedcal.constants import Dept, DeptStatus
+    from fedcal.enum import Dept, DeptStatus
+
+
+EnumType = TypeVar("EnumType", bound="EnumBase")
 
 FedStampConvertibleTypes = Union[
     Timestamp,
@@ -52,13 +55,4 @@ FedIndexConvertibleTypes = Union[
     PeriodIndex,
 ]
 
-RawIntervalType = tuple[str, str, "Dept", "DeptStatus"]
-
-DTIntervalType = Union[
-    tuple[Timestamp, Timestamp, "Dept", "DeptStatus"]
-    | tuple[Iterable[Timestamp], "Dept", "DeptStatus"]
-]
-
 RefinedIntervalType = tuple[Interval, "Dept", "DeptStatus"]
-
-IntervalFactoryType = list[RefinedIntervalType]

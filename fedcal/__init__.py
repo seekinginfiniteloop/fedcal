@@ -31,7 +31,7 @@ kind of analysis you are doing.
 
 from .fedindex import FedIndex, to_fedindex
 from .fedstamp import FedStamp, to_fedstamp
-from .constants import Dept
+from .enum import Dept, DeptStatus
 
 __all__: list[str] = [
     "FedStamp",

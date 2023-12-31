@@ -33,7 +33,7 @@ from funcy import decorator
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Series
 
-from fedcal._meta import MagicDelegator
+from fedcal._base import MagicDelegator
 
 
 class NPArrayImposter(
