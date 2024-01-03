@@ -232,14 +232,6 @@ class EnumBase:
         """
         return hash(self.value)
 
-    @classmethod
-    def _lookup_attributes(cls: Type[EnumType]) -> Iterable[str]:
-        """
-        Child classes should override this method to return the attribute names
-        that should be considered in the reverse lookup.
-        """
-        raise NotImplementedError("This method should be implemented by child classes.")
-
     def __iter__(self) -> Generator[str, Any, None]:
         """
         Iterates through the enum object's attributes.
@@ -253,6 +245,16 @@ class EnumBase:
         """
         for attr in type(self)._lookup_attributes():
             yield getattr(self, attr)
+
+
+class HandyEnumMixin:
+    @classmethod
+    def _lookup_attributes(cls: Type[EnumType]) -> Iterable[str]:
+        """
+        Child classes should override this method to return the attribute names
+        that should be considered in the reverse lookup.
+        """
+        raise NotImplementedError("This method should be implemented by child classes.")
 
     @classmethod
     def reverse_lookup(
@@ -281,3 +283,28 @@ class EnumBase:
         member = cls.reverse_lookup(val, attributes=cls._lookup_attributes())
         return getattr(member, rtn_attr, None) if member else None
 
+    @classmethod
+    def list(cls) -> list[int | str]:
+        """
+        Simple classmethod to return the values of members.
+        """
+        return sorted(list(map(lambda c: c.value, cls)))
+
+    @classmethod
+    def members(cls) -> list[EnumType]:
+        """
+        Simple classmethod to return the members of the enum class.
+        """
+        return sorted(list(cls.__members__))
+
+    @classmethod
+    def zip(cls) -> list[tuple[Any]]:
+        return sorted(zip(cls.__members__.items()), key=lambda k: k[0].value)
+
+    @classmethod
+    def map(cls) -> dict[Any, Any]:
+        return dict(zip(cls._member_names_, cls._value2member_map_.keys()))
+
+    @classmethod
+    def get_reverse_member_value_map(cls) -> dict[Any, Any]:
+        return cls._value2member_map_

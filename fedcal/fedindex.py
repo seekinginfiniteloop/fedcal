@@ -34,15 +34,14 @@ from pandas import (
     Timestamp,
 )
 
-from fedcal import _civpay, _date_attributes, _mil, _status_factory, time_utils
+from fedcal import _civpay, _mil, _status_factory, cal_offsets, time_utils
 from fedcal._civpay import FedPayDay
-from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
+from fedcal.cal_offsets import FedBusinessDay, FedFiscalCal, FedHolidays
 from fedcal._base import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
 from fedcal._typing import (
     FedIndexConvertibleTypes,
     FedStampConvertibleTypes,
-
 )
 from fedcal.enum import Dept, depts_set
 from fedcal.time_utils import YearMonthDay
@@ -334,8 +333,6 @@ class FedIndex(
         """
         return self.datetimeindex.min(), self.datetimeindex.max()
 
-
-
     # utility methods
 
     def contains_date(self, date: FedStampConvertibleTypes) -> bool:
@@ -410,14 +407,12 @@ class FedIndex(
         )
         return other_index.isin(values=self.datetimeindex).any()
 
-
-
     def _set_fiscalcal(self) -> None:
         """
         Sets the _fiscalcal attribute for fy/fq retrievals.
         """
-        if not hasattr(_date_attributes.FedFiscalCal, "fqs") or self._fiscalcal is None:
-            self._fiscalcal: FedFiscalCal = _date_attributes.FedFiscalCal(
+        if not hasattr(cal_offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
+            self._fiscalcal: FedFiscalCal = cal_offsets.FedFiscalCal(
                 dates=self.datetimeindex
             )
 
@@ -425,11 +420,8 @@ class FedIndex(
         """
         Sets the self._holidays attribute for FedHolidays retrievals.
         """
-        if (
-            not hasattr(_date_attributes.FedHolidays, "holidays")
-            or self._holidays is None
-        ):
-            self._holidays: FedHolidays = _date_attributes.FedHolidays()
+        if not hasattr(cal_offsets.FedHolidays, "holidays") or self._holidays is None:
+            self._holidays: FedHolidays = cal_offsets.FedHolidays()
 
     # Begin date attribute property methods
     @property
@@ -465,7 +457,7 @@ class FedIndex(
         Datetimeindex
             Datetimeindex of dates that are business days.
         """
-        bdays: FedBusDay = _date_attributes.FedBusDay()
+        bdays: FedBusinessDay = cal_offsets.FedBusinessDay()
         return self.datetimeindex[bdays.get_business_days(dates=self.datetimeindex)]
 
     @property

@@ -53,13 +53,14 @@ input to U.S. Eastern, as with `to_timestamp`.
 from __future__ import annotations
 
 import datetime
+from enum import unique
 from functools import singledispatch, wraps
 from typing import Any, Callable, Self
 
 import numpy as np
 import pandas as pd
 from attrs import astuple, define, field
-from numpy import datetime64, int64
+from numpy import datetime64, int32, int64
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.frequencies import to_offset
@@ -85,18 +86,16 @@ def to_dt(t: str, fmt: str | None = None) -> Timestamp:
     return pd.to_datetime(arg=t, format=t_fmt)
 
 
-def get_today_in_posix_day() -> int:
+def get_today() -> Timestamp:
     """
-    Returns the current date in POSIX-day format.
+    Returns the current date as a Timestamp.
 
     Returns
     -------
-    int
-        The current date in POSIX-day format.
+    Current date as a normalized Timestamp.
 
     """
-    today: float = pd.Timestamp.utcnow().normalize().timestamp()
-    return int(today // 86400)
+    return pd.Timestamp.utcnow().normalize()
 
 
 def pdtimestamp_to_posix_day(timestamp: Timestamp) -> int:
@@ -135,7 +134,37 @@ def ensure_datetimeindex(
         return pd.DatetimeIndex(
             data=[dates] if isinstance(dates, pd.Timestamp) else dates
         )
-    return dates
+    return dates.normalize()
+
+
+def dt2date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
+    """
+    Adapted from RBF06:
+    https://stackoverflow.com/questions/13648774/get-year-month-or-day-from-numpy-datetime64#26895491
+
+    Convert array of datetime64 to a calendar array of year, month, day with
+    these quantites indexed on the last axis.
+
+    Parameters
+    ----------
+    dt : datetime64 array (...)
+        numpy.ndarray of datetimes of arbitrary shape
+
+    Returns
+    -------
+    uint32 array (..., 4)
+        calendar array with last axis representing year, month, day
+    """
+
+    out: NDArray[Any] = np.empty(shape=dtarr.shape + (4,), dtype="u4")
+
+    Y, M, D = [dtarr.astype(dtype=f"M8[{x}]") for x in "YMD"]
+    out[..., 0] = dtarr.astype(dtype="datetime64[D]")
+    out[..., 1] = Y + 1970
+    out[..., 2] = (M - Y) + 1
+    out[..., 3] = (D - M) + 1
+
+    return out
 
 
 @define(order=True, auto_attribs=True)

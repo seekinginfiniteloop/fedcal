@@ -17,15 +17,56 @@ delivery, ensuring consistency across modules thanks to their Enumy-ness.
 """
 from __future__ import annotations
 
-from enum import Enum, unique
+from enum import Enum, unique, IntEnum
 from typing import Iterable, Type
 
-from fedcal._base import EnumBase
+from fedcal._base import EnumBase, HandyEnumMixin
 from fedcal._typing import EnumType
 
 
 @unique
-class Dept(EnumBase, Enum):
+class DoW(HandyEnumMixin, IntEnum):
+    """
+    Enum for days of the week.
+    """
+
+    MON = 0
+    TUE = 1
+    WED = 2
+    THU = 3
+    FRI = 4
+    SAT = 5
+    SUN = 6
+
+    def __str__(self) -> str:
+        return self.name.lower()
+
+
+@unique
+class Month(HandyEnumMixin, IntEnum):
+    """
+    Enum for months.
+    """
+
+    JAN = 1
+    FEB = 2
+    MAR = 3
+    APR = 4
+    MAY = 5
+    JUN = 6
+    JUL = 7
+    AUG = 8
+    SEP = 9
+    OCT = 10
+    NOV = 11
+    DEC = 12
+
+    def __str__(self) -> str:
+        return self.name.lower()
+
+
+@unique
+class Dept(EnumBase, HandyEnumMixin, Enum):
     """
     Dept enums represent federal departments and are used throughout fedcal to
     represent departments
@@ -65,6 +106,7 @@ class Dept(EnumBase, Enum):
         full (str): The full name of the department in mixed case.
         short (str): The shortened name of the department in mix case.
         """
+        self.value = abbreviation
         self.abbrev: str = abbreviation  # mixed case abbreviation
         self.full: str = full_name  # full name in mixed case
         self.short: str = short_name  # shortened name in mixed case
@@ -148,7 +190,7 @@ and Congress).
 
 
 @unique
-class DeptStatus(EnumBase, Enum):
+class DeptStatus(EnumBase, HandyEnumMixin, Enum):
     """
     DeptStatus is an enum used primarily for consistency across back-end
     operations to consistently apply and translate statuses for various uses.
@@ -195,6 +237,7 @@ class DeptStatus(EnumBase, Enum):
         appropriations status
         simple_status: simplified status descriptor (as a string)
         """
+        self.value: int = value
         self.val: int = value
         self.var: str = variable_string
         self.approps: str = appropriations_status

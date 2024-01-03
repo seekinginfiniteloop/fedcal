@@ -24,9 +24,9 @@ from typing import Any
 import pandas as pd
 from pandas import Timestamp
 
-from fedcal import _civpay, _date_attributes, _mil, time_utils
+from fedcal import _civpay, _mil, cal_offsets, time_utils
 from fedcal._civpay import FedPayDay
-from fedcal._date_attributes import FedBusDay, FedFiscalCal, FedHolidays
+from fedcal.cal_offsets import FedBusinessDay, FedFiscalCal, FedHolidays
 from fedcal._base import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
 from fedcal._typing import FedStampConvertibleTypes
@@ -349,7 +349,7 @@ class FedStamp(
         True if the date is a business day, False otherwise.
 
         """
-        bizday: FedBusDay = _date_attributes.FedBusDay()
+        bizday: FedBusinessDay = cal_offsets.FedBusinessDay()
         return bizday.fed_business_days.is_on_offset(dt=self.pdtimestamp)
 
     # holiday properties
@@ -357,18 +357,15 @@ class FedStamp(
         """
         Sets the holidays attribute.
         """
-        if (
-            not hasattr(_date_attributes.FedHolidays, "holidays")
-            or self._holidays is None
-        ):
-            self._holidays: FedHolidays = _date_attributes.FedHolidays()
+        if not hasattr(cal_offsets.FedHolidays, "holidays") or self._holidays is None:
+            self._holidays: FedHolidays = cal_offsets.FedHolidays()
 
     def _set_fiscalcal(self) -> None:
         """
         Sets the fiscalcal attribute.
         """
-        if not hasattr(_date_attributes.FedFiscalCal, "fqs") or self._fiscalcal is None:
-            self._fiscalcal: FedFiscalCal = _date_attributes.FedFiscalCal(
+        if not hasattr(cal_offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
+            self._fiscalcal: FedFiscalCal = cal_offsets.FedFiscalCal(
                 dates=self.pdtimestamp
             )
 

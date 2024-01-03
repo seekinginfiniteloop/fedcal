@@ -23,77 +23,160 @@ person-power:
 military passdays surrounding federal holidays.
 """
 from __future__ import annotations
+from enum import IntEnum, unique
+from typing import ClassVar
 
+import numpy as np
 import pandas as pd
 from attrs import define, field
 from numpy.typing import NDArray
-from pandas import DataFrame, DatetimeIndex, Series, Timestamp
+from numpy import busdaycalendar, datetime64, int64, int32, ndarray
+from pandas import DataFrame, DateOffset, DatetimeIndex, Index, Series, Timestamp,
 
-from fedcal import _date_attributes, time_utils
+from fedcal import cal_offsets
+from fedcal.time_utils import ensure_datetimeindex, to_datetimeindex, dt2date
+from fedcal.enum import DoW, Month
+from fedcal.cal_offsets import FedBusinessDay, FedHolidays
+
+from pandas.api.types import is_scalar
+from pandas.tseries.offsets import MonthBegin, MonthEnd, CustomBusinessDay
+from pandas._libs.tslibs.offsets import (
+from datetime import timedelta
+    apply_wraps,
+    SemiMonthOffset,
+    shift_month,
+)
 
 
-@define(order=True, kw_only=True)
-class MilitaryPayDay:
-
+@define(slots=False, order=False)
+class MilitaryPayDay(SemiMonthOffset):
     """
-    Handles the calculation and verification of military paydays.
-
-    Attributes
-    ----------
-    dates: date or dates used for calculations.
-
-    paydays: boolean or boolean Series indicating whether the date or dates
-    are military paydays
-
-    Methods
-    -------
-    get_mil_paydays(dates=None) -> Series[bool]
-        Determines if the given date/dates is a military payday.
-
+    Custom date offset class based on pandas' SemiMonthOffset for efficient
+    date calculations of military paydays based on their rules of falling on
+    the 1st or 15th of the month if they are business days, else soonest prior
+    business day. We use FedBusinessDay's underlying numpy calendar for
+    efficient vector operations on the date shifts.
     """
 
-    dates: Timestamp | DatetimeIndex | Series = field(default=None)
-    paydays: NDArray | bool | None = field(default=None, init=False)
+    _prefix: ClassVar[str] = "CMB"
+    _min_day_of_month: int = 7
+    n: int = 1
+    normalize = True
+    day_of_month = 15
+    b_day: ClassVar[FedBusinessDay] = FedBusinessDay()
+
 
     def __attrs_post_init__(self) -> None:
+        if not hasattr(type(self), "calendar"):
+            hol = FedHolidays()
+            type(self).calendar = np.busdaycalendar(weekmask="1101100", holidays=hol.np_holidays)
+        super().__init__(n=self.n, normalize=self.normalize, weekmask=self.weekmask, holidays=self.holidays, calendar=type(self).calendar, offset=self.offset)
+
+
+    def is_on_offset(self, dt: Timestamp | DatetimeIndex | Series[bool]) -> bool | NDArray[bool]:
         """
-        Initializes the instance and sets attributes.
+        Check if the (scalar) date is on the offset.
         """
-        self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
+        if is_scalar(val=dt):
+            return self._check_scalar_on_offset(dt=dt)
+        else:
+            return self._check_array_on_offset(dtarr=dt)
 
-        self.paydays: NDArray | bool | None = self.get_mil_paydays(dates=self.dates)
+    def _check_scalar_on_offset(self, dt: Timestamp | NDArray[datetime64] | DatetimeIndex | Series[Timestamp]) -> bool:
+        if self.b_day.is_on_offset(dt=dt) and dt.day in [1, self.day_of_month]:
+            return True
+        if self.b_day.is_on_offset(dt=dt) and (
+            self.day_of_month - 3 < dt.day < self.day_of_month
+        ):
+            return self.b_day.rollback(dt=dt.replace(day=self.day_of_month)) == dt
+        if self.b_day.is_on_offset(dt=dt) and dt.day > 24:
+            next_month = dt + pd.Timedelta(months=1)
+            return self.b_day.rollback(dt=next_month.replace(day=1)) == dt
+        return False
 
-    def get_mil_paydays(
-        self, dates: DatetimeIndex | Series[Timestamp] | Timestamp = None
-    ) -> NDArray:
-        """
-        Determines if the given date is a military payday.
+    def _check_array_on_offset(self, dtarr: NDArray[datetime64] | DatetimeIndex | Series[Timestamp]) -> NDArray[bool]:
+        if isinstance(dtarr, ndarray) and dtarr.dtype.str.startswith(("datetime64", "int")):
+            dtarr = dtarr.astype(dtype="datetime64[ns]")
 
-        Parameters
-        ----------
-        dates : date to check, defaults to the date attribute if None.
+        dti: DatetimeIndex = ensure_datetimeindex(dates=dtarr).normalize()
+        compare_dti: DatetimeIndex = pd.date_range(start=dti.min() - MonthBegin(n=1), end=dti.max() + MonthEnd(n=1), freq=self, normalize=True)
+        return dti.isin(values=compare_dti)
 
-        Returns
-        -------
-        Boolean array of dates reflecting military paydays for the range.
-        """
-
-        dates = pd.DatetimeIndex(data=self.dates if dates is None else dates)
-        bday = _date_attributes.FedBusDay()
-        bdays = pd.Series(data=(bday.get_business_days(dates=dates)), index=dates)
-        pays = pd.Series(
-            data=(dates.day.isin(values=[1, 15]) & bdays),
-            index=dates,
-            name="mil_paydays",
-        )
-        non_std: DatetimeIndex = dates[dates.day.isin(values=[1, 15]) & ~pays]
-        for non_std_date in non_std:
-            closest_bday: Timestamp = bday.get_prior_business_day(
-                date=non_std_date - pd.Timedelta(days=1)
+    @apply_wraps
+    def _apply(self, other: Timestamp) -> Timestamp:
+        if self.n > 0:
+            target_day: int = self.day_of_month if other.day < self.day_of_month else 1
+            other = (
+                shift_month(other, self.n) if other.day >= self.day_of_month else other
             )
-            if closest_bday in dates:
-                pays.at[closest_bday] = True
-        return pays
+        else:
+            target_day = self.day_of_month if other.day > self.day_of_month else 1
+
+        adjusted_date = other.replace(day=target_day)
+
+        return self.b_day.rollback(dt=adjusted_date)
+
+    def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64]:
+        np_dtstruct: NDArray[datetime64, int32] = dt2date(
+            dtarr=dtarr.astype(dtype="datetime64[ns]")
+        )
+        days = np_dtstruct[..., 3]
+
+        is_target: NDArray[bool] = np.isin(
+            element=days, test_elements=[1, self.day_of_month]
+        )
+        busdays = np.is_busday(
+            np_dtstruct[..., 0][is_target], busdaycal=self.b_day.calendar
+        )
+        non_busdays_idx = np.where(is_target & ~busdays)[0]
+
+        offset_dates: NDArray[datetime64] = np.busday_offset(
+            dates=np_dtstruct[..., 0][non_busdays_idx],
+            offsets=0,
+            roll="backward",
+            busdaycal=self.b_day.calendar,
+        )
+        off_arr: NDArray[datetime64] = dtarr.copy().astype(dtype="datetime64[D]")
+        off_arr[non_busdays_idx] = offset_dates
+
+        return off_arr
+
+@define(order=False, slots=False)
+class TestPass(CustomBusinessDay):
+    _prefix: ClassVar[str] = "CDP"
+    n: int = 1
+    normalize: str = True
+    weekmask: str = "Mon Tue Thu Fri"
+    holidays: NDArray[datetime64] | None = None
+    calendar: ClassVar[busdaycalendar] = np.busdaycalendar(weekmask="1101100", holidays=FedHolidays().np_holidays)
+    offset = timedelta(days=0)
+
+    # mapping of holiday-day-of-the-week to passday-day-of-the-week
+    # default is Friday passday for Thursday or Monday holiday, Monday passday
+    # for Friday or Tuesday holiday, and Thursday passday for Wednesday holiday
+    passday_map: dict[str: str] = {
+        "Mon": 'Fri', # holiday day of observance : day of associated passday
+        "Tue": 'Mon',
+        "Wed": 'Thu',
+        "Thu": "Fri",
+        "Fri": "Mon",
+    }
+
+    _map: dict | None = None
+
+    def __attrs_post_init__(self) -> None:
+        super().__init__(
+            n=self.n, normalize=self.normalize, weekmask=self.weekmask, holidays=self.holidays, calendar=type(self).calendar, offset= self.offset
+        )
+        self._map = self._set_map()
+
+    def _set_map(self) -> None:
+        self._map = {}
+        for k, v in self.passday_map.items() if k in DoW.__members__.keys() and v in DoW.__members__.keys() else None:
+            nk = DoW.__members__.get(k)
+            nv = DoW.__members__.get(v)
+            self._map[nk] = nv
+
 
 
 @define(order=True, kw_only=True)
@@ -155,7 +238,7 @@ class ProbableMilitaryPassDay:
         """
         Complete initialization of the instance and sets attributes
         """
-        self.dates = time_utils.ensure_datetimeindex(dates=self.dates)
+        self.dates = ensure_datetimeindex(dates=self.dates)
         self.passdays = self.get_probable_passdays(dates=self.dates)
 
     def get_probable_passdays(
@@ -177,11 +260,7 @@ class ProbableMilitaryPassDay:
         if dates is None:
             dates = self.dates
         else:
-            dates = (
-                time_utils.to_datetimeindex(dates)
-                if isinstance(dates, pd.Series)
-                else dates
-            )
+            dates = to_datetimeindex(dates) if isinstance(dates, pd.Series) else dates
         masks: DataFrame = self._get_base_masks(dates=dates)
         fri_mask: Series[bool] = dates.isin(
             dates[masks["monday_holidays"]] - pd.DateOffset(days=3)
@@ -214,8 +293,8 @@ class ProbableMilitaryPassDay:
         A dataframe of boolean masks, and date information
         """
 
-        bday = _date_attributes.FedBusDay()
-        holiday = _date_attributes.FedHolidays()
+        bday = cal_offsets.FedBusinessDay()
+        holiday = cal_offsets.FedHolidays()
 
         mask_frame = pd.DataFrame(index=dates)
 
