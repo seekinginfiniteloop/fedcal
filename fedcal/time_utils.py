@@ -60,7 +60,7 @@ from typing import Any, Callable, Self
 import numpy as np
 import pandas as pd
 from attrs import astuple, define, field
-from numpy import datetime64, int32, int64
+from numpy import datetime64, int32, int64, uint8
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.frequencies import to_offset
@@ -164,6 +164,29 @@ def dt2date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
     out[..., 2] = (M - Y) + 1
     out[..., 3] = (D - M) + 1
 
+    return out
+
+
+def dt64_to_dow(dtarr: NDArray[datetime64]) -> NDArray[datetime64 | int64]:
+    """
+    Adapted from jwdink on stackoverflow:
+    https://stackoverflow.com/questions/52398383/finding-day-of-the-week-for-a-datetime64
+
+    Convert array of datetime64 to an array of days of the week.
+
+    Parameters
+    ----------
+    dtarr : datetime64 array (...)
+        numpy.ndarray of datetimes of arbitrary shape
+
+    Returns
+    -------
+    int64 array
+        array with axis representing day of week
+    """
+    out: NDArray[uint8] = np.empty(shape=dtarr.shape + (2,), dtype=uint8)
+    out[..., 0] = dtarr.astype(dtype="datetime64[D]")
+    out[..., 1] = (dtarr.astype(dtype="datetime64[D]").view(dtype="int64") - 4) % 7
     return out
 
 

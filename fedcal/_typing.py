@@ -56,3 +56,5 @@ FedIndexConvertibleTypes = Union[
 ]
 
 RefinedIntervalType = tuple[Interval, "Dept", "DeptStatus"]
+
+DT_LIKE = TypeVar('datetime-like')

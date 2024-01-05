@@ -185,9 +185,6 @@ class FedHolidays(AbstractHolidayCalendar):
         if not hasattr(type(self), "np_holidays") or not hasattr:(type(self), "np_cal"):
                 type(self).np_holidays = self.holidays().to_numpy()
 
-
-
-
     def holidays(
         self,
         start: Timestamp = None,
