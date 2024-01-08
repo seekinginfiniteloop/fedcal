@@ -1,0 +1,1128 @@
+# fedcal offsets.py
+#
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
+#
+# fedcal is open source software subject to the terms of the
+# MIT license, found in the
+# [GitHub source directory](https://github.com/psuedomagi/fedcal)
+# in the LICENSE.md file.
+#
+# It may be freely distributed, reused, modified, and distributed under the
+# terms of that license, but must be accompanied by the license and the
+# accompanying copyright notice.
+
+"""
+Provides a series of custom pandas offset classes, either for direct use or
+integration with FedStamp and FedIndex, namely: federal holidays, business
+days, and fiscal years/quarters.
+
+The offsets module includes offsets for:
+- Civilian biweekly paydays (`FedPayDay`, customized from `Week`)
+- holidays (`FedHolidays`, customized from `AbstractHolidayCalendar`)
+- business days (`FedBusinessDay`, customized from `CustomBusinessDay`)
+- military paydays (`MilitaryPayDay`, heavily customized from
+`SemiMonthOffset`)
+- military passdays (`MilitaryPassday`, a frankensteinly customized from
+`CustomBusinessDay`), which provides an offset for identifying probable
+passdays falling on businessdays adjacent to Federal holidays. It allows some
+customization of the rules used to identify passdays.
+"""
+
+from __future__ import annotations
+
+import warnings
+from datetime import timedelta
+from typing import ClassVar
+
+import numpy as np
+import pandas as pd
+from attrs import define, field
+from numpy import datetime64, int32, int64, timedelta64
+from numpy.typing import NDArray
+from pandas import (
+    DatetimeIndex,
+    Index,
+    Series,
+    Timedelta,
+    TimedeltaIndex,
+    Timestamp,
+    to_datetime,
+)
+from pandas._libs.tslibs.offsets import SemiMonthOffset, apply_wraps, shift_month
+from pandas.tseries.holiday import (
+    AbstractHolidayCalendar,
+    Holiday,
+    USColumbusDay,
+    USLaborDay,
+    USMartinLutherKingJr,
+    USMemorialDay,
+    USPresidentsDay,
+    USThanksgivingDay,
+    nearest_workday,
+)
+from pandas.tseries.offsets import CustomBusinessDay, MonthBegin, MonthEnd, Week
+
+from fedcal._typing import DatetimeScalarOrArray, TimestampSeries
+from fedcal.enum import DoW
+from fedcal.time_utils import (
+    dt64_to_date,
+    dt64_to_dow,
+    ensure_datetimeindex,
+    get_today,
+    to_dt64,
+)
+
+
+@define(slots=False, order=False, kw_only=True)
+class FedPayDay(Week):
+    """
+    A custom pandas offset class that calculates federal civilian biweekly
+    paydays, which occur every other Friday since 2 Jan 1970 (from an epoch
+    perspective... people got paid before that too). We adjust and offset
+    pandas' Week offset to instead produce a biweekly pattern set to our
+    group of Fridays.
+
+    Attributes
+    ----------
+
+    normalize : defaulting to True, represents whether to normalize the time
+        output to midnight. As we're concerned with days here, we default to
+        true to remove the time component.
+
+    Methods
+    -------
+    is_on_offset(dt: Timestamp) -> bool
+        Checks if a given date or array of dates is on a federal civilian
+        biweekly payday.
+
+    See Also
+    --------
+    *Private Methods*:
+    _weeks_since_epoch : calculates the number of weeks since the reference
+        date (2 Jan 1970)
+
+    _calculate_adjustment : calculates the adjustment to be applied to the
+        Week offset to match the correct biweekly pattern.
+
+    _apply : applies the biweekly pattern set by this class to a given
+        datetime.
+
+    _apply_array : applies the biweekly pattern set by this class to a
+        given array of datetime-like objects."""
+
+    _prefix: str = "FW"
+
+    # changing this will break functionality, represents biweekly pattern
+    _n: int = field(default=1, alias="_n")
+
+    _normalize: bool = field(default=True, alias="_normalize")
+
+    # changing this will break functionality, represents Fridays
+    _weekday: int = field(default=4, alias="_weekday")
+
+    def __attrs_post_init__(self) -> None:
+        """
+        Initializes the parent Week() class.
+        """
+
+        super().__init__(
+            n=self._n,
+            normalize=self._normalize,
+            weekday=self._weekday,
+        )
+
+    def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
+        """
+        Check if a given datetime-like object or array of datetime-like
+        objects falls on the offset.
+
+        Parameters
+        ----------
+        dt : datetime-like object to check
+
+        Returns
+        -------
+        bool or array of bool, depending on whether `dt` is a scalar or an
+        array of datetime-like objects.
+        """
+        day_mask = dt64_to_dow(dt)[1] == self._weekday
+        weeks_since_ref: int | NDArray[int] = self._weeks_since_epoch(dt=dt)
+        return dt[((weeks_since_ref % 2) == 0) & day_mask]
+
+    def _weeks_since_epoch(self, dt: DatetimeScalarOrArray) -> int | NDArray[int]:
+        """
+        Calculates weeks since the epoch for internal offset calculations.
+        We take advantage of the fact that the first payday was the second
+        day of the epoch to simplify calculations.
+
+        Parameters
+        ----------
+        dt
+            any datetime-like object or array of datetime-like objects.
+
+        Returns
+        -------
+            int or array of int representing the number of weeks since the
+            epoch, depending on input.
+        """
+        days = (
+            dt.value if pd.api.types.is_scalar(val=dt) else dt.astype("int64")
+        ) // 86_400_000_000_000
+
+        # The first payday was the 2nd day of the epoch (2 Jan 1970)
+        # so we just subtract a day
+        return (days - 1) // 7
+
+    def _calculate_adjustment(
+        self, dt: pd.Timestamp | NDArray[datetime64] | DatetimeIndex
+    ) -> int | NDArray[timedelta64]:
+        """
+        Calculates the offset adjustment to align the offset with the correct
+        biweekly period.
+
+        Parameters
+        ----------
+        dt
+            datetime-like object or array of datetime-like objects.
+
+        Returns
+        -------
+            binary int or array of int representing the adjustment.
+        """
+        weeks_since_ref = self._weeks_since_epoch(dt=dt)
+        if pd.api.types.is_scalar(val=dt):
+            return np.where(weeks_since_ref % 2 == 1, 1, 0)
+        return np.where(
+            weeks_since_ref % 2 == 1, np.timedelta64(7, "D"), np.timedelta64(0, "D")
+        )
+
+    @apply_wraps
+    def _apply(self, other) -> Timestamp:
+        """
+        Applies our custom biweekly alignment before using Week's internal
+        _apply method for applying offsets to scalars.
+
+        Parameters
+        ----------
+        other
+            scalar datetime-like object
+
+        Returns
+        -------
+            Timestamp object with the offset applied.
+        """
+        adjustment: int | NDArray[int] | None = self._calculate_adjustment(dt=other)
+        return super()._apply(other) + Week(n=adjustment * self._n)
+
+    @to_dt64(freq="ns")
+    def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64]:
+        """
+        Applies our custom biweekly alignment after using Week's internal
+        _apply_array method for applying the offset to an array.
+
+        Parameters
+        ----------
+        dtarr
+            array of datetime objects
+
+        Returns
+        -------
+            NDArray of datetime64 objects with the offset applied.
+        """
+        initial_offset = super()._apply_array(dtarr)
+        adjustments: NDArray[timedelta64] = self._calculate_adjustment(
+            dt=initial_offset.copy()
+        )
+
+        return initial_offset.astype("datetime64[ns]") + adjustments
+
+
+# Custom Holiday objects; it bothers me that only half of the rules in
+# USFederalHolidayCalendar have their own variable. I know it's because of
+# their offsets, but... I just had to.
+
+NewYearsDay = Holiday(name="New Year's Day", month=1, day=1, observance=nearest_workday)
+MartinLutherKingJr: Holiday = USMartinLutherKingJr
+PresidentsDay: Holiday = USPresidentsDay
+MemorialDay: Holiday = USMemorialDay
+Juneteenth = Holiday(
+    name="Juneteenth National Independence Day",
+    month=6,
+    day=19,
+    start_date=pd.Timestamp(year=2021, month=6, day=18),
+    observance=nearest_workday,
+)
+IndependenceDay = Holiday(
+    name="Independence Day", month=7, day=4, observance=nearest_workday
+)
+LaborDay: Holiday = USLaborDay
+ColumbusDay: Holiday = USColumbusDay
+VeteransDay = Holiday(name="Veterans Day", month=11, day=11, observance=nearest_workday)
+ThanksgivingDay: Holiday = USThanksgivingDay
+ChristmasDay = Holiday(
+    name="Christmas Day", month=12, day=25, observance=nearest_workday
+)
+
+
+@define(order=False, slots=False)
+class FedHolidays(AbstractHolidayCalendar):
+
+    """
+    Custom implementation based on pandas' USFederalHolidayCalendar and using
+    pandas' AbstractHolidayCalendar base/meta calendar.
+
+    Customized to add additional functionality and supply proclaimed holidays.
+
+    US Federal Government Holiday Calendar based on rules specified by:
+    https://www.opm.gov/policy-data-oversight/pay-leave/federal-holidays/
+
+    Attributes
+    ----------
+    proclaimed_holidays : Series of holidays proclaimed by executive orders.
+    holidays : Combined Series of regular and proclaimed federal
+    holidays.
+
+    np_holidays : vectorized holidays in a numpy array for faster operations
+
+    Methods
+    -------
+    get_holidays(date) -> Series[bool]
+        Check if a given date is a federal holiday.
+    get_proclamation_holidays(date) -> Series[bool]
+        Check if a given date was a holiday by proclamation (most were
+        Christmas Eve).
+    guess_proclamation_holidays(dates) -> Series[bool]
+        Guess if any future Christmas Eves in a pd.DatetimeIndex may be a
+        holiday based on Christmas day
+    """
+
+    _prefix: str = "FH"
+
+    name: ClassVar[str] = "USFederalHolidays"
+
+    rules: ClassVar[list[Holiday]] = [
+        NewYearsDay,
+        MartinLutherKingJr,
+        PresidentsDay,
+        MemorialDay,
+        Juneteenth,
+        IndependenceDay,
+        LaborDay,
+        ColumbusDay,
+        VeteransDay,
+        ThanksgivingDay,
+        ChristmasDay,
+        # now for proclamation holidays:
+        Holiday(
+            name="2020 Christmas Eve proclamation (Trump)", year=2020, month=12, day=24
+        ),
+        Holiday(
+            name="2019 Christmas Eve proclamation (Trump)", year=2019, month=12, day=24
+        ),
+        Holiday(
+            name="2018 Christmas Eve by proclamation (Trump)",
+            year=2018,
+            month=12,
+            day=24,
+        ),
+        Holiday(
+            name="2015 Christmas Eve proclamation (Obama)", year=2015, month=12, day=24
+        ),
+        Holiday(
+            name="2014 Christmas Eve proclamation (Obama)", year=2014, month=12, day=26
+        ),
+        Holiday(
+            name="2012 Christmas Eve proclamation (Obama)", year=2012, month=12, day=24
+        ),
+        Holiday(
+            name="2007 Christmas Eve proclamation (GW Bush)",
+            year=2007,
+            month=12,
+            day=24,
+        ),
+        Holiday(
+            name="2001 Christmas Eve proclamation (GW Bush)",
+            year=2001,
+            month=12,
+            day=24,
+        ),
+        Holiday(
+            name="1979 Christmas Eve proclamation (Carter)", year=1979, month=12, day=24
+        ),
+        Holiday(
+            name="1973 New Year's Eve proclamation (Nixon)", year=1973, month=12, day=31
+        ),
+        Holiday(
+            name="1973 Christmas Eve proclamation (Nixon)", year=1973, month=12, day=24
+        ),
+    ]
+
+    proclaimed_holidays: ClassVar[list[Holiday]] = [rule for rule in rules if rule.year]
+    scheduled_holidays: ClassVar[list[Holiday]] = [
+        rule for rule in rules if not rule.year
+    ]
+
+    np_holidays: NDArray[datetime64] | None = field(default=None, init=False)
+
+    def __attrs_post_init__(self) -> None:
+        """
+        Make sure Abstract Holiday calendar and our attributes are running
+        properly.
+        """
+        super().__init__(name=type(self).name, rules=type(self).rules)
+        if not self.np_holidays:
+            self.np_holidays = self.holidays().to_numpy().astype(dtype="datetime64[D]")
+
+    def holidays(
+        self,
+        start: Timestamp = None,
+        end: Timestamp = None,
+        return_name: bool = False,
+        with_proclamation: bool = True,
+    ) -> DatetimeIndex | Series[str]:
+        """
+        Implements parent classes's method of the same name. Returns
+        DatetimeIndex of holidays for either given dates or class dates
+        (1970-2199). Optional return flag returns a series with holidays
+        named.
+
+        Parameters
+        ----------
+        start : start date for the range, defaults to class dates if None.
+        end : end date for the range, defaults to class dates if None.
+        return_name : whether to return a series with holidays named.
+        Defaults to False.
+        with_proclamation : whether to include historical proclamation
+        holidays (i.e. one-off Christmas Eves), defaults to True.
+
+        Returns
+        -------
+        DatetimeIndex of holidays between the start and end dates, or
+        Series of holidays with names of holidays if return_name flag
+        and dates as the index.
+        """
+        if with_proclamation:
+            return super().holidays(start=start, end=end, return_name=return_name)
+        else:
+            return AbstractHolidayCalendar(
+                rules=type(self).scheduled_holidays
+            ).holidays(start=start, end=end, return_name=return_name)
+
+    def proclamation_holidays(
+        self,
+        start: Timestamp | None = None,
+        end: Timestamp = None,
+        return_name: bool = False,
+    ) -> DatetimeIndex | TimestampSeries:
+        """
+        Retrieve dates for proclamation holidays only. If dates provided,
+        returns only within date range. If return_name flag given, returns a
+        series with holidays named, otherwise a DatetimeIndex with only dates.
+
+        Parameters
+        ----------
+        start : start date for the range, defaults to class dates if None.
+        end : end date for the range, defaults to class dates if None.
+        return_name : whether to return a series with holidays named.
+        Defaults to False.
+
+        Returns
+        -------
+        DatetimeIndex of holidays between the start and end dates, or
+        Series of holidays with names of holidays if return_name flag
+        and dates as the index.
+        """
+        only_proc_hols_instance: AbstractHolidayCalendar = AbstractHolidayCalendar(
+            name="USFederalProclamationHolidays", rules=type(self).proclaimed_holidays
+        )
+        return only_proc_hols_instance.holidays()
+
+    def _calculate_historical_probabilities(self) -> Series[float]:
+        """
+        Handles the heavier work of calculating the probabilities
+        for estimate_future_proclamation_holidays.
+
+        Returns
+        -------
+            series of floats giving rough probabilities a future
+            Christmas Eve may be a proclamation holiday based on
+            its day of the week compared to historical trends.
+        """
+        _hist_xmas: DatetimeIndex = ChristmasDay.dates(
+            start_date="1970-01-01", end_date=get_today().tz_localize(None)
+        )
+        _hist_xmas_dow_counts: Series[
+            int
+        ] = _hist_xmas.to_series().dt.dayofweek.value_counts()
+        _hist_p_hols: Series[Timestamp] = self.proclamation_holidays().to_series()
+
+        _hist_p_hols_years: Series[int] = _hist_p_hols.dt.year
+        _matched_xmas: DatetimeIndex = _hist_xmas[
+            _hist_xmas.year.isin(_hist_p_hols_years)
+        ]
+        _matched_xmas_dow_counts: Series[
+            int
+        ] = _matched_xmas.to_series().dt.dayofweek.value_counts()
+        breakpoint()
+        return (_matched_xmas_dow_counts / _hist_xmas_dow_counts).fillna(value=0)
+
+    @ensure_datetimeindex
+    def estimate_future_proclamation_holidays(
+        self,
+        future_dates: Timestamp | TimestampSeries | DatetimeIndex,
+    ) -> Series[float]:
+        """
+        Roughly estimate if a future Christmas Eve may be proclaimed a holiday
+        based on Christmas Day's weekday. Of the 10 such proclamations to
+        date, 6 (60%) fell on a Tuesday, 2 on a Friday, and 1 each on
+        Wednesday and Thursday. The associated proclamation holiday for the
+        Thursday actually fell on the 26th... we omit the 26th here because 1
+        is not a pattern... The same goes for Nixon's surprise New Year's Eve.
+
+        Parameters
+        ----------
+        future_dates : Dates for which to guess the holidays.
+
+        Returns
+        -------
+        A Series of dates with float probabilities they could be declared a
+        proclamation holiday based on their day of week and whether they're a
+        Christmas Eve.
+
+        """
+        dates = future_dates
+        max_past: Timestamp = get_today()
+        if dates.tzinfo or max_past.tzinfo:
+            dates = dates.tz_localize(None) if dates.tzinfo else dates
+            max_past = max_past.tz_localize(None) if max_past.tzinfo else max_past
+            if dates.max() <= max_past:
+                raise ValueError(
+                    "No dates in provided index are in the future, latest"
+                    f"date was: {dates.max()}"
+                )
+
+        historical_probabilities: Series[
+            float
+        ] = self._calculate_historical_probabilities()
+        eval_dates: DatetimeIndex = dates[
+            (dates.month == 12)
+            & (dates.day == 24)
+            & (dates.dayofweek < 5)
+            & (dates > max_past)
+        ]
+
+        if eval_dates.empty:
+            return pd.Series(data=np.zeros(shape=len(dates), dtype=bool), index=dates)
+
+        probabilities = pd.Series(
+            data=np.zeros(shape=len(dates), dtype=float), index=dates
+        )
+        eval_probabilities = eval_dates.dayofweek.map(
+            mapper=historical_probabilities
+        ).fillna(value=0)
+        probabilities[eval_dates] = eval_probabilities
+        return probabilities
+
+
+@define(order=False, slots=False)
+class FedBusinessDay(CustomBusinessDay):
+
+    """
+    Class representing federal business days, adjusted for federal holidays.
+    As a CustomBusinessDay object, it may be directly applied to a pandas
+    timeseries with simple addition/subtraction (see examples below):
+
+    Attributes
+    ----------
+    self : CustomBusinessDay child class (the most important thing here)
+    You probably won't need to touch any of these defaults and can happily
+    call it as FedHolidays()
+
+    _weekmask : defaults to "Mon Tue Wed Thu Fri", and business day in most
+    situations, but here if you need to pass a custom weekmask. Can be pass as
+    either binary representing each day of the week starting with Monday (e.g.
+    '1111100' is Mon-Fri), or three-letter strings of just the business days.
+
+    _normalize : True -- normalized offset. Note, it will not pass equality
+        tests with non-normalized offsets.
+
+    _holidays : default is derived from FedHolidays, providing federal holidays
+
+    _calendar : We default to a numpy busdaycalendar with vectorized holidays.
+
+    off_set : alias for offset, for shifting more than one day pass a
+    timedelta object. Default is 0.
+
+    Methods
+    -------
+    *inherits methods from CustomBusinessDay and BusinessDay, such as:
+
+    is_on_offset(dt: Timestamp) -> bool
+        Checks if a given date is on a federal business day.
+
+    rollback(dt: Timestamp) -> Timestamp
+        rolls the date back to the previous business day if not a business day
+
+    rollforward(dt: Timestamp) -> Timestamp
+        rolls the date forward to the next business day if not a business day
+
+    Examples
+    --------
+    ```python
+    # Create a DatetimeIndex of only business days:
+    >>> import pandas as pd
+    >>> import fedcal as fc
+    >>> fbd = fc.FedBusinessDay()
+    >>> bdays = pd.date_range(start="2021-01-01", end="2022-01-10", freq=fbd)
+
+    # Shift the result to the next business day (next day on the offset) --
+    # for Timestamp or across a DatetimeIndex/Timestamp Series
+    >>> ts = pd.to_datetime('2024-1-1') # New Years' Day, a Monday
+    >>> fbd.is_on_offset(ts)
+    False
+    >>> next_business_day = ts + fbd   # subtract for the prior business day
+    2024-1-2 00:00:00
+
+    # Add 5 business days for processing (or subtract, or whatever):
+    >>> five_bdays = your_datetimeindex + fc.FedBusinessDay(offset=pd.Timedelta(days=5))
+    ```
+    """
+
+    _prefix: str = "F"
+
+    _weekmask: list[str] = field(default="1111100", alias="_weekmask")
+    _normalize: bool = field(default=True, alias="_normalize")
+
+    _holidays: list[Timestamp] | NDArray[np.datetime64] | None = field(
+        default=FedHolidays().np_holidays, alias="_holidays"
+    )
+    off_set: timedelta | Timedelta = field(default=timedelta(days=0))
+
+    def __attrs_post_init__(self) -> None:
+        """We make sure CBD is initiated how we want."""
+        cal = np.busdaycalendar(weekmask=self._weekmask, holidays=self._holidays)
+        super().__init__(
+            n=1,
+            normalize=self._normalize,
+            calendar=cal,
+            offset=self.off_set,
+        )
+
+    @ensure_datetimeindex
+    def get_business_days(
+        self, dates: Timestamp | TimestampSeries | DatetimeIndex, as_bool: bool = False
+    ) -> DatetimeIndex | Series[bool] | None:
+        """
+        Retrieve a Datetimeindex of business days. If as_bool flag is True,
+        returns a boolean array of the same length as the input dates.
+
+        Parameters
+        ----------
+        dates : either a single pd.Timestamp, a Series of
+        Timestamps, or DatetimeIndex for offsetting with fed_business_days.
+        as_bool : whether to return a boolean array. Defaults to False.
+
+        Returns
+        -------
+        DatetimeIndex of business days. If as_bool flag is True, returns a
+        boolean array reflecting business days in the range.
+
+        """
+        with warnings.catch_warnings():
+            warnings.simplefilter(action="ignore")
+            if as_bool:
+                return dates.isin(values=(dates + self))
+            else:
+                dates + self
+
+    def get_prior_business_day(self, date: Timestamp) -> Timestamp:
+        """
+        Generates next earliest business day. Primarily for finding
+        next-earliest business day before a military payday that doesn't
+        fall on a business day.
+
+        Returns
+        -------
+        next nearest business day prior to the given date
+        """
+        return self.rollback(dt=date)
+
+
+@define(slots=False, order=False)
+class MilitaryPayDay(SemiMonthOffset):
+    """
+    Custom date offset class based on pandas' SemiMonthOffset for efficient
+    date calculations of military paydays based on their rules of falling on
+    the 1st or 15th of the month if they are business days, else soonest prior
+    business day. We use FedBusinessDay's underlying numpy calendar for
+    efficient vector operations on the date shifts.
+
+    Attributes
+    ----------
+
+    normalize: default is true, as this is a calendar we're mostly concerned
+        with dates -- normalizes time values to midnight.
+    day_of_month: default is 15. The day of the month to calculate the payday
+        on.As a SemiMonthOffset class, the other date is 1.
+    b_day: FedBusinessDay object used for adjusting business day offsets.
+        offset: default is 0, and different values not currently implemented.
+    """
+
+    _prefix: str = "CMB"
+    _min_day_of_month: int = 7
+
+    normalize: bool = field(default=True)
+    day_of_month: int = field(default=15)
+    b_day: FedBusinessDay = FedBusinessDay()
+    #  TODO: offset: timedelta | Timedelta = timedelta(days=0)
+    calendar: np.busdaycalendar = b_day.calendar
+
+    def __attrs_post_init__(self) -> None:
+        """
+        Initializes FedHolidays if not yet initialized; initializes
+        SemiMonthOffset parent class.
+        """
+        if self.offset != timedelta(days=0):
+            raise NotImplementedError(
+                "These attribute specifications are not supported for MilitaryPayDay, yet."
+            )
+        if not hasattr(type(self), "calendar"):
+            FedHolidays()
+            self.calendar = self.b_day.calendar
+        super().__init__(normalize=self.normalize, day_of_month=self.day_of_month)
+
+    def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
+        """
+        Check if the date(s) is on the offset.
+
+        Parameters
+        ----------
+        dt : datetime scalar or array to check for being useful.
+
+        Returns
+        -------
+        bool or array of bool for values on offset.
+
+        """
+        if pd.api.types.is_scalar(val=dt):
+            return self._check_scalar_on_offset(dt=dt)
+        else:
+            return self._check_array_on_offset(dtarr=dt)
+
+    def _check_scalar_on_offset(self, dt: Timestamp) -> bool:
+        """
+        Checks scalar if it is on the offset
+
+        Parameters
+        ----------
+        dt
+            datetime scalar for checking
+
+        Returns
+        -------
+            True if the date is on the offset.
+        """
+        if self.b_day.is_on_offset(dt=dt) and dt.day in [1, self.day_of_month]:
+            return True
+        if self.b_day.is_on_offset(dt=dt) and (
+            self.day_of_month - 3 < dt.day < self.day_of_month
+        ):
+            return self.b_day.rollback(dt=dt.replace(day=self.day_of_month)) == dt
+        if self.b_day.is_on_offset(dt=dt) and dt.day > 24:
+            next_month = dt + pd.Timedelta(months=1)
+            return self.b_day.rollback(dt=next_month.replace(day=1)) == dt
+        return False
+
+    @staticmethod
+    def _to_dti(dtarr: NDArray[datetime64]) -> DatetimeIndex:
+        """
+        Converts a numpy array of datetimes to a DatetimeIndex.
+
+        Parameters
+        ----------
+        dtarr
+            array of datetimes to convert
+
+        Returns
+        -------
+            A DatetimeIndex of the datetimes.
+        """
+        return DatetimeIndex(
+            values=dtarr.astype(dtype="datetime64[ns]"), normalize=self.normalize
+        )
+
+    def _check_array_on_offset(
+        self, dtarr: NDArray[datetime64] | DatetimeIndex | TimestampSeries
+    ) -> NDArray[bool]:
+        """
+        Checks an array for values on the offset.
+
+        Parameters
+        ----------
+        dtarr
+            array of datetimes to check
+
+        Returns
+        -------
+            An NDArray of bool value reflecting days of the week.
+        """
+        if isinstance(dtarr, np.ndarray) and dtarr.dtype.str.startswith(
+            ("datetime64", "int")
+        ):
+            dtarr = dtarr.astype(dtype="datetime64[ns]")
+
+        dti: DatetimeIndex = self._to_dti(dtarr=dtarr)
+        compare_dti: DatetimeIndex = pd.date_range(
+            start=dti.min() - MonthBegin(n=1),
+            end=dti.max() + MonthEnd(n=1),
+            freq=self,
+            normalize=self.normalize,
+        )
+        return dti.isin(values=compare_dti)
+
+    @apply_wraps
+    def _apply(self, other: Timestamp) -> Timestamp:
+        """
+        Overrides parent's _apply method. Responsible for applying an offset
+        to a datetime scalar.
+
+        Parameters
+        ----------
+        other
+            datetime scalar to be offset
+
+        Returns
+        -------
+            Date adjusted by the offset.
+        """
+        if self.n > 0:
+            target_day: int = self.day_of_month if other.day < self.day_of_month else 1
+            other = (
+                shift_month(other, self.n) if other.day >= self.day_of_month else other
+            )
+        else:
+            target_day = self.day_of_month if other.day > self.day_of_month else 1
+
+        adjusted_date = other.replace(day=target_day)
+
+        return self.b_day.rollback(dt=adjusted_date)
+
+    def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64]:
+        """
+        Applies the offset to an array input.
+
+        Parameters
+        ----------
+        dtarr
+            A datetime array for offsetting
+
+        Returns
+        -------
+            Offset array.
+        """
+        np_dtstruct: NDArray[datetime64, int32] = dt64_to_date(dtarr=dtarr)
+        days = np_dtstruct[..., 3]
+
+        is_target: NDArray[bool] = np.isin(
+            element=days, test_elements=[1, self.day_of_month]
+        )
+        busdays = np.is_busday(
+            np_dtstruct[..., 0][is_target], busdaycal=self.b_day.calendar
+        )
+        non_busdays_idx = np.where(is_target & ~busdays)[0]
+
+        offset_dates: NDArray[datetime64] = np.busday_offset(
+            dates=np_dtstruct[..., 0][non_busdays_idx],
+            offsets=0,
+            roll="backward",
+            busdaycal=self.b_day.calendar,
+        )
+        off_arr: NDArray[datetime64] = dtarr.copy().astype(dtype="datetime64[D]")
+        off_arr[non_busdays_idx] = offset_dates
+
+        return off_arr
+
+
+@define(order=False, slots=False)
+class MilitaryPassday(CustomBusinessDay):
+    """
+    A custom pandas DateOffset class for *probable* military passdays
+    business-day-adjacent to federal holidays. With passdays reflected as only
+    the affected normal business day vice the entire period if it spans a
+    weekend.
+
+    Because passday practices can be very localized, we set a default mapping
+    of probable passdays based on holiday day of the week in self.passday_map,
+    with default behavior as follows: Mon & Thu holidays have corresponding
+    Friday passdays, Friday and Tuesday holidays mapped to Monday passdays, and
+    Wednesday to Thursday. You can change these values by passing your own
+    dictionary to self.passday_map using three-letter strings for each day in
+    title case, e.g. {"Mon": "Fri", "Tue": "Mon", "Wed": "Thu"}. The mapping
+    for each value must be to an adjacent business day, and weekends cannot be
+    mapped to either value. Perhaps a future version can implement more
+    flexibility, please fork and open a pull request.
+
+    Methods
+    -------
+    is_on_offset : returns True if the date is on the offset, False otherwise.
+
+    nearest_holiday : a handy utility that can find the nearest holiday to any
+    date-like object, whether scalar or array. Used in passday calculations,
+    but available for broader use because it's spiffy.
+
+    Attributes
+    ----------
+    n : default to 1. Allowance for other values not currently implemented.
+    This would significantly affect offset calculations in a way that is
+    probably not desirable for anyone interested in military passdays.
+
+    normalize : default to True. Normalizes dates to midnight, removing time
+    data. As this is a calendar focused on dates, that's what we start with.
+
+    weekmask: defaults to M-F. Like n, this attribute is part of
+    CustomBusinessDay's core logic. While we'd love to change it, for now you
+    cannot pass other values.
+
+    holidays: defaults to None, but there if you want to pass additional
+    holidays to consider in calculations.
+
+    calendar: defaults to a numpy busdaycalendar with vectorized U.S. federal
+    holidays.
+
+    offset: defaults to timedelta(days=0). Not fully implemented and unlikely
+    to be useful for most users, but on the to-do list for eventual
+    implementation.
+
+    passday_map: default mappings of holiday day-of-week to
+    passday-day-of-week. You may provide custom mappings meeting criteria in
+    the _passday_reqs property
+
+    _map : An internal mapping of holiday-day-of-week to passday-day-of-week
+    using an enum translated from string input.
+
+    Raises
+    ------
+    ValueError
+        If the passday map is not a valid mapping of holiday-day-of-the-week
+        to passday-day-of-the-week. Message describing criteria is both the
+        error message and a property, _passday_reqs.
+    NotImplementedError
+        If the n, weekmask, or offset attributes are changed.
+
+
+    Notes
+    -----
+    *Private Methods*:
+        __attrs_post_init__ : initializes the parent CustomBusinessDay class
+            and sets the internal mapping of holiday-day-of-week to passdays
+        _set_map : sets the internal mapping of holiday-day-of-week to passdays
+        _passday_reqs : describes the requirements for a valid passday map.
+        _validate_map : validates the internal mapping of holiday-day-of-week
+            to passdays
+        _apply : Custom implementation of the parent CustomBusinessDay class's
+            _apply method, which handles scalar date offsets.
+        _apply_array : Custom implementation of the parent CustomBusinessDay's
+            _apply_array method, which handles array date offsets.
+    """
+
+    _prefix: str = "CDP"
+    normalize: bool = field(default=True)
+    weekmask: str = field(default="Mon Tue Wed Thu Fri")
+    holidays: NDArray[datetime64] | None = None
+    calendar: np.busdaycalendar = np.busdaycalendar(
+        weekmask="1111100", holidays=FedHolidays().np_holidays
+    )
+    offset = timedelta(days=0)
+
+    # mapping of holiday-day-of-the-week to passday-day-of-the-week
+    # default is Friday passday for Thursday or Monday holiday, Monday passday
+    # for Friday or Tuesday holiday, and Thursday passday for Wednesday holiday
+    passday_map: dict[str, str] = field(
+        default={
+            "Mon": "Fri",  # [key] holiday day of observance to:
+            "Tue": "Mon",  # *value* day of associated passday
+            "Wed": "Thu",
+            "Thu": "Fri",
+            "Fri": "Mon",
+        }
+    )
+
+    _map: dict | None = None
+
+    def __attrs_post_init__(self) -> None:
+        """
+        Validates attributes and initializes the parent class.
+
+        Raises
+        ------
+        NotImplementedError
+            If core attributes n, weekmask,or offset are not their default
+            values.
+        """
+        if self.weekmask != "Mon Tue Wed Thu Fri" or self.offset != timedelta(days=0):
+            raise NotImplementedError(
+                "Changing defaults for this attribute is not currently " "supported."
+            )
+        super().__init__(
+            normalize=self.normalize,
+            weekmask=self.weekmask,
+            holidays=self.holidays,
+            calendar=self.calendar,
+            offset=self.offset,
+        )
+        self._map = self._set_map()
+        self._validate_map()
+
+    def _set_map(self) -> None:
+        """
+        Sets the internal mapping for holidays to passdays.
+        """
+        self._map: dict[DoW, DoW] = {
+            DoW.__members__.get(k.title()): DoW.__members__.get(v.title())
+            for k, v in self.passday_map.items()
+        }
+
+    @property
+    def _passday_reqs(self) -> str:
+        """
+        Provides requirements for passday_map to pass validation, used as an
+        error message.
+        """
+        return """Passday map must:
+                1) Use 5 unique weekday keys and 5 unique
+                values (each consisting of weekdays).
+                2) Keys and values must have valid string representations of
+                DoW objects (three letter weekdays (e.g. Tue))
+                3) Keys and values must be within one adjacent businessday
+                4) Keys and values cannot be the same.
+                5) Keys or values cannot be Saturday or Sunday.
+                """
+
+    def _validate_map(self) -> None:
+        """
+        Validates the passday_map
+
+        Raises
+        ------
+        ValueError
+            If criteria in _passday_reqs are not met.
+        """
+        if (
+            len(set(self._map.keys())) != 5
+            or len(set(self._map.values())) != 5
+            or not all(isinstance(v, DoW) for v in self._map.values())
+            or any(v > 4 for v in self._map.values())
+        ):
+            raise ValueError(self._passday_reqs)
+        for k, v in self._map.items():
+            if k == v or (k in [4, 0] and abs(k - v) not in [1, 3]) or abs(k - v) != 1:
+                raise ValueError(self._passday_reqs)
+
+    def is_on_offset(self, dt: Timestamp) -> bool:
+        """
+        Tests if a scalar date is on the offset.
+
+        Returns
+        -------
+        bool
+            True if the date is on the offset, False otherwise.
+        """
+        return self._apply(other=dt) == dt
+
+    @apply_wraps
+    def _apply(self, other: Timestamp) -> Timestamp:
+        """
+        Custom implementation of the parent CustomBusinessDay class's _apply
+        method; applies date offset to a scalar date.
+
+        Parameters
+        ----------
+        other : Timestamp
+            Scalar date to apply offset to.
+
+        Returns
+        -------
+        Timestamp
+            Date with offset applied.
+
+        """
+        hol: Timestamp = self.nearest_holiday(other=other)
+        hol_dow: int = pd.to_datetime(arg=hol).dayofweek
+        pass_dow: DoW = self._map[hol_dow]
+        if pass_dow < hol_dow and (hol_dow != 4 and pass_dow != 0):
+            return self.rollback(dt=hol) - self.offset
+        else:
+            return self.rollforward(dt=hol) + self.offset
+
+    @to_dt64
+    def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64] | None:
+        """
+        Custom implementation of the parent CustomBusinessDay class's
+        _apply_array method; applies date offset to an array of dates.
+
+        Parameters
+        ----------
+        dtarr : NDArray[datetime64]
+            Array of dates to apply offset to.
+
+        Returns
+        -------
+        NDArray[datetime64]
+            Array of dates with offset applied.
+        """
+        hols: NDArray[datetime64] = self.nearest_holiday(other=dtarr)
+        hols_dow: NDArray[int64] = (
+            hols.astype("datetime64[D]").view("int64") - 4
+        ) % 7  # Day of week for holidays
+        pass_dow = np.array(object=[self._map[DoW(value=dow)] for dow in hols_dow])
+
+        roll_backward = (pass_dow < hols_dow) & ~((hols_dow == 4) & (pass_dow == 0))
+
+        offset_dates: NDArray[datetime64] = hols.copy()
+        offset_dates[roll_backward] = np.busday_offset(
+            dates=hols[roll_backward],
+            offsets=self.offset,
+            roll="backward",
+            busdaycal=self.calendar,
+        )
+        offset_dates[~roll_backward] = np.busday_offset(
+            dates=hols[~roll_backward],
+            offsets=self.offset,
+            roll="forward",
+            busdaycal=self.calendar,
+        )
+
+        return offset_dates
+
+    @staticmethod
+    def nearest_holiday(
+        other: DatetimeScalarOrArray, holidays: DatetimeScalarOrArray | None = None
+    ) -> DatetimeScalarOrArray:
+        """
+        Finds nearest holiday to date or dates, supports vectorized and scalar input as long as they implement comparison, subtraction, and abs.
+
+        Adapted from Tamas Hegedus on StackOverflow:
+        https://stackoverflow.com/questions/32237862/find-the-closest-date-to-a-given-date
+
+        Parameters
+        ----------
+        other : date or dates to find nearest holiday to.
+        holidays : list of dates to find nearest holiday to.
+
+        Returns
+        -------
+        nearest holiday(s) to date or dates.
+
+        """
+
+        holidays = holidays or FedHolidays().np_holidays
+        return min(holidays, key=lambda x: abs(x - other))
+
+
+__all__: list[str] = [
+    "FedPayDay",
+    "FedBusinessDay",
+    "FedHolidays",
+    "MilitaryPayDay",
+    "MilitaryPassday",
+]

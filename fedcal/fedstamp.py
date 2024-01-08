@@ -24,9 +24,9 @@ from typing import Any
 import pandas as pd
 from pandas import Timestamp
 
-from fedcal import _civpay, _mil, cal_offsets, time_utils
+from fedcal import _civpay, _mil, offsets, time_utils
 from fedcal._civpay import FedPayDay
-from fedcal.cal_offsets import FedBusinessDay, FedFiscalCal, FedHolidays
+from fedcal.offsets import FedBusinessDay, FedFiscalCal, FedHolidays
 from fedcal._base import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
 from fedcal._typing import FedStampConvertibleTypes
@@ -336,7 +336,7 @@ class FedStamp(
         Integer POSIX-day timestamp in seconds.
 
         """
-        return time_utils.pdtimestamp_to_posix_day(timestamp=self.pdtimestamp)
+        return time_utils.ts_to_posix_day(timestamp=self.pdtimestamp)
 
     # business day property
     @property
@@ -349,7 +349,7 @@ class FedStamp(
         True if the date is a business day, False otherwise.
 
         """
-        bizday: FedBusinessDay = cal_offsets.FedBusinessDay()
+        bizday: FedBusinessDay = offsets.FedBusinessDay()
         return bizday.fed_business_days.is_on_offset(dt=self.pdtimestamp)
 
     # holiday properties
@@ -357,17 +357,15 @@ class FedStamp(
         """
         Sets the holidays attribute.
         """
-        if not hasattr(cal_offsets.FedHolidays, "holidays") or self._holidays is None:
-            self._holidays: FedHolidays = cal_offsets.FedHolidays()
+        if not hasattr(offsets.FedHolidays, "holidays") or self._holidays is None:
+            self._holidays: FedHolidays = offsets.FedHolidays()
 
     def _set_fiscalcal(self) -> None:
         """
         Sets the fiscalcal attribute.
         """
-        if not hasattr(cal_offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
-            self._fiscalcal: FedFiscalCal = cal_offsets.FedFiscalCal(
-                dates=self.pdtimestamp
-            )
+        if not hasattr(offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
+            self._fiscalcal: FedFiscalCal = offsets.FedFiscalCal(dates=self.pdtimestamp)
 
     @property
     def holiday(self) -> bool:
@@ -611,6 +609,6 @@ def to_fedstamp(*date: FedStampConvertibleTypes) -> FedStamp:
             date = tuple(date) if count == 3 else date
             return FedStamp(pdtimestamp=time_utils.to_timestamp(date))
     raise ValueError(
-        f"""invalid number of arguments: {count}.
-        to_fedstamp() requires either 1 argument, or 3 integers as YYYY, M, D"""
+        f"invalid number of arguments: {count}. "
+        "to_fedstamp() requires either 1 argument, or 3 integers as YYYY, M, D"
     )

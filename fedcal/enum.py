@@ -106,7 +106,6 @@ class Dept(EnumBase, HandyEnumMixin, Enum):
         full (str): The full name of the department in mixed case.
         short (str): The shortened name of the department in mix case.
         """
-        self.value = abbreviation
         self.abbrev: str = abbreviation  # mixed case abbreviation
         self.full: str = full_name  # full name in mixed case
         self.short: str = short_name  # shortened name in mixed case
@@ -219,7 +218,7 @@ class DeptStatus(EnumBase, HandyEnumMixin, Enum):
 
     def __init__(
         self,
-        value: int,
+        val: int,
         variable_string: str,
         appropriations_status: str,
         operational_status: str,
@@ -230,15 +229,14 @@ class DeptStatus(EnumBase, HandyEnumMixin, Enum):
 
         Attributes
         ----------
-        value: ordered integer value of the status
+        val: ordered integer value of the status
         var: variable-style string representation of the status
         approps: string description of the associated appropriations status
         ops: string descrition of the operational status corresponding to the
         appropriations status
         simple_status: simplified status descriptor (as a string)
         """
-        self.value: int = value
-        self.val: int = value
+        self.val: int = val
         self.var: str = variable_string
         self.approps: str = appropriations_status
         self.ops: str = operational_status
@@ -290,3 +288,6 @@ class DeptStatus(EnumBase, HandyEnumMixin, Enum):
         list[str]: List of attributes for lookup.
         """
         return ["val", "var", "approps", "ops", "simple"]
+
+
+__all__: list[str] = ["DoW", "Month", "Dept", "DeptStatus"]

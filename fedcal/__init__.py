@@ -29,9 +29,9 @@ to create a `FedDepartment` object. Which may be useful depending on what
 kind of analysis you are doing.
 """
 
-from .fedindex import FedIndex, to_fedindex
-from .fedstamp import FedStamp, to_fedstamp
-from .enum import Dept, DeptStatus
+#from .fedindex import FedIndex, to_fedindex
+#from .fedstamp import FedStamp, to_fedstamp
+#from .enum import Dept
 
 __all__: list[str] = [
     "FedStamp",

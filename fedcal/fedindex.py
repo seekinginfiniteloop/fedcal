@@ -34,9 +34,9 @@ from pandas import (
     Timestamp,
 )
 
-from fedcal import _civpay, _mil, _status_factory, cal_offsets, time_utils
+from fedcal import _civpay, _mil, _status_factory, offsets, time_utils
 from fedcal._civpay import FedPayDay
-from fedcal.cal_offsets import FedBusinessDay, FedFiscalCal, FedHolidays
+from fedcal.offsets import FedBusinessDay, FedFiscalCal, FedHolidays
 from fedcal._base import MagicDelegator
 from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
 from fedcal._typing import (
@@ -411,8 +411,8 @@ class FedIndex(
         """
         Sets the _fiscalcal attribute for fy/fq retrievals.
         """
-        if not hasattr(cal_offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
-            self._fiscalcal: FedFiscalCal = cal_offsets.FedFiscalCal(
+        if not hasattr(offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
+            self._fiscalcal: FedFiscalCal = offsets.FedFiscalCal(
                 dates=self.datetimeindex
             )
 
@@ -420,8 +420,8 @@ class FedIndex(
         """
         Sets the self._holidays attribute for FedHolidays retrievals.
         """
-        if not hasattr(cal_offsets.FedHolidays, "holidays") or self._holidays is None:
-            self._holidays: FedHolidays = cal_offsets.FedHolidays()
+        if not hasattr(offsets.FedHolidays, "holidays") or self._holidays is None:
+            self._holidays: FedHolidays = offsets.FedHolidays()
 
     # Begin date attribute property methods
     @property
@@ -457,7 +457,7 @@ class FedIndex(
         Datetimeindex
             Datetimeindex of dates that are business days.
         """
-        bdays: FedBusinessDay = cal_offsets.FedBusinessDay()
+        bdays: FedBusinessDay = offsets.FedBusinessDay()
         return self.datetimeindex[bdays.get_business_days(dates=self.datetimeindex)]
 
     @property
@@ -789,6 +789,6 @@ def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:
         if count in {1, 2}:
             return FedIndex(datetimeindex=time_utils.to_datetimeindex(dates))
     raise ValueError(
-        f"""Invalid number of arguments: {count}. Please pass either an
-        array-like date object or start and end dates for the range."""
+        f"Invalid number of arguments: {count}. Please pass either an "
+        "array-like date object or start and end dates for the range."
     )

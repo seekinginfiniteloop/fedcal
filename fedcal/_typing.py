@@ -18,7 +18,7 @@ clean but well-typed.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Iterable, TypeVar, Union
+from typing import TYPE_CHECKING, TypeVar, Union
 
 from numpy import datetime64, int64
 from numpy.typing import NDArray
@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from fedcal.time_utils import YearMonthDay
     from fedcal.enum import Dept, DeptStatus
 
+TimestampSeries = "Series[Timestamp]"
 
 EnumType = TypeVar("EnumType", bound="EnumBase")
 
@@ -48,8 +49,8 @@ FedStampConvertibleTypes = Union[
 FedIndexConvertibleTypes = Union[
     tuple[FedStampConvertibleTypes, FedStampConvertibleTypes],
     tuple[Timestamp, Timestamp],
-    NDArray,
-    Series,
+    NDArray[datetime64],
+    TimestampSeries,
     DatetimeIndex,
     Index,
     PeriodIndex,
@@ -57,4 +58,22 @@ FedIndexConvertibleTypes = Union[
 
 RefinedIntervalType = tuple[Interval, "Dept", "DeptStatus"]
 
-DT_LIKE = TypeVar('datetime-like')
+DatetimeScalarOrArray = Union[
+    datetime,
+    datetime.date,
+    datetime64,
+    Timestamp,
+    int64,
+    DatetimeIndex,
+    TimestampSeries,
+    NDArray[datetime64 | int64],
+]
+
+__all__: list[str] = [
+    "EnumType",
+    "FedStampConvertibleTypes",
+    "FedIndexConvertibleTypes",
+    "TimestampSeries",
+    "RefinedIntervalType",
+    "DatetimeScalarOrArray",
+]

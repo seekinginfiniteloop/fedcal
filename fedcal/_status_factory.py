@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 from fedcal._typing import RefinedIntervalType
 from fedcal.enum import Dept, DeptStatus
-from fedcal.time_utils import to_dt
+from fedcal.time_utils import iso_to_ts
 from pandas import MultiIndex, Timestamp
 
 # set path to our JSON data as path to our module... plus filename, of course.
@@ -49,6 +49,13 @@ dhs_formed: Date of DHS formation
 
 
 def load_statuses() -> list[dict]:
+    """
+    Loads the status json.
+
+    Returns
+    -------
+        A list of dictionaries from the json contents.
+    """
     with open(file=json_file_path, mode="r") as f:
         data: list[dict[str, str]] = json.load(fp=f)
     return data
@@ -71,12 +78,12 @@ def process_interval(
     RefinedIntervalType; our intervals ready to load
     into an index
     """
-    start: Timestamp = to_dt(t=interval_data["interval"]["start"])
-    end: Timestamp = to_dt(t=interval_data["interval"]["end"])
+    start: Timestamp = iso_to_ts(t=interval_data["interval"]["start"])
+    end: Timestamp = iso_to_ts(t=interval_data["interval"]["end"])
     dept: Dept = Dept[interval_data["dept"]]
     status: DeptStatus = DeptStatus[interval_data["status"]]
     return (
-        pd.Interval(left=start, right=end, closed="both"),
+        pd.Interval(left=start, right=end, closed="left"),
         dept.short,
         status.var,
     )
@@ -107,7 +114,7 @@ def fetch_index() -> MultiIndex:
 
     TODO: Implement some kind of binary search to efficiently grab
     what we need. This isn't slow as-is, but it seems wasteful to load
-    everything every time... for say, a Timestamp.
+    everything every time... when it could be just for, a Timestamp.
 
     Returns
     -------
@@ -119,3 +126,11 @@ def fetch_index() -> MultiIndex:
         process_interval(interval_data=i) for i in raw_intervals
     ]
     return to_multi_index(interval_list=processed_intervals)
+
+
+__all__: list[str] = [
+    "load_statuses",
+    "process_interval",
+    "to_multi_index",
+    "fetch_index",
+]

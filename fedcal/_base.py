@@ -13,6 +13,12 @@
 
 """
 _base is an internal support module containing the meta and base classes.
+It consists of:
+- MagicDelegator, a metaclass that facilitates cloning magic/dunder methods
+- EnumBase, a base class for enumerated types that provides magic methods and
+common class methods
+- HandyEnumMixin, a mixin class for enumerated types that provides common
+and useful class methods
 """
 
 from functools import total_ordering
@@ -82,7 +88,8 @@ class MagicDelegator(type):
         """
         if delegate_to is None or delegate_class is None:
             raise TypeError(
-                "MagicDelegator requires 'delegate_to' attribute name and 'delegate_class'"
+                "MagicDelegator requires 'delegate_to' attribute name and  "
+                "'delegate_class'"
             )
 
         @staticmethod
@@ -284,14 +291,14 @@ class HandyEnumMixin:
         return getattr(member, rtn_attr, None) if member else None
 
     @classmethod
-    def list(cls) -> list[int | str]:
+    def list_vals(cls) -> list[int | str]:
         """
         Simple classmethod to return the values of members.
         """
         return sorted(list(map(lambda c: c.value, cls)))
 
     @classmethod
-    def members(cls) -> list[EnumType]:
+    def members(cls) -> list[Type[EnumType]]:
         """
         Simple classmethod to return the members of the enum class.
         """
@@ -308,3 +315,6 @@ class HandyEnumMixin:
     @classmethod
     def get_reverse_member_value_map(cls) -> dict[Any, Any]:
         return cls._value2member_map_
+
+
+__all__: list[str] = ["EnumBase", "HandyEnumMixin", "MagicDelegator"]
