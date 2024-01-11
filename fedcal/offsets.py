@@ -22,7 +22,7 @@ The offsets module includes offsets for:
 - business days (`FedBusinessDay`, customized from `CustomBusinessDay`)
 - military paydays (`MilitaryPayDay`, heavily customized from
 `SemiMonthOffset`)
-- military passdays (`MilitaryPassday`, a frankensteinly customized from
+- military passdays (`MilitaryPassDay`, a frankensteinly customized from
 `CustomBusinessDay`), which provides an offset for identifying probable
 passdays falling on businessdays adjacent to Federal holidays. It allows some
 customization of the rules used to identify passdays.
@@ -31,8 +31,8 @@ customization of the rules used to identify passdays.
 from __future__ import annotations
 
 import warnings
-from datetime import timedelta
-from typing import ClassVar
+from datetime import datetime, timedelta
+from typing import ClassVar, Literal
 
 import numpy as np
 import pandas as pd
@@ -71,6 +71,8 @@ from fedcal.time_utils import (
     get_today,
     to_dt64,
 )
+from funcy import print_exits, print_calls, print_enters
+import pysnooper
 
 
 @define(slots=False, order=False, kw_only=True)
@@ -584,19 +586,20 @@ class FedBusinessDay(CustomBusinessDay):
     2024-1-2 00:00:00
 
     # Add 5 business days for processing (or subtract, or whatever):
-    >>> five_bdays = your_datetimeindex + fc.FedBusinessDay(offset=pd.Timedelta(days=5))
+    >>> five_bdays = your_datetimeindex + fc.FedBusinessDay(offset=pd.Timedelta
+    (days=5))
     ```
     """
 
     _prefix: str = "F"
 
     _weekmask: list[str] = field(default="1111100", alias="_weekmask")
-    _normalize: bool = field(default=True, alias="_normalize")
+    _normalize: bool = field(default=True, init=False, alias="_normalize")
 
     _holidays: list[Timestamp] | NDArray[np.datetime64] | None = field(
         default=FedHolidays().np_holidays, alias="_holidays"
     )
-    off_set: timedelta | Timedelta = field(default=timedelta(days=0))
+    off_set: timedelta | Timedelta = field(default=timedelta(days=0), init=False)
 
     def __attrs_post_init__(self) -> None:
         """We make sure CBD is initiated how we want."""
@@ -607,6 +610,77 @@ class FedBusinessDay(CustomBusinessDay):
             calendar=cal,
             offset=self.off_set,
         )
+
+    @to_dt64()
+    def is_on_offset(dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
+        """
+        Checks if a given date is on a federal business day.
+
+        Parameters
+        ----------
+        dt : either a single pd.Timestamp, a Series of
+        Timestamps, or DatetimeIndex for offsetting with fed_business_days.
+
+        Returns
+        -------
+        A boolean scalar or array reflecting business days in the range.
+        """
+        return np.is_busday(dates=dt, busdaycal=self.calendar)
+
+    @to_dt64()
+    def _roll(
+        self, dt: DatetimeScalarOrArray, roll: Literal["forward", "backward"]
+    ) -> datetime64 | NDArray[datetime64]:
+        print(f"incoming to _roll: {type(dt)}, {dt}")
+        if pd.api.types.is_scalar(val=dt):
+            return (
+                dt
+                if self.is_on_offset(dt)
+                else np.busday_offset(
+                    dates=dt, offsets=0, roll=roll, busdaycal=self.calendar
+                )
+            )
+        mask = ~(self.is_on_offset(dt))
+        dt[mask] = np.busday_offset(
+            dates=dt[mask], offsets=0, roll=roll, busdaycal=self.calendar
+        )
+        return dt
+
+    def rollback(self, dt: DatetimeScalarOrArray) -> datetime64 | NDArray[datetime64]:
+        """
+        Rolls a date back to the last prior business day, if it isn't a
+        business day.
+
+        Parameters
+        ----------
+        dt
+            datetime scalar or array to rollback
+
+        Returns
+        -------
+            either the date(s) if it is on a business day or the prior business day(s).
+        """
+        print(f"incoming to rollback: {type(dt)}, {dt}")
+        return self._roll(dt=dt, roll="backward")
+
+    def rollforward(
+        self, dt: DatetimeScalarOrArray
+    ) -> datetime64 | NDArray[datetime64]:
+        """
+        Rolls a date(s) forward to the next business day if it isn't a business
+        day.
+
+        Parameters
+        ----------
+        dt
+            datetime scalar or array to roll forward
+
+        Returns
+        -------
+            Date(s) either rolled forward to next business day or returned if
+            on a business day.
+        """
+        return self._roll(dt=dt, roll="forward")
 
     @ensure_datetimeindex
     def get_business_days(
@@ -635,18 +709,6 @@ class FedBusinessDay(CustomBusinessDay):
             else:
                 dates + self
 
-    def get_prior_business_day(self, date: Timestamp) -> Timestamp:
-        """
-        Generates next earliest business day. Primarily for finding
-        next-earliest business day before a military payday that doesn't
-        fall on a business day.
-
-        Returns
-        -------
-        next nearest business day prior to the given date
-        """
-        return self.rollback(dt=date)
-
 
 @define(slots=False, order=False)
 class MilitaryPayDay(SemiMonthOffset):
@@ -660,36 +722,32 @@ class MilitaryPayDay(SemiMonthOffset):
     Attributes
     ----------
 
-    normalize: default is true, as this is a calendar we're mostly concerned
+    _normalize: default is true, as this is a calendar we're mostly concerned
         with dates -- normalizes time values to midnight.
-    day_of_month: default is 15. The day of the month to calculate the payday
-        on.As a SemiMonthOffset class, the other date is 1.
+
     b_day: FedBusinessDay object used for adjusting business day offsets.
-        offset: default is 0, and different values not currently implemented.
     """
 
-    _prefix: str = "CMB"
     _min_day_of_month: int = 7
 
-    normalize: bool = field(default=True)
-    day_of_month: int = field(default=15)
+    _normalize: bool = field(default=True, init=False, alias="_normalize")
     b_day: FedBusinessDay = FedBusinessDay()
-    #  TODO: offset: timedelta | Timedelta = timedelta(days=0)
-    calendar: np.busdaycalendar = b_day.calendar
+    calendar: np.busdaycalendar = field(default=b_day.calendar, init=False)
 
     def __attrs_post_init__(self) -> None:
         """
         Initializes FedHolidays if not yet initialized; initializes
         SemiMonthOffset parent class.
         """
-        if self.offset != timedelta(days=0):
-            raise NotImplementedError(
-                "These attribute specifications are not supported for MilitaryPayDay, yet."
-            )
-        if not hasattr(type(self), "calendar"):
+        if not hasattr(self, "calendar"):
             FedHolidays()
+            self.b_day = FedBusinessDay()
             self.calendar = self.b_day.calendar
-        super().__init__(normalize=self.normalize, day_of_month=self.day_of_month)
+        super().__init__(
+            n=1,
+            normalize=self._normalize,
+            day_of_month=15,
+        )
 
     def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
         """
@@ -706,8 +764,7 @@ class MilitaryPayDay(SemiMonthOffset):
         """
         if pd.api.types.is_scalar(val=dt):
             return self._check_scalar_on_offset(dt=dt)
-        else:
-            return self._check_array_on_offset(dtarr=dt)
+        return self._check_array_on_offset(dtarr=dt)
 
     def _check_scalar_on_offset(self, dt: Timestamp) -> bool:
         """
@@ -722,34 +779,14 @@ class MilitaryPayDay(SemiMonthOffset):
         -------
             True if the date is on the offset.
         """
-        if self.b_day.is_on_offset(dt=dt) and dt.day in [1, self.day_of_month]:
+        if self.b_day.is_on_offset(dt=dt) and dt.day in [1, 15]:
             return True
-        if self.b_day.is_on_offset(dt=dt) and (
-            self.day_of_month - 3 < dt.day < self.day_of_month
-        ):
-            return self.b_day.rollback(dt=dt.replace(day=self.day_of_month)) == dt
+        if self.b_day.is_on_offset(dt=dt) and (15 - 3 < dt.day < 15):
+            return self.b_day.rollback(date=dt)(dt=dt.replace(day=15)) == dt
         if self.b_day.is_on_offset(dt=dt) and dt.day > 24:
             next_month = dt + pd.Timedelta(months=1)
-            return self.b_day.rollback(dt=next_month.replace(day=1)) == dt
+            return self.b_day.rollback(date=dt)(dt=next_month.replace(day=1)) == dt
         return False
-
-    @staticmethod
-    def _to_dti(dtarr: NDArray[datetime64]) -> DatetimeIndex:
-        """
-        Converts a numpy array of datetimes to a DatetimeIndex.
-
-        Parameters
-        ----------
-        dtarr
-            array of datetimes to convert
-
-        Returns
-        -------
-            A DatetimeIndex of the datetimes.
-        """
-        return DatetimeIndex(
-            values=dtarr.astype(dtype="datetime64[ns]"), normalize=self.normalize
-        )
 
     def _check_array_on_offset(
         self, dtarr: NDArray[datetime64] | DatetimeIndex | TimestampSeries
@@ -766,19 +803,14 @@ class MilitaryPayDay(SemiMonthOffset):
         -------
             An NDArray of bool value reflecting days of the week.
         """
-        if isinstance(dtarr, np.ndarray) and dtarr.dtype.str.startswith(
-            ("datetime64", "int")
-        ):
-            dtarr = dtarr.astype(dtype="datetime64[ns]")
-
-        dti: DatetimeIndex = self._to_dti(dtarr=dtarr)
-        compare_dti: DatetimeIndex = pd.date_range(
-            start=dti.min() - MonthBegin(n=1),
-            end=dti.max() + MonthEnd(n=1),
-            freq=self,
-            normalize=self.normalize,
+        dti: DatetimeIndex = pd.DatetimeIndex(data=dtarr.copy())
+        print(f"incoming to _check_array {type(dti)}, {dti}")
+        print(f"outgoing to rollback: {dti.copy()[dti.day.isin([1,15])]}")
+        offset: NDArray[datetime64] = self.b_day.rollback(
+            dt=dti[dti.day.isin(values=[1, 15])]
         )
-        return dti.isin(values=compare_dti)
+        print(f"returned from rollback: {offset}")
+        return dti.isin(values=offset)
 
     @apply_wraps
     def _apply(self, other: Timestamp) -> Timestamp:
@@ -796,16 +828,13 @@ class MilitaryPayDay(SemiMonthOffset):
             Date adjusted by the offset.
         """
         if self.n > 0:
-            target_day: int = self.day_of_month if other.day < self.day_of_month else 1
-            other = (
-                shift_month(other, self.n) if other.day >= self.day_of_month else other
-            )
+            target_day: int = 15 if other.day < 15 else 1
+            other = shift_month(other, self.n) if other.day >= 15 else other
         else:
-            target_day = self.day_of_month if other.day > self.day_of_month else 1
+            target_day = 15 if other.day > 15 else 1
 
         adjusted_date = other.replace(day=target_day)
-
-        return self.b_day.rollback(dt=adjusted_date)
+        return self.b_day.rollback(adjusted_date)
 
     def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64]:
         """
@@ -823,28 +852,24 @@ class MilitaryPayDay(SemiMonthOffset):
         np_dtstruct: NDArray[datetime64, int32] = dt64_to_date(dtarr=dtarr)
         days = np_dtstruct[..., 3]
 
-        is_target: NDArray[bool] = np.isin(
-            element=days, test_elements=[1, self.day_of_month]
-        )
-        busdays = np.is_busday(
-            np_dtstruct[..., 0][is_target], busdaycal=self.b_day.calendar
-        )
+        is_target: NDArray[bool] = np.isin(element=days, test_elements=[1, 15])
+        busdays = np.is_busday(np_dtstruct[..., 0][is_target], busdaycal=self.calendar)
         non_busdays_idx = np.where(is_target & ~busdays)[0]
 
-        offset_dates: NDArray[datetime64] = np.busday_offset(
-            dates=np_dtstruct[..., 0][non_busdays_idx],
-            offsets=0,
-            roll="backward",
-            busdaycal=self.b_day.calendar,
+        offset_dates: NDArray[datetime64] = self.b_day.rollback(
+            dt=np_dtstruct[..., 0][is_target]
         )
+
         off_arr: NDArray[datetime64] = dtarr.copy().astype(dtype="datetime64[D]")
         off_arr[non_busdays_idx] = offset_dates
 
         return off_arr
 
+    # TODO: implement custom rollback/rollforward with array support
+
 
 @define(order=False, slots=False)
-class MilitaryPassday(CustomBusinessDay):
+class MilitaryPassDay(CustomBusinessDay):
     """
     A custom pandas DateOffset class for *probable* military passdays
     business-day-adjacent to federal holidays. With passdays reflected as only
@@ -862,6 +887,12 @@ class MilitaryPassday(CustomBusinessDay):
     mapped to either value. Perhaps a future version can implement more
     flexibility, please fork and open a pull request.
 
+    In case you're wondering why MilitaryPassDay is a child of
+    CustomBusinessDay, there really isn't a good reason. We needed the core
+    DateOffset logic and helper methods from any of the day-based child
+    classes to DateOffset. For consistency we still use FedBusinessDay for
+    business day related calculations.
+
     Methods
     -------
     is_on_offset : returns True if the date is on the offset, False otherwise.
@@ -872,33 +903,16 @@ class MilitaryPassday(CustomBusinessDay):
 
     Attributes
     ----------
-    n : default to 1. Allowance for other values not currently implemented.
-    This would significantly affect offset calculations in a way that is
-    probably not desirable for anyone interested in military passdays.
-
-    normalize : default to True. Normalizes dates to midnight, removing time
-    data. As this is a calendar focused on dates, that's what we start with.
-
-    weekmask: defaults to M-F. Like n, this attribute is part of
-    CustomBusinessDay's core logic. While we'd love to change it, for now you
-    cannot pass other values.
-
-    holidays: defaults to None, but there if you want to pass additional
-    holidays to consider in calculations.
-
-    calendar: defaults to a numpy busdaycalendar with vectorized U.S. federal
-    holidays.
 
     offset: defaults to timedelta(days=0). Not fully implemented and unlikely
     to be useful for most users, but on the to-do list for eventual
     implementation.
 
+    b_day: FedBusinessDay object used for adjusting business day offsets.
+
     passday_map: default mappings of holiday day-of-week to
     passday-day-of-week. You may provide custom mappings meeting criteria in
     the _passday_reqs property
-
-    _map : An internal mapping of holiday-day-of-week to passday-day-of-week
-    using an enum translated from string input.
 
     Raises
     ------
@@ -926,13 +940,12 @@ class MilitaryPassday(CustomBusinessDay):
     """
 
     _prefix: str = "CDP"
-    normalize: bool = field(default=True)
-    weekmask: str = field(default="Mon Tue Wed Thu Fri")
-    holidays: NDArray[datetime64] | None = None
-    calendar: np.busdaycalendar = np.busdaycalendar(
-        weekmask="1111100", holidays=FedHolidays().np_holidays
-    )
-    offset = timedelta(days=0)
+
+    _normalize: bool = field(default=True, init=False, alias="_normalize")
+
+    off_set: timedelta | Timedelta = field(default=timedelta(days=0), init=False)
+
+    b_day = FedBusinessDay()
 
     # mapping of holiday-day-of-the-week to passday-day-of-the-week
     # default is Friday passday for Thursday or Monday holiday, Monday passday
@@ -940,7 +953,7 @@ class MilitaryPassday(CustomBusinessDay):
     passday_map: dict[str, str] = field(
         default={
             "Mon": "Fri",  # [key] holiday day of observance to:
-            "Tue": "Mon",  # *value* day of associated passday
+            "Tue": "Mon",  # value day of associated passday
             "Wed": "Thu",
             "Thu": "Fri",
             "Fri": "Mon",
@@ -959,26 +972,24 @@ class MilitaryPassday(CustomBusinessDay):
             If core attributes n, weekmask,or offset are not their default
             values.
         """
-        if self.weekmask != "Mon Tue Wed Thu Fri" or self.offset != timedelta(days=0):
-            raise NotImplementedError(
-                "Changing defaults for this attribute is not currently " "supported."
-            )
+        if not hasattr(self.b_day, "calendar"):
+            FedHolidays()
+            self.b_day = FedBusinessDay()
         super().__init__(
-            normalize=self.normalize,
-            weekmask=self.weekmask,
-            holidays=self.holidays,
-            calendar=self.calendar,
-            offset=self.offset,
+            n=1,
+            normalize=self._normalize,
+            calendar=self.b_day.calendar,
+            offset=self.off_set,
         )
         self._map = self._set_map()
         self._validate_map()
 
-    def _set_map(self) -> None:
+    def _set_map(self) -> dict[DoW, DoW]:
         """
         Sets the internal mapping for holidays to passdays.
         """
-        self._map: dict[DoW, DoW] = {
-            DoW.__members__.get(k.title()): DoW.__members__.get(v.title())
+        return {
+            DoW.__members__.get(k.upper()): DoW.__members__.get(v.upper())
             for k, v in self.passday_map.items()
         }
 
@@ -1008,17 +1019,75 @@ class MilitaryPassday(CustomBusinessDay):
             If criteria in _passday_reqs are not met.
         """
         if (
-            len(set(self._map.keys())) != 5
-            or len(set(self._map.values())) != 5
+            len(self._map.keys()) != 5
+            or len(self._map.values()) != 5
             or not all(isinstance(v, DoW) for v in self._map.values())
             or any(v > 4 for v in self._map.values())
         ):
-            raise ValueError(self._passday_reqs)
+            raise ValueError(
+                f"map failed key-value composition checks {self._passday_reqs}"
+            )
         for k, v in self._map.items():
-            if k == v or (k in [4, 0] and abs(k - v) not in [1, 3]) or abs(k - v) != 1:
-                raise ValueError(self._passday_reqs)
+            if (
+                k == v
+                or (k in [4, 0] and abs(k - v) not in [1, 4])
+                or (k in [1, 2, 3] and abs(k - v) != 1)
+            ):
+                raise ValueError(
+                    "map failed proximity checks -- days must be within one"
+                    f"business day of each other. {self._passday_reqs}"
+                )
 
-    def is_on_offset(self, dt: Timestamp) -> bool:
+    def _check_scalar_on_offset(self, dt: Timestamp) -> bool:
+        """
+        Checks if a scalar date is on the offset.
+
+        Parameters
+        ----------
+        dt
+            Timestamp date to check
+
+        Returns
+        -------
+            True if date on offset
+        """
+        if not self.b_day.is_on_offset(dt):
+            return False
+        dt = pd.Timestamp(dt)
+        dt_dow = dt.dayofweek
+        hol = pd.Timestamp(self.nearest_holiday(other=dt))
+        diff = abs((dt - hol).days)
+        if diff not in {1, 3}:
+            return False
+        if diff == 3 and dt_dow not in {0, 4}:
+            return False
+        return self._map[DoW(value=hol.dayofweek)] == DoW(value=dt_dow)
+
+    def _check_array_on_offset(self, dtarr: NDArray[datetime64]) -> NDArray[bool]:
+        """
+        Checks if an array of dates is on the offset.
+
+        Parameters
+        ----------
+        dtarr
+            Array of dates to check
+
+        Returns
+        -------
+            Array of booleans, True if date on offset
+        """
+        dtarr: DatetimeIndex = pd.to_datetime(arg=dtarr)
+        dtarr_dow = dtarr.dayofweek
+        hols: DatetimeIndex = pd.to_datetime(self.nearest_holiday(other=dtarr))
+        diffs: int = abs((dtarr - hols).days)
+        conditions = (
+            ((diffs == 3 & hols.day_of_week in {0, 3}) | (diffs == 1 & dtarr_dow < 5))
+            & (self.b_day.is_on_offset(dtarr))
+            & (self._map[DoW(hols.dayofweek)] == DoW(dtarr_dow))
+        )
+        return np.where(conditions, True, False)
+
+    def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool:
         """
         Tests if a scalar date is on the offset.
 
@@ -1027,7 +1096,9 @@ class MilitaryPassday(CustomBusinessDay):
         bool
             True if the date is on the offset, False otherwise.
         """
-        return self._apply(other=dt) == dt
+        if pd.api.types.is_scalar(val=dt):
+            return self._check_scalar_on_offset(dt=dt)
+        return self._check_array_on_offset(dtarr=dt)
 
     @apply_wraps
     def _apply(self, other: Timestamp) -> Timestamp:
@@ -1050,11 +1121,11 @@ class MilitaryPassday(CustomBusinessDay):
         hol_dow: int = pd.to_datetime(arg=hol).dayofweek
         pass_dow: DoW = self._map[hol_dow]
         if pass_dow < hol_dow and (hol_dow != 4 and pass_dow != 0):
-            return self.rollback(dt=hol) - self.offset
+            return self.b_day.rollback(dt=hol)
         else:
-            return self.rollforward(dt=hol) + self.offset
+            return self.b_day.rollforward(dt=hol)
 
-    @to_dt64
+    @to_dt64()
     def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64] | None:
         """
         Custom implementation of the parent CustomBusinessDay class's
@@ -1070,7 +1141,7 @@ class MilitaryPassday(CustomBusinessDay):
         NDArray[datetime64]
             Array of dates with offset applied.
         """
-        hols: NDArray[datetime64] = self.nearest_holiday(other=dtarr)
+        hols: NDArray[datetime64] = self.nearest_holiday(other=dtarr.copy())
         hols_dow: NDArray[int64] = (
             hols.astype("datetime64[D]").view("int64") - 4
         ) % 7  # Day of week for holidays
@@ -1081,15 +1152,15 @@ class MilitaryPassday(CustomBusinessDay):
         offset_dates: NDArray[datetime64] = hols.copy()
         offset_dates[roll_backward] = np.busday_offset(
             dates=hols[roll_backward],
-            offsets=self.offset,
+            offsets=self.off_set,
             roll="backward",
-            busdaycal=self.calendar,
+            busdaycal=self.b_day.calendar,
         )
         offset_dates[~roll_backward] = np.busday_offset(
             dates=hols[~roll_backward],
-            offsets=self.offset,
+            offsets=self.off_set,
             roll="forward",
-            busdaycal=self.calendar,
+            busdaycal=self.b_day.calendar,
         )
 
         return offset_dates
@@ -1099,7 +1170,8 @@ class MilitaryPassday(CustomBusinessDay):
         other: DatetimeScalarOrArray, holidays: DatetimeScalarOrArray | None = None
     ) -> DatetimeScalarOrArray:
         """
-        Finds nearest holiday to date or dates, supports vectorized and scalar input as long as they implement comparison, subtraction, and abs.
+        Finds nearest holiday to date or dates, supports vectorized and scalar
+        input as long as they implement comparison, subtraction, and abs.
 
         Adapted from Tamas Hegedus on StackOverflow:
         https://stackoverflow.com/questions/32237862/find-the-closest-date-to-a-given-date
@@ -1116,7 +1188,7 @@ class MilitaryPassday(CustomBusinessDay):
         """
 
         holidays = holidays or FedHolidays().np_holidays
-        return min(holidays, key=lambda x: abs(x - other))
+        return min(holidays, key=lambda x: abs((x - other).days))
 
 
 __all__: list[str] = [
@@ -1124,5 +1196,5 @@ __all__: list[str] = [
     "FedBusinessDay",
     "FedHolidays",
     "MilitaryPayDay",
-    "MilitaryPassday",
+    "MilitaryPassDay",
 ]

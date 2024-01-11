@@ -89,6 +89,7 @@ from fedcal._typing import (
     FedStampConvertibleTypes,
     TimestampSeries,
 )
+from funcy import print_enters, print_exits
 
 
 def iso_to_ts(t: str, fmt: str | None = None) -> Timestamp:
@@ -138,6 +139,50 @@ def ts_to_posix_day(timestamp: Timestamp) -> int:
     return int(timestamp.normalize().timestamp() // 86400)
 
 
+def check_dt_in_array(arr: NDArray | DatetimeIndex | Series) -> bool:
+    """
+    Checks an array for datetime-like objects
+
+    Parameters
+    ----------
+    arr : array-like object to check
+
+    Returns
+    -------
+    bool
+        True if datetime-like objects are found in the array, False otherwise.
+    """
+    if isinstance(arr, pd.DatetimeIndex):
+        return True
+    type_check = str(arr.dtype)
+    return bool(
+        type_check.startswith(("datetime", "<M8", "int")) or type_check == "Timestamp"
+    )
+
+
+def find_datetime(*args, **kwargs) -> DatetimeScalarOrArray:
+    """
+    Finds the first argument that is a datetime object.
+
+    Parameters
+    ----------
+    args : list of arguments
+    kwargs : dict of keyword arguments
+
+    Returns
+    -------
+    Datetime object or None
+    """
+    scalars = (datetime.datetime, datetime.date, pd.Timestamp, np.datetime64, np.int64)
+    arrays = (np.ndarray, pd.DatetimeIndex, pd.Series)
+    for arg in (*args, *kwargs.values()):
+        if pd.api.types.is_scalar(val=arg) and isinstance(arg, scalars):
+            return arg
+        if isinstance(arg, arrays) and check_dt_in_array(arr=arg):
+            return arg
+    return None
+
+
 @decorator
 def ensure_datetimeindex(call) -> Any:
     """
@@ -152,21 +197,13 @@ def ensure_datetimeindex(call) -> Any:
     -------
     Wrapped func output from converted datetime index.
     """
-    method = hasattr(call._args[0], "__class__")
-    dates = call._args[1] if method else call._args[0]
-    other_args = call._args[2:] if method else call._args[1:]
+    dt = find_datetime(*call._args, **call._kwargs)
 
-    dates = (
-        pd.DatetimeIndex([dates])
-        if isinstance(dates, pd.Timestamp)
-        else (
-            pd.DatetimeIndex(dates)
-            if isinstance(dates, (pd.Series, pd.DatetimeIndex))
-            else dates.normalize()
-        )
+    return (
+        pd.DatetimeIndex([dt])
+        if isinstance(dt, pd.Timestamp)
+        else (pd.DatetimeIndex(dt))
     )
-
-    return call._func(*(call._args[0], dates) if method else (dates,), *other_args)
 
 
 @decorator
@@ -193,29 +230,15 @@ def to_dt64(
     -------
     Wrapped func output from converted datetime
     """
-    args = call._args
-
-    if len(args) > 1 and hasattr(args[0], "__class__"):
-        dt = args[1]
-        other_args = args[2:]
-        call_with_method = True
-    else:
-        dt = args[0]
-        other_args = args[1:]
-        call_with_method = False
-
+    dt = find_datetime(*call._args, **call._kwargs)
     if pd.api.types.is_scalar(val=dt):
         dt = pd.Timestamp(dt).normalize()
     elif isinstance(dt, pd.Series):
         dt: DatetimeIndex = pd.DatetimeIndex(data=dt).normalize()
     else:
-        dt = pd.to_datetime(dt).normalize()
+        dt = pd.to_datetime(dt, freq=dt.freq).normalize()
 
-    dt_converted = dt.to_numpy().astype("int64" if to_int64 else f"datetime64[{freq}]")
-    if call_with_method:
-        return call(args[0], dt_converted, *other_args, **call._kwargs)
-    else:
-        return call(dt_converted, *other_args, **call._kwargs)
+    return dt.to_numpy().astype("int64" if to_int64 else f"datetime64[{freq}]")
 
 
 @to_dt64(freq="ns")
