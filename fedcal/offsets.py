@@ -37,7 +37,7 @@ from typing import ClassVar, Literal
 import numpy as np
 import pandas as pd
 from attrs import define, field
-from numpy import datetime64, int32, int64, timedelta64
+from numpy import bool_, datetime64, int32, int64, timedelta64
 from numpy.typing import NDArray
 from pandas import (
     DatetimeIndex,
@@ -71,8 +71,6 @@ from fedcal.time_utils import (
     get_today,
     to_dt64,
 )
-from funcy import print_exits, print_calls, print_enters
-import pysnooper
 
 
 @define(slots=False, order=False, kw_only=True)
@@ -216,7 +214,7 @@ class FedPayDay(Week):
         adjustment: int | NDArray[int] | None = self._calculate_adjustment(dt=other)
         return super()._apply(other) + Week(n=adjustment * self._n)
 
-    @to_dt64(freq="ns")
+    @to_dt64(freq="ns", method=True)
     def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64]:
         """
         Applies our custom biweekly alignment after using Week's internal
@@ -465,7 +463,6 @@ class FedHolidays(AbstractHolidayCalendar):
         _matched_xmas_dow_counts: Series[
             int
         ] = _matched_xmas.to_series().dt.dayofweek.value_counts()
-        breakpoint()
         return (_matched_xmas_dow_counts / _hist_xmas_dow_counts).fillna(value=0)
 
     @ensure_datetimeindex
@@ -602,7 +599,7 @@ class FedBusinessDay(CustomBusinessDay):
     off_set: timedelta | Timedelta = field(default=timedelta(days=0), init=False)
 
     def __attrs_post_init__(self) -> None:
-        """We make sure CBD is initiated how we want."""
+        """We make sure CBD initiates properly."""
         cal = np.busdaycalendar(weekmask=self._weekmask, holidays=self._holidays)
         super().__init__(
             n=1,
@@ -611,8 +608,8 @@ class FedBusinessDay(CustomBusinessDay):
             offset=self.off_set,
         )
 
-    @to_dt64()
-    def is_on_offset(dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
+    @to_dt64(method=True)
+    def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
         """
         Checks if a given date is on a federal business day.
 
@@ -625,13 +622,14 @@ class FedBusinessDay(CustomBusinessDay):
         -------
         A boolean scalar or array reflecting business days in the range.
         """
-        return np.is_busday(dates=dt, busdaycal=self.calendar)
+        scalar: bool = pd.api.types.is_scalar(val=dt)
+        bdays = np.is_busday(dates=dt, busdaycal=self.calendar)
+        return bdays[0] if scalar else bdays
 
-    @to_dt64()
+    @to_dt64(method=True)
     def _roll(
         self, dt: DatetimeScalarOrArray, roll: Literal["forward", "backward"]
     ) -> datetime64 | NDArray[datetime64]:
-        print(f"incoming to _roll: {type(dt)}, {dt}")
         if pd.api.types.is_scalar(val=dt):
             return (
                 dt
@@ -660,7 +658,6 @@ class FedBusinessDay(CustomBusinessDay):
         -------
             either the date(s) if it is on a business day or the prior business day(s).
         """
-        print(f"incoming to rollback: {type(dt)}, {dt}")
         return self._roll(dt=dt, roll="backward")
 
     def rollforward(
@@ -804,12 +801,10 @@ class MilitaryPayDay(SemiMonthOffset):
             An NDArray of bool value reflecting days of the week.
         """
         dti: DatetimeIndex = pd.DatetimeIndex(data=dtarr.copy())
-        print(f"incoming to _check_array {type(dti)}, {dti}")
-        print(f"outgoing to rollback: {dti.copy()[dti.day.isin([1,15])]}")
+
         offset: NDArray[datetime64] = self.b_day.rollback(
             dt=dti[dti.day.isin(values=[1, 15])]
         )
-        print(f"returned from rollback: {offset}")
         return dti.isin(values=offset)
 
     @apply_wraps
@@ -849,7 +844,7 @@ class MilitaryPayDay(SemiMonthOffset):
         -------
             Offset array.
         """
-        np_dtstruct: NDArray[datetime64, int32] = dt64_to_date(dtarr=dtarr)
+        np_dtstruct: NDArray[datetime64, int32] = dt64_to_date(dtarr=dtarr.copy())
         days = np_dtstruct[..., 3]
 
         is_target: NDArray[bool] = np.isin(element=days, test_elements=[1, 15])
@@ -1077,14 +1072,19 @@ class MilitaryPassDay(CustomBusinessDay):
             Array of booleans, True if date on offset
         """
         dtarr: DatetimeIndex = pd.to_datetime(arg=dtarr)
-        dtarr_dow = dtarr.dayofweek
+        dtarr_dow: Index[int] = dtarr.dayofweek
         hols: DatetimeIndex = pd.to_datetime(self.nearest_holiday(other=dtarr))
-        diffs: int = abs((dtarr - hols).days)
-        conditions = (
-            ((diffs == 3 & hols.day_of_week in {0, 3}) | (diffs == 1 & dtarr_dow < 5))
-            & (self.b_day.is_on_offset(dtarr))
-            & (self._map[DoW(hols.dayofweek)] == DoW(dtarr_dow))
+        diffs: Index[int] = abs((dtarr - hols).days)
+        _map_map: NDArray[int] = np.array(
+            object=[self._map[DoW(value=i)].value for i in range(5)]
         )
+        cond1 = (diffs == 3) & ((hols.dayofweek == 0) | (hols.dayofweek == 4))
+        cond2 = (diffs == 1) & (dtarr_dow < 5)
+        cond3 = self.b_day.is_on_offset(dt=dtarr)
+        cond4 = _map_map[hols.dayofweek.values] == dtarr_dow.values
+
+        conditions = (cond1 | cond2) & cond3 & cond4
+
         return np.where(conditions, True, False)
 
     def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool:
@@ -1120,12 +1120,14 @@ class MilitaryPassDay(CustomBusinessDay):
         hol: Timestamp = self.nearest_holiday(other=other)
         hol_dow: int = pd.to_datetime(arg=hol).dayofweek
         pass_dow: DoW = self._map[hol_dow]
-        if pass_dow < hol_dow and (hol_dow != 4 and pass_dow != 0):
+        if ((pass_dow < hol_dow) or (hol_dow == 0 and pass_dow == 4)) and (
+            hol_dow != 4 and pass_dow != 0
+        ):
             return self.b_day.rollback(dt=hol)
         else:
             return self.b_day.rollforward(dt=hol)
 
-    @to_dt64()
+    @to_dt64(method=True)
     def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64] | None:
         """
         Custom implementation of the parent CustomBusinessDay class's
@@ -1146,28 +1148,30 @@ class MilitaryPassDay(CustomBusinessDay):
             hols.astype("datetime64[D]").view("int64") - 4
         ) % 7  # Day of week for holidays
         pass_dow = np.array(object=[self._map[DoW(value=dow)] for dow in hols_dow])
-
-        roll_backward = (pass_dow < hols_dow) & ~((hols_dow == 4) & (pass_dow == 0))
+        roll_backward = (
+            (pass_dow < hols_dow) | ((pass_dow == 4) & (hols_dow == 0))
+        ) & ~((hols_dow == 4) & (pass_dow == 0))
 
         offset_dates: NDArray[datetime64] = hols.copy()
         offset_dates[roll_backward] = np.busday_offset(
             dates=hols[roll_backward],
-            offsets=self.off_set,
+            offsets=0,
             roll="backward",
             busdaycal=self.b_day.calendar,
         )
         offset_dates[~roll_backward] = np.busday_offset(
             dates=hols[~roll_backward],
-            offsets=self.off_set,
+            offsets=0,
             roll="forward",
             busdaycal=self.b_day.calendar,
         )
 
-        return offset_dates
+        return offset_dates.astype(dtype="datetime64[ns]")
 
-    @staticmethod
     def nearest_holiday(
-        other: DatetimeScalarOrArray, holidays: DatetimeScalarOrArray | None = None
+        self,
+        other: DatetimeScalarOrArray,
+        holidays: DatetimeScalarOrArray | None = None,
     ) -> DatetimeScalarOrArray:
         """
         Finds nearest holiday to date or dates, supports vectorized and scalar
@@ -1186,9 +1190,14 @@ class MilitaryPassDay(CustomBusinessDay):
         nearest holiday(s) to date or dates.
 
         """
-
-        holidays = holidays or FedHolidays().np_holidays
-        return min(holidays, key=lambda x: abs((x - other).days))
+        holidays = self.b_day.calendar.holidays
+        if pd.api.types.is_scalar(val=other):
+            return min(holidays, key=lambda x: abs((x - other)))
+        other: NDArray[datetime64] = (
+            other if isinstance(other, np.ndarray) else other.to_numpy()
+        )
+        diffs = np.abs(other[:, np.newaxis] - holidays)
+        return holidays[np.argmin(a=diffs, axis=1)]
 
 
 __all__: list[str] = [

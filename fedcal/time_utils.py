@@ -89,7 +89,28 @@ from fedcal._typing import (
     FedStampConvertibleTypes,
     TimestampSeries,
 )
-from funcy import print_enters, print_exits
+
+datetime_types = (
+    datetime.datetime,
+    datetime.date,
+    pd.Timestamp,
+    np.datetime64,
+    np.int64,
+)
+array_types = (np.ndarray, pd.DatetimeIndex, pd.Series)
+
+datetime_keys: list[str] = [
+    "dates",
+    "date",
+    "datetime",
+    "timestamp",
+    "time",
+    "datetimeindex",
+    "dt",
+    "dtarr",
+    "arr",
+    "array",
+]
 
 
 def iso_to_ts(t: str, fmt: str | None = None) -> Timestamp:
@@ -160,7 +181,33 @@ def check_dt_in_array(arr: NDArray | DatetimeIndex | Series) -> bool:
     )
 
 
-def find_datetime(*args, **kwargs) -> DatetimeScalarOrArray:
+def is_datetime_like(val=None) -> bool:
+    """
+    Checks if a value is datetime-like or an array that contains datetimes.
+
+    Parameters
+    ----------
+    val, optional : value to check, by default None
+
+    Returns
+    -------
+        True if object is datetime-like, False otherwise.
+    """
+    if isinstance(val, (tuple, list, dict)):
+        try:
+            for value in iter(val):
+                if isinstance(value, tuple(datetime_types and array_types)):
+                    val = value
+        finally:
+            pass
+    return isinstance(val, datetime_types) or (
+        isinstance(val, array_types) and check_dt_in_array(arr=val)
+    )
+
+
+def find_datetime(
+    *args, **kwargs
+) -> tuple[DatetimeScalarOrArray, str] | DatetimeScalarOrArray | None:
     """
     Finds the first argument that is a datetime object.
 
@@ -173,18 +220,95 @@ def find_datetime(*args, **kwargs) -> DatetimeScalarOrArray:
     -------
     Datetime object or None
     """
-    scalars = (datetime.datetime, datetime.date, pd.Timestamp, np.datetime64, np.int64)
-    arrays = (np.ndarray, pd.DatetimeIndex, pd.Series)
-    for arg in (*args, *kwargs.values()):
-        if pd.api.types.is_scalar(val=arg) and isinstance(arg, scalars):
-            return arg
-        if isinstance(arg, arrays) and check_dt_in_array(arr=arg):
+    for key, value in kwargs.items():
+        if is_datetime_like(val=value):
+            return value, key
+        if key in datetime_keys and value:
+            value = value[0] if isinstance(value, (tuple, list)) else value
+            return (value, key)
+    for arg in args:
+        if isinstance(arg, tuple):
+            for elem in arg:
+                if is_datetime_like(val=elem):
+                    return elem
+        elif is_datetime_like(val=arg):
             return arg
     return None
 
 
+def _set_args_kwargs(instance, new_dt, kw, *pargs, **pkwargs) -> dict[str, Any]:
+    """
+    Sets the args and kwargs for the wrapped function.
+
+    Parameters
+    ----------
+    instance : instance or class passed to wrapped method
+    kw : key name of datetime keyword argument
+    new_dt = adjusted/new datetime-like object converted by the wrapper
+    pargs : passed arguments
+    pkwargs : passed dict of keyword arguments
+
+    Returns
+    -------
+    tuple of args and kwargs
+    """
+    arg_dict = {"nargs": None, "nkwargs": None}
+    if instance and not kw:
+        arg_dict["nargs"] = instance, new_dt
+        arg_dict["nkwargs"] = pkwargs or None
+    elif kw:
+        arg_dict["nargs"] = (instance, pargs or instance) if instance else pargs or None
+        pkwargs.pop(kw, None)
+        arg_dict["nkwargs"] = {**pkwargs, kw: new_dt}
+    else:
+        arg_dict["nargs"] = new_dt, +pargs if pargs else new_dt
+        arg_dict["nkwargs"] = pkwargs or None
+    return arg_dict
+
+
+def _set_vars(
+    call, method
+) -> tuple[
+    Any | None,
+    DatetimeScalarOrArray | Any | tuple[DatetimeScalarOrArray, str] | None,
+    str | Any | Timestamp | tuple[None, None] | None,
+    Any | None,
+    Any,
+]:
+    args, kwargs = call._args, call._kwargs
+    if args:
+        instance, other_args = (args[0], args[1:]) if method else (None, args)
+        if other_args and kwargs:
+            dt, kw = find_datetime(*other_args, **kwargs)
+        else:
+            dt, kw = find_datetime(*other_args), None if other_args else (None, None)
+    else:
+        dt, kw = find_datetime(None, **kwargs)
+        instance, other_args = None, None
+
+    if not dt:
+        try:
+            if other_args:
+                dt = (
+                    other_args[0]
+                    if is_datetime_like(val=other_args[0])
+                    else pd.to_datetime(other_args[0])
+                )
+            elif kwargs:
+                kw, dt = kwargs.popitem()[1][0]
+        except ValueError as e:
+            (
+                "unable to locate datetime-like-object in call arguments "
+                f"and keywords: {e}"
+            )
+    other_args = (
+        tuple(arg for arg in other_args if (arg is not dt or dt not in arg)) or None
+    )
+    return instance, dt, kw, other_args, kwargs
+
+
 @decorator
-def ensure_datetimeindex(call) -> Any:
+def ensure_datetimeindex(call, method: bool = False) -> Any:
     """
     Decorator to ensure that the argument is a DatetimeIndex before calling
     the original function.
@@ -193,22 +317,35 @@ def ensure_datetimeindex(call) -> Any:
     ----------
     call : calling function
 
+    method : boolean flag to indicate if the wrapped function is a method
+    that expects an instance or cls as the first positional argument
+
     Returns
     -------
     Wrapped func output from converted datetime index.
     """
-    dt = find_datetime(*call._args, **call._kwargs)
+    instance, dt, kw, other_args, kwargs = _set_vars(call=call, method=method)
 
+    new_dt = pd.DatetimeIndex(
+        data=[dt] if isinstance(dt, (pd.Timestamp, np.datetime64)) else dt
+    )
+    n_args_kwargs = _set_args_kwargs(
+        instance=instance, new_dt=new_dt, kw=kw, pargs=other_args, pkwargs=kwargs
+    )
+    nargs, nkwargs = n_args_kwargs.get("nargs"), n_args_kwargs.get("nkwargs")
     return (
-        pd.DatetimeIndex([dt])
-        if isinstance(dt, pd.Timestamp)
-        else (pd.DatetimeIndex(dt))
+        call._func(*nargs, **nkwargs)
+        if (nargs and nkwargs)
+        else (call._func(*nargs) if nargs else call._func(**nkwargs))
     )
 
 
 @decorator
 def to_dt64(
-    call: DatetimeScalarOrArray, freq: str = "D", to_int64: bool = False
+    call,
+    freq: str = "D",
+    to_int64: bool = False,
+    method: bool = False,
 ) -> Any:
     """
     Decorator to convert date or date array to datetime64 date or array of
@@ -226,19 +363,30 @@ def to_dt64(
     to_int64: boolean flag to instead convert output to int64 nanoseconds
         since the epoch.
 
+    method : boolean flag to indicate if the wrapped function is a method
+    that expects an instance or cls as the first positional argument
+
     Returns
     -------
     Wrapped func output from converted datetime
     """
-    dt = find_datetime(*call._args, **call._kwargs)
-    if pd.api.types.is_scalar(val=dt):
-        dt = pd.Timestamp(dt).normalize()
-    elif isinstance(dt, pd.Series):
-        dt: DatetimeIndex = pd.DatetimeIndex(data=dt).normalize()
-    else:
-        dt = pd.to_datetime(dt, freq=dt.freq).normalize()
+    dt_type: str = "int64" if to_int64 else f"datetime64[{freq}]"
+    instance, dt, kw, other_args, kwargs = _set_vars(call=call, method=method)
 
-    return dt.to_numpy().astype("int64" if to_int64 else f"datetime64[{freq}]")
+    new_dt = (
+        dt.astype(dt_type)
+        if isinstance(dt, (np.ndarray, datetime64))
+        else pd.to_datetime(dt).normalize().to_numpy().astype(dtype=dt_type)
+    )
+    n_args_kwargs = _set_args_kwargs(
+        instance=instance, new_dt=new_dt, kw=kw, pargs=other_args, pkwargs=kwargs
+    )
+    nargs, nkwargs = n_args_kwargs.get("nargs"), n_args_kwargs.get("nkwargs")
+    return (
+        call._func(*nargs, **nkwargs)
+        if (nargs and nkwargs)
+        else (call._func(*nargs) if nargs else call._func(**nkwargs))
+    )
 
 
 @to_dt64(freq="ns")
@@ -248,7 +396,7 @@ def dt64_to_date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
     https://stackoverflow.com/questions/13648774/get-year-month-or-day-from-numpy-datetime64#26895491
 
     Convert array of datetime64 to a calendar array of year, month, day with
-    these quantites indexed on the last axis.
+    these quantities indexed on the last axis.
 
     Parameters
     ----------
@@ -261,7 +409,6 @@ def dt64_to_date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
         calendar array with last axis representing year, month, day
     """
     out: NDArray[Any] = np.empty(shape=dtarr.shape + (4,), dtype="u4")
-
     Y, M, D = [dtarr.astype(dtype=f"M8[{x}]") for x in "YMD"]
     out[..., 0] = dtarr.astype(dtype="datetime64[D]")
     out[..., 1] = Y + 1970
@@ -271,7 +418,7 @@ def dt64_to_date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
     return out
 
 
-@to_dt64
+@to_dt64(freq="ns", method=False)
 def dt64_to_dow(dtarr: NDArray[datetime64]) -> NDArray[datetime64 | int64]:
     """
     Adapted from jwdink on stackoverflow:
@@ -583,7 +730,7 @@ def check_timestamp(call) -> Timestamp | None:
     arg = call._args[0]
 
     if isinstance(arg, pd.Timestamp):
-        return call(_check_year(dates=arg))
+        return call._func(_check_year(dates=arg))
 
     if arg is None:
         raise ValueError(
@@ -593,7 +740,7 @@ def check_timestamp(call) -> Timestamp | None:
 
     try:
         ts = pd.Timestamp(arg)
-        return call(_check_year(dates=ts))
+        return call._func(_check_year(dates=ts))
     except TypeError as e:
         raise TypeError(
             f"input {arg} could not be converted to a pd.Timestamp. "
@@ -650,9 +797,9 @@ def wrap_tuple(call) -> tuple[Any] | Any | None:
     args = call._args
 
     if len(args) == 1:
-        return call(args[0])
+        return call._func(args[0])
     elif len(args) == 2:
-        return call((args[0], args[1]))
+        return call._func((args[0], args[1]))
     else:
         raise ValueError(f"Expected 1 or 2 arguments, got {len(args)}")
 
