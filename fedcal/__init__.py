@@ -1,6 +1,6 @@
 # fedcal __init__.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -23,20 +23,50 @@ import fedcal as fc
 dates = (1999,10,1), (2040,9,30)
 fdx = fc.to_fedindex(dates)
 ```
-
-We also import the `FedDepartment` class and the `Dept` enum, which are used
-to create a `FedDepartment` object. Which may be useful depending on what
-kind of analysis you are doing.
 """
 
-# from .fedindex import FedIndex, to_fedindex
-# from .fedstamp import FedStamp, to_fedstamp
-# from .enum import Dept
+from ._base import MagicDelegator
+from .enum import DeptStatus, DoW, Month
+from .fedindex import FedIndex, to_fedindex
+from .fedstamp import FedStamp, to_fedstamp
+from .fiscal import FedFiscalCal
+from .offsets import (
+    FedBusinessDay,
+    FedHolidays,
+    FedPayDay,
+    MilitaryPassDay,
+    MilitaryPayDay,
+)
+from .utils import (
+    YearMonthDay,
+    dt64_to_date,
+    dt64_to_dow,
+    iso_to_ts,
+    to_datetimeindex,
+    to_dt64,
+    to_timestamp,
+)
 
-# __all__: list[str] = [
-#    "FedStamp",
-#    "FedIndex",
-#    "to_fedstamp",
-#    "to_fedindex",
-#    "Dept",
-# ]
+__all__: list[str] = [
+    "DeptStatus",
+    "DoW",
+    "FedBusinessDay",
+    "FedFiscalCal",
+    "FedHolidays",
+    "FedIndex",
+    "FedPayDay",
+    "FedStamp",
+    "MagicDelegator",
+    "MilitaryPassDay",
+    "MilitaryPayDay",
+    "Month",
+    "YearMonthDay",
+    "dt64_to_date",
+    "dt64_to_dow",
+    "iso_to_ts",
+    "to_datetimeindex",
+    "to_dt64",
+    "to_fedindex",
+    "to_fedstamp",
+    "to_timestamp",
+]

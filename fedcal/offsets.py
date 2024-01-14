@@ -31,23 +31,15 @@ customization of the rules used to identify passdays.
 from __future__ import annotations
 
 import warnings
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import ClassVar, Literal
 
 import numpy as np
 import pandas as pd
 from attrs import define, field
-from numpy import bool_, datetime64, int32, int64, timedelta64
+from numpy import datetime64, int32, int64, timedelta64
 from numpy.typing import NDArray
-from pandas import (
-    DatetimeIndex,
-    Index,
-    Series,
-    Timedelta,
-    TimedeltaIndex,
-    Timestamp,
-    to_datetime,
-)
+from pandas import DatetimeIndex, Index, Series, Timedelta, Timestamp, to_datetime
 from pandas._libs.tslibs.offsets import SemiMonthOffset, apply_wraps, shift_month
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar,
@@ -60,11 +52,11 @@ from pandas.tseries.holiday import (
     USThanksgivingDay,
     nearest_workday,
 )
-from pandas.tseries.offsets import CustomBusinessDay, MonthBegin, MonthEnd, Week
+from pandas.tseries.offsets import CustomBusinessDay, Week
 
 from fedcal._typing import DatetimeScalarOrArray, TimestampSeries
 from fedcal.enum import DoW
-from fedcal.time_utils import (
+from fedcal.utils import (
     dt64_to_date,
     dt64_to_dow,
     ensure_datetimeindex,
@@ -214,7 +206,6 @@ class FedPayDay(Week):
         adjustment: int | NDArray[int] | None = self._calculate_adjustment(dt=other)
         return super()._apply(other) + Week(n=adjustment * self._n)
 
-    @to_dt64(freq="ns", method=True)
     def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64]:
         """
         Applies our custom biweekly alignment after using Week's internal
@@ -229,6 +220,7 @@ class FedPayDay(Week):
         -------
             NDArray of datetime64 objects with the offset applied.
         """
+        dtarr = to_dt64(dt=dtarr)
         initial_offset = super()._apply_array(dtarr)
         adjustments: NDArray[timedelta64] = self._calculate_adjustment(
             dt=initial_offset.copy()
@@ -465,7 +457,6 @@ class FedHolidays(AbstractHolidayCalendar):
         ] = _matched_xmas.to_series().dt.dayofweek.value_counts()
         return (_matched_xmas_dow_counts / _hist_xmas_dow_counts).fillna(value=0)
 
-    @ensure_datetimeindex
     def estimate_future_proclamation_holidays(
         self,
         future_dates: Timestamp | TimestampSeries | DatetimeIndex,
@@ -489,7 +480,7 @@ class FedHolidays(AbstractHolidayCalendar):
         Christmas Eve.
 
         """
-        dates = future_dates
+        dates = ensure_datetimeindex(dt=future_dates)
         max_past: Timestamp = get_today()
         if dates.tzinfo or max_past.tzinfo:
             dates = dates.tz_localize(None) if dates.tzinfo else dates
@@ -608,7 +599,6 @@ class FedBusinessDay(CustomBusinessDay):
             offset=self.off_set,
         )
 
-    @to_dt64(method=True)
     def is_on_offset(self, dt: DatetimeScalarOrArray) -> bool | NDArray[bool]:
         """
         Checks if a given date is on a federal business day.
@@ -622,23 +612,24 @@ class FedBusinessDay(CustomBusinessDay):
         -------
         A boolean scalar or array reflecting business days in the range.
         """
+        dt = to_dt64(dt=dt)
         scalar: bool = pd.api.types.is_scalar(val=dt)
         bdays = np.is_busday(dates=dt, busdaycal=self.calendar)
-        return bdays[0] if scalar else bdays
+        return bdays[0] if scalar and isinstance(bdays, np.ndarray) else bdays
 
-    @to_dt64(method=True)
     def _roll(
         self, dt: DatetimeScalarOrArray, roll: Literal["forward", "backward"]
     ) -> datetime64 | NDArray[datetime64]:
+        dt = to_dt64(dt=dt)
         if pd.api.types.is_scalar(val=dt):
             return (
                 dt
-                if self.is_on_offset(dt)
+                if self.is_on_offset(dt=dt)
                 else np.busday_offset(
                     dates=dt, offsets=0, roll=roll, busdaycal=self.calendar
                 )
             )
-        mask = ~(self.is_on_offset(dt))
+        mask = ~(self.is_on_offset(dt=dt))
         dt[mask] = np.busday_offset(
             dates=dt[mask], offsets=0, roll=roll, busdaycal=self.calendar
         )
@@ -679,7 +670,6 @@ class FedBusinessDay(CustomBusinessDay):
         """
         return self._roll(dt=dt, roll="forward")
 
-    @ensure_datetimeindex
     def get_business_days(
         self, dates: Timestamp | TimestampSeries | DatetimeIndex, as_bool: bool = False
     ) -> DatetimeIndex | Series[bool] | None:
@@ -699,6 +689,7 @@ class FedBusinessDay(CustomBusinessDay):
         boolean array reflecting business days in the range.
 
         """
+        dates = ensure_datetimeindex(dt=dates)
         with warnings.catch_warnings():
             warnings.simplefilter(action="ignore")
             if as_bool:
@@ -859,6 +850,12 @@ class MilitaryPayDay(SemiMonthOffset):
         off_arr[non_busdays_idx] = offset_dates
 
         return off_arr
+
+    def rollback(dt: DatetimeScalarOrArray):
+        raise NotImplementedError("rollback not yet implemented")
+
+    def rollforward(dt: DatetimeScalarOrArray):
+        raise NotImplementedError("rollforward not yet implemented")
 
     # TODO: implement custom rollback/rollforward with array support
 
@@ -1127,7 +1124,6 @@ class MilitaryPassDay(CustomBusinessDay):
         else:
             return self.b_day.rollforward(dt=hol)
 
-    @to_dt64(method=True)
     def _apply_array(self, dtarr: NDArray[datetime64]) -> NDArray[datetime64] | None:
         """
         Custom implementation of the parent CustomBusinessDay class's
@@ -1143,6 +1139,7 @@ class MilitaryPassDay(CustomBusinessDay):
         NDArray[datetime64]
             Array of dates with offset applied.
         """
+        dtarr = to_dt64(dt=dtarr)
         hols: NDArray[datetime64] = self.nearest_holiday(other=dtarr.copy())
         hols_dow: NDArray[int64] = (
             hols.astype("datetime64[D]").view("int64") - 4
@@ -1198,6 +1195,12 @@ class MilitaryPassDay(CustomBusinessDay):
         )
         diffs = np.abs(other[:, np.newaxis] - holidays)
         return holidays[np.argmin(a=diffs, axis=1)]
+
+    def rollback(dt: DatetimeScalarOrArray):
+        raise NotImplementedError("rollback not yet implemented")
+
+    def rollforward(dt: DatetimeScalarOrArray):
+        raise NotImplementedError("rollforward not yet implemented")
 
 
 __all__: list[str] = [

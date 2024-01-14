@@ -1,6 +1,6 @@
 # fedcal enum.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -17,7 +17,7 @@ delivery, ensuring consistency across modules thanks to their Enumy-ness.
 """
 from __future__ import annotations
 
-from enum import Enum, unique, IntEnum
+from enum import Enum, IntEnum, unique
 from typing import Iterable, Type
 
 from fedcal._base import EnumBase, HandyEnumMixin

@@ -1,6 +1,6 @@
 # fedcal _typing.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -25,7 +25,7 @@ from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, Interval, PeriodIndex, Series, Timestamp
 
 if TYPE_CHECKING:
-    from fedcal.time_utils import YearMonthDay
+    from fedcal.utils import YearMonthDay
     from fedcal.enum import Dept, DeptStatus
 
 TimestampSeries = "Series[Timestamp]"
@@ -70,10 +70,10 @@ DatetimeScalarOrArray = Union[
 ]
 
 __all__: list[str] = [
-    "EnumType",
-    "FedStampConvertibleTypes",
-    "FedIndexConvertibleTypes",
-    "TimestampSeries",
-    "RefinedIntervalType",
     "DatetimeScalarOrArray",
+    "EnumType",
+    "FedIndexConvertibleTypes",
+    "FedStampConvertibleTypes",
+    "RefinedIntervalType",
+    "TimestampSeries",
 ]

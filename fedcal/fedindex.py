@@ -1,6 +1,6 @@
 # fedcal fedindex.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -12,14 +12,14 @@
 # accompanying copyright notice.
 
 """
-fedindex is one of fedcal's two main APIs, home to `FedIndex` a proxy
+fedindex is one of fedcal's main APIs, home to `FedIndex` a proxy
 for pandas' `pd.DatetimeIndex` with additional functionality for fedcal
 data, with the goal of seamlessly building on `pd.DatetimeIndex` and
 integrating fedcal data into pandas analyses.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, KeysView
+from typing import Any
 
 import pandas as pd
 from numpy import int64
@@ -34,17 +34,20 @@ from pandas import (
     Timestamp,
 )
 
-from fedcal import _civpay, _mil, _status_factory, offsets, time_utils
-from fedcal._civpay import FedPayDay
-from fedcal.offsets import FedBusinessDay, FedFiscalCal, FedHolidays
+from fedcal import utils
 from fedcal._base import MagicDelegator
-from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
-from fedcal._typing import (
-    FedIndexConvertibleTypes,
-    FedStampConvertibleTypes,
+from fedcal._status_factory import fetch_index
+from fedcal._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
+from fedcal.enum import DeptStatus, depts_set
+from fedcal.fiscal import FedFiscalCal
+from fedcal.offsets import (
+    FedBusinessDay,
+    FedHolidays,
+    FedPayDay,
+    MilitaryPassDay,
+    MilitaryPayDay,
 )
-from fedcal.enum import Dept, depts_set
-from fedcal.time_utils import YearMonthDay
+from fedcal.utils import YearMonthDay
 
 
 class FedIndex(
@@ -269,7 +272,7 @@ class FedIndex(
     @staticmethod
     def _convert_input(time_input: FedIndexConvertibleTypes) -> DatetimeIndex:
         """
-        Routes input to converter methods in time_utils module for
+        Routes input to converter methods in utils module for
         conversion and normalization.
 
         Parameters
@@ -281,7 +284,7 @@ class FedIndex(
         -------
             a pd.DatetimeIndex object for self.datetimeindex
         """
-        return time_utils.to_datetimeindex(time_input)
+        return utils.to_datetimeindex(time_input)
 
     @staticmethod
     def _set_default_index() -> DatetimeIndex:
@@ -293,33 +296,10 @@ class FedIndex(
             `pd.DatetimeIndex` with default range of FY99 to FY44.
         """
         default_range: tuple["YearMonthDay", "YearMonthDay"] = (
-            time_utils.YearMonthDay(year=1998, month=10, day=1),
-            time_utils.YearMonthDay(year=2045, month=9, day=30),
+            utils.YearMonthDay(year=1998, month=10, day=1),
+            utils.YearMonthDay(year=2045, month=9, day=30),
         )
-        return time_utils.to_datetimeindex(default_range)
-
-    @staticmethod
-    def _reverse_human_readable_status(status_str: str) -> StatusTupleType:
-        """
-        Convert a human-readable status string to its corresponding status
-        tuple.
-
-        Parameters
-        ----------
-        status_str : str
-            The status string to be converted.
-
-        Returns
-        -------
-        StatusTupleType
-            The corresponding tuple representation of the status.
-
-        Notes
-        -----
-        This method uses the `READABLE_STATUS_MAP` to reverse map
-        human-readable status strings to their internal tuple representations.
-        """
-        return READABLE_STATUS_MAP.inv[status_str]
+        return utils.to_datetimeindex(default_range)
 
     def set_self_date_range(self) -> tuple[Timestamp, Timestamp]:
         """
@@ -354,7 +334,7 @@ class FedIndex(
         This method converts the input date to a `FedStamp`, if necessary,
         and then checks if it exists in the index.
         """
-        date: Timestamp = time_utils.to_timestamp(date)
+        date: Timestamp = utils.to_timestamp(date)
         return date in self.datetimeindex
 
     def contains_index(self, other_index: FedIndexConvertibleTypes) -> bool:
@@ -375,7 +355,7 @@ class FedIndex(
         other_index = (
             other_index.datetimeindex
             if isinstance(other_index, FedIndex)
-            else time_utils.to_datetimeindex(other_index)
+            else utils.to_datetimeindex(other_index)
         )
         return other_index.isin(values=self.datetimeindex).all()
 
@@ -403,7 +383,7 @@ class FedIndex(
         other_index = (
             other_index.datetimeindex
             if isinstance(other_index, FedIndex)
-            else time_utils.to_datetimeindex(other_index)
+            else utils.to_datetimeindex(other_index)
         )
         return other_index.isin(values=self.datetimeindex).any()
 
@@ -787,7 +767,7 @@ def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:
     """
     if count := len(dates):
         if count in {1, 2}:
-            return FedIndex(datetimeindex=time_utils.to_datetimeindex(dates))
+            return FedIndex(datetimeindex=utils.to_datetimeindex(dates))
     raise ValueError(
         f"Invalid number of arguments: {count}. Please pass either an "
         "array-like date object or start and end dates for the range."

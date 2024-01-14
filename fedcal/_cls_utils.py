@@ -1,6 +1,6 @@
 # fedcal _cls_utils.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the

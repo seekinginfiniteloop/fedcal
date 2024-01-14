@@ -1,6 +1,6 @@
 # fedcal _base.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -21,8 +21,8 @@ common class methods
 and useful class methods
 """
 
-from functools import total_ordering
 import inspect
+from functools import total_ordering
 from typing import Any, Callable, Generator, Iterable, Type
 
 from fedcal._typing import EnumType

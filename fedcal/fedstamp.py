@@ -1,6 +1,6 @@
 # fedcal fedstamp.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -19,19 +19,25 @@ integrating fedcal data into pandas analyses.
 """
 from __future__ import annotations
 
+from enum import DeptStatus
 from typing import Any
 
 import pandas as pd
 from pandas import Timestamp
 
-from fedcal import _civpay, _mil, offsets, time_utils
-from fedcal._civpay import FedPayDay
-from fedcal.offsets import FedBusinessDay, FedFiscalCal, FedHolidays
+from fedcal import offsets, utils
 from fedcal._base import MagicDelegator
-from fedcal._mil import MilitaryPayDay, ProbableMilitaryPassDay
+from fedcal._status_factory import fetch_index
 from fedcal._typing import FedStampConvertibleTypes
-from fedcal.enum import Dept
-from fedcal.time_utils import YearMonthDay
+from fedcal.fiscal import FedFiscalCal
+from fedcal.offsets import (
+    FedBusinessDay,
+    FedHolidays,
+    FedPayDay,
+    MilitaryPassDay,
+    MilitaryPayDay,
+)
+from fedcal.utils import YearMonthDay
 
 
 class FedStamp(
@@ -255,7 +261,7 @@ class FedStamp(
         if isinstance(pdtimestamp, pd.Timestamp):
             self.pdtimestamp: Timestamp = pdtimestamp
         elif pdtimestamp is not None:
-            self.pdtimestamp = time_utils.to_timestamp(pdtimestamp)
+            self.pdtimestamp = utils.to_timestamp(pdtimestamp)
         else:
             pd.Timestamp.utcnow().normalize()
 
@@ -276,7 +282,8 @@ class FedStamp(
         The value of the attribute.
 
         """
-        # this shouldn't be necessary, but... seems to be until I can work it out.
+        # this shouldn't be necessary...
+        # but... it seems to be until I can work out why.
         if name in self.__class__.__dict__:
             return self.__class__.__dict__[name].__get__(self, self.__class__)
 
@@ -317,7 +324,7 @@ class FedStamp(
         pdtimestamp.
 
         """
-        return time_utils.YearMonthDay(
+        return utils.YearMonthDay(
             year=self.pdtimestamp.year,
             month=self.pdtimestamp.month,
             day=self.pdtimestamp.day,
@@ -336,7 +343,7 @@ class FedStamp(
         Integer POSIX-day timestamp in seconds.
 
         """
-        return time_utils.ts_to_posix_day(timestamp=self.pdtimestamp)
+        return utils.ts_to_posix_day(timestamp=self.pdtimestamp)
 
     # business day property
     @property
@@ -607,7 +614,7 @@ def to_fedstamp(*date: FedStampConvertibleTypes) -> FedStamp:
     if count := len(date):
         if count in {1, 3}:
             date = tuple(date) if count == 3 else date
-            return FedStamp(pdtimestamp=time_utils.to_timestamp(date))
+            return FedStamp(pdtimestamp=utils.to_timestamp(date))
     raise ValueError(
         f"invalid number of arguments: {count}. "
         "to_fedstamp() requires either 1 argument, or 3 integers as YYYY, M, D"

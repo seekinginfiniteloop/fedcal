@@ -1,6 +1,6 @@
-# fedcal time_utils.py
+# fedcal utils.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -12,7 +12,7 @@
 # accompanying copyright notice.
 
 """
-time_utils.py provides a number of helper converter functions for handling
+utils.py provides a number of helper converter functions for handling
 time conversions in fedcal. We expose it publicly because they're probably
 generally useful for other things.
 
@@ -24,10 +24,10 @@ Timestamp, primarily for loading json status input in _status_factory.py
 handling POSIX-day integer second retrieval for today and from pandas
 Timestamp objects respectively.
 
-- `ensure_datetimeindex` a decorator that normalizes a variety of input to
+- `ensure_datetimeindex` a converter that normalizes a variety of input to
 DatetimeIndex for consistent handling
 
-- `to_dt64` a decorator that normalizes a variety of input to numpy.datetime64
+- `to_dt64` a converter that normalizes a variety of input to numpy.datetime64
 for consistent handling. Primarily used for back-end custom DateOffset object
 calculations.
 
@@ -71,6 +71,7 @@ input to U.S. Eastern, as with `to_timestamp`.
 from __future__ import annotations
 
 import datetime
+from array import ArrayType
 from functools import singledispatch
 from typing import Any, Self
 
@@ -78,7 +79,7 @@ import numpy as np
 import pandas as pd
 from attrs import astuple, define, field
 from funcy import decorator
-from numpy import datetime64, int32, int64, uint8
+from numpy import ScalarType, datetime64, int32, int64, uint8
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.frequencies import to_offset
@@ -87,7 +88,6 @@ from fedcal._typing import (
     DatetimeScalarOrArray,
     FedIndexConvertibleTypes,
     FedStampConvertibleTypes,
-    TimestampSeries,
 )
 
 datetime_types = (
@@ -100,17 +100,41 @@ datetime_types = (
 array_types = (np.ndarray, pd.DatetimeIndex, pd.Series)
 
 datetime_keys: list[str] = [
-    "dates",
+    "arr",
+    "array",
     "date",
+    "dates",
     "datetime",
-    "timestamp",
-    "time",
     "datetimeindex",
     "dt",
     "dtarr",
-    "arr",
-    "array",
+    "time",
+    "timestamp",
 ]
+
+
+def find_nearest(
+    items: ArrayType | ScalarType, pivot: ScalarType
+) -> ArrayType | ScalarType:
+    """
+    Implementation of Tamas Hegedus' solution on StackOverflow:
+    https://stackoverflow.com/questions/32237862/find-the-closest-date-to-a-given-date
+
+    Can find nearest value in items to pivot for any two arguments
+    that support comparison, subtraction and abs, including datetime-like
+    objects.
+
+    Parameters
+    ----------
+    items : values to compare with pivot
+    pivot : value to find the closest item to
+
+    Returns
+    -------
+    nearest item(s) in items to pivot
+
+    """
+    return min(items, key=lambda x: abs(x - pivot))
 
 
 def iso_to_ts(t: str, fmt: str | None = None) -> Timestamp:
@@ -194,12 +218,7 @@ def is_datetime_like(val=None) -> bool:
         True if object is datetime-like, False otherwise.
     """
     if isinstance(val, (tuple, list, dict)):
-        try:
-            for value in iter(val):
-                if isinstance(value, tuple(datetime_types and array_types)):
-                    val = value
-        finally:
-            pass
+        return any(is_datetime_like(val=v) for v in val)
     return isinstance(val, datetime_types) or (
         isinstance(val, array_types) and check_dt_in_array(arr=val)
     )
@@ -236,126 +255,33 @@ def find_datetime(
     return None
 
 
-def _set_args_kwargs(instance, new_dt, kw, *pargs, **pkwargs) -> dict[str, Any]:
+def ensure_datetimeindex(dt: DatetimeScalarOrArray) -> Any:
     """
-    Sets the args and kwargs for the wrapped function.
+    Ensures that the argument is a DatetimeIndex.
 
     Parameters
     ----------
-    instance : instance or class passed to wrapped method
-    kw : key name of datetime keyword argument
-    new_dt = adjusted/new datetime-like object converted by the wrapper
-    pargs : passed arguments
-    pkwargs : passed dict of keyword arguments
+    dt : datetime-like object to convert to DatetimeIndex
 
     Returns
     -------
-    tuple of args and kwargs
+    pd.DatetimeIndex object of the input datetime-like object
     """
-    arg_dict = {"nargs": None, "nkwargs": None}
-    if instance and not kw:
-        arg_dict["nargs"] = instance, new_dt
-        arg_dict["nkwargs"] = pkwargs or None
-    elif kw:
-        arg_dict["nargs"] = (instance, pargs or instance) if instance else pargs or None
-        pkwargs.pop(kw, None)
-        arg_dict["nkwargs"] = {**pkwargs, kw: new_dt}
-    else:
-        arg_dict["nargs"] = new_dt, +pargs if pargs else new_dt
-        arg_dict["nkwargs"] = pkwargs or None
-    return arg_dict
 
-
-def _set_vars(
-    call, method
-) -> tuple[
-    Any | None,
-    DatetimeScalarOrArray | Any | tuple[DatetimeScalarOrArray, str] | None,
-    str | Any | Timestamp | tuple[None, None] | None,
-    Any | None,
-    Any,
-]:
-    args, kwargs = call._args, call._kwargs
-    if args:
-        instance, other_args = (args[0], args[1:]) if method else (None, args)
-        if other_args and kwargs:
-            dt, kw = find_datetime(*other_args, **kwargs)
-        else:
-            dt, kw = find_datetime(*other_args), None if other_args else (None, None)
-    else:
-        dt, kw = find_datetime(None, **kwargs)
-        instance, other_args = None, None
-
-    if not dt:
-        try:
-            if other_args:
-                dt = (
-                    other_args[0]
-                    if is_datetime_like(val=other_args[0])
-                    else pd.to_datetime(other_args[0])
-                )
-            elif kwargs:
-                kw, dt = kwargs.popitem()[1][0]
-        except ValueError as e:
-            (
-                "unable to locate datetime-like-object in call arguments "
-                f"and keywords: {e}"
-            )
-    other_args = (
-        tuple(arg for arg in other_args if (arg is not dt or dt not in arg)) or None
-    )
-    return instance, dt, kw, other_args, kwargs
-
-
-@decorator
-def ensure_datetimeindex(call, method: bool = False) -> Any:
-    """
-    Decorator to ensure that the argument is a DatetimeIndex before calling
-    the original function.
-
-    Parameters
-    ----------
-    call : calling function
-
-    method : boolean flag to indicate if the wrapped function is a method
-    that expects an instance or cls as the first positional argument
-
-    Returns
-    -------
-    Wrapped func output from converted datetime index.
-    """
-    instance, dt, kw, other_args, kwargs = _set_vars(call=call, method=method)
-
-    new_dt = pd.DatetimeIndex(
+    return pd.DatetimeIndex(
         data=[dt] if isinstance(dt, (pd.Timestamp, np.datetime64)) else dt
     )
-    n_args_kwargs = _set_args_kwargs(
-        instance=instance, new_dt=new_dt, kw=kw, pargs=other_args, pkwargs=kwargs
-    )
-    nargs, nkwargs = n_args_kwargs.get("nargs"), n_args_kwargs.get("nkwargs")
-    return (
-        call._func(*nargs, **nkwargs)
-        if (nargs and nkwargs)
-        else (call._func(*nargs) if nargs else call._func(**nkwargs))
-    )
 
 
-@decorator
 def to_dt64(
-    call,
-    freq: str = "D",
-    to_int64: bool = False,
-    method: bool = False,
-) -> Any:
+    dt: DatetimeScalarOrArray, freq: str = "D", to_int64: bool = False
+) -> NDArray[datetime64 | int64] | datetime64 | int64:
     """
-    Decorator to convert date or date array to datetime64 date or array of
-    specified frequency (defaults to day, 'D'). If to_int64 flag is passed,
-    it will ignore frequency argument and return int64 time since the epoch in
-    nanoseconds.
+    Converts date input to numpy datetime64 array or scalar or optionally int64 timestamp.
 
     Arguments
     ---------
-    call : calling function
+    dt : datetime-like object to convert
 
     freq : optional string frequency for datetime64 conversion, defaults to
         'D'. Must be a valid frequency (e.g. 'D', 's', 'us', 'ns')
@@ -363,33 +289,18 @@ def to_dt64(
     to_int64: boolean flag to instead convert output to int64 nanoseconds
         since the epoch.
 
-    method : boolean flag to indicate if the wrapped function is a method
-    that expects an instance or cls as the first positional argument
-
     Returns
     -------
-    Wrapped func output from converted datetime
+    Converted array or scalar
     """
-    dt_type: str = "int64" if to_int64 else f"datetime64[{freq}]"
-    instance, dt, kw, other_args, kwargs = _set_vars(call=call, method=method)
-
-    new_dt = (
+    dt_type = "int64" if to_int64 else f"datetime64[{freq}]"
+    return (
         dt.astype(dt_type)
         if isinstance(dt, (np.ndarray, datetime64))
         else pd.to_datetime(dt).normalize().to_numpy().astype(dtype=dt_type)
     )
-    n_args_kwargs = _set_args_kwargs(
-        instance=instance, new_dt=new_dt, kw=kw, pargs=other_args, pkwargs=kwargs
-    )
-    nargs, nkwargs = n_args_kwargs.get("nargs"), n_args_kwargs.get("nkwargs")
-    return (
-        call._func(*nargs, **nkwargs)
-        if (nargs and nkwargs)
-        else (call._func(*nargs) if nargs else call._func(**nkwargs))
-    )
 
 
-@to_dt64(freq="ns")
 def dt64_to_date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
     """
     Adapted from RBF06:
@@ -408,6 +319,7 @@ def dt64_to_date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
     uint32 array (..., 4)
         calendar array with last axis representing year, month, day
     """
+    dtarr = to_dt64(dt=dtarr, freq="ns")
     out: NDArray[Any] = np.empty(shape=dtarr.shape + (4,), dtype="u4")
     Y, M, D = [dtarr.astype(dtype=f"M8[{x}]") for x in "YMD"]
     out[..., 0] = dtarr.astype(dtype="datetime64[D]")
@@ -418,7 +330,6 @@ def dt64_to_date(dtarr: NDArray[datetime64]) -> NDArray[int32]:
     return out
 
 
-@to_dt64(freq="ns", method=False)
 def dt64_to_dow(dtarr: NDArray[datetime64]) -> NDArray[datetime64 | int64]:
     """
     Adapted from jwdink on stackoverflow:
@@ -436,6 +347,7 @@ def dt64_to_dow(dtarr: NDArray[datetime64]) -> NDArray[datetime64 | int64]:
     int64 array
         array with axis representing day of week
     """
+    dtarr = to_dt64(dt=dtarr, freq="ns")
     out: NDArray[uint8] = np.empty(shape=dtarr.shape + (2,), dtype=uint8)
     out[..., 0] = dtarr
     out[..., 1] = (dtarr.view(dtype="int64") - 4) % 7
@@ -942,10 +854,14 @@ def _normalize_datetimeindex(datetimeindex: DatetimeIndex) -> DatetimeIndex:
 __all__: list[str] = [
     "YearMonthDay",
     "check_timestamp",
+    "datetime_keys",
     "dt64_to_date",
     "dt64_to_dow",
     "ensure_datetimeindex",
+    "find_datetime",
+    "find_nearest",
     "get_today",
+    "is_datetime_like",
     "iso_to_ts",
     "to_datetimeindex",
     "to_dt64",

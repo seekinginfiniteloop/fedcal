@@ -1,6 +1,6 @@
 # fedcal _status_factory.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -26,7 +26,7 @@ from pathlib import Path
 import pandas as pd
 from fedcal._typing import RefinedIntervalType
 from fedcal.enum import Dept, DeptStatus
-from fedcal.time_utils import iso_to_ts
+from fedcal.utils import iso_to_ts
 from pandas import MultiIndex, Timestamp
 
 # set path to our JSON data as path to our module... plus filename, of course.
@@ -129,8 +129,8 @@ def fetch_index() -> MultiIndex:
 
 
 __all__: list[str] = [
+    "fetch_index",
     "load_statuses",
     "process_interval",
     "to_multi_index",
-    "fetch_index",
 ]
