@@ -1,6 +1,6 @@
 # fedcal _typing.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -18,17 +18,19 @@ clean but well-typed.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Generator, Mapping, Union
+from typing import TYPE_CHECKING, TypeVar, Union
 
-from bidict import frozenbidict
 from numpy import datetime64, int64
 from numpy.typing import NDArray
-from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
+from pandas import DatetimeIndex, Index, Interval, PeriodIndex, Series, Timestamp
 
 if TYPE_CHECKING:
-    from fedcal.constants import AppropsStatus, Dept, OpsStatus, ShutdownFlag
-    from fedcal.depts import FedDepartment
-    from fedcal.time_utils import YearMonthDay
+    from fedcal.utils import YearMonthDay
+    from fedcal.enum import Dept, DeptStatus
+
+TimestampSeries = "Series[Timestamp]"
+
+EnumType = TypeVar("EnumType", bound="EnumBase")
 
 FedStampConvertibleTypes = Union[
     Timestamp,
@@ -47,33 +49,31 @@ FedStampConvertibleTypes = Union[
 FedIndexConvertibleTypes = Union[
     tuple[FedStampConvertibleTypes, FedStampConvertibleTypes],
     tuple[Timestamp, Timestamp],
-    NDArray,
-    Series,
+    NDArray[datetime64],
+    TimestampSeries,
     DatetimeIndex,
     Index,
     PeriodIndex,
 ]
 
-AppropriationsGapsMapType = Mapping[tuple[int, int], tuple[set["Dept"], "ShutdownFlag"]]
+RefinedIntervalType = tuple[Interval, "Dept", "DeptStatus"]
 
-CRMapType = Mapping[tuple[int, int], set["Dept"]]
+DatetimeScalarOrArray = Union[
+    datetime,
+    datetime.date,
+    datetime64,
+    Timestamp,
+    int64,
+    DatetimeIndex,
+    TimestampSeries,
+    NDArray[datetime64 | int64],
+]
 
-StatusTupleType = tuple["AppropsStatus", "OpsStatus"]
-
-AssembledBudgetIntervalType = tuple[set["Dept"], StatusTupleType]
-
-DateStampStatusMapType = Mapping["Dept", StatusTupleType]
-
-StatusMapType = frozenbidict[str, StatusTupleType]
-
-StatusPoolType = Mapping[tuple["Dept", str], "FedDepartment"]
-
-StatusDictType = dict["Dept", "FedDepartment"]
-
-StatusGeneratorType = Generator[tuple[str, StatusDictType], None, None]
-
-StatusCacheType = dict[str, StatusDictType]
-
-ExtractedStatusDataGeneratorType = Generator[
-    tuple[Timestamp, "FedDepartment"], None, None
+__all__: list[str] = [
+    "DatetimeScalarOrArray",
+    "EnumType",
+    "FedIndexConvertibleTypes",
+    "FedStampConvertibleTypes",
+    "RefinedIntervalType",
+    "TimestampSeries",
 ]

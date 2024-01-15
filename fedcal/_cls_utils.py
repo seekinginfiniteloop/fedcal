@@ -1,6 +1,6 @@
 # fedcal _cls_utils.py
 #
-# Copyright (c) 2023 Adam Poulemanos. All rights reserved.
+# Copyright (c) 2023-2024 Adam Poulemanos. All rights reserved.
 #
 # fedcal is open source software subject to the terms of the
 # MIT license, found in the
@@ -33,7 +33,7 @@ from funcy import decorator
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Series
 
-from fedcal._meta import MagicDelegator
+from fedcal._base import MagicDelegator
 
 
 class NPArrayImposter(
@@ -49,7 +49,7 @@ class NPArrayImposter(
 
     def __getattr__(self, name: str) -> Any:
         """
-        Delegates attribute access to the pdtimestamp attribute. This lets
+        Delegates attribute access to the ts attribute. This lets
         FedStamp objects use any methods/attributes of Timestamp.
 
         Parameters
