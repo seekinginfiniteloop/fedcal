@@ -195,6 +195,8 @@ class FedIndex(
 
     TODO
     ----
+    Implement new status system into methods
+
     Implement custom __setattr__, __setstate_cython__, __setstate__,
     __init_subclass__, __hash__, __getstate__, __dir__, (__slots__?)
     """

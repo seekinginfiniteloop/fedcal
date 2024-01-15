@@ -235,6 +235,9 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
 
     TODO
     ----
+    Implement new status system into methods
+
+
     Implement custom __setattr__, __setstate_cython__, __setstate__,
     __delattr__, __init_subclass__, __hash__, __getstate__, __dir__,
     __reduce__, __reduce_ex__, reduce_cython__, (__slots__?)
