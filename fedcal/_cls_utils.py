@@ -49,7 +49,7 @@ class NPArrayImposter(
 
     def __getattr__(self, name: str) -> Any:
         """
-        Delegates attribute access to the pdtimestamp attribute. This lets
+        Delegates attribute access to the ts attribute. This lets
         FedStamp objects use any methods/attributes of Timestamp.
 
         Parameters

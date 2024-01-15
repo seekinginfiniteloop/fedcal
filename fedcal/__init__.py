@@ -26,7 +26,7 @@ fdx = fc.to_fedindex(dates)
 """
 
 from ._base import MagicDelegator
-from .enum import DeptStatus, DoW, Month
+from .enum import Dept, DeptStatus, DoW, Month
 from .fedindex import FedIndex, to_fedindex
 from .fedstamp import FedStamp, to_fedstamp
 from .fiscal import FedFiscalCal
@@ -48,6 +48,7 @@ from .utils import (
 )
 
 __all__: list[str] = [
+    "Dept",
     "DeptStatus",
     "DoW",
     "FedBusinessDay",

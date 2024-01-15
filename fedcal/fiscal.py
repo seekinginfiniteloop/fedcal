@@ -23,7 +23,7 @@ from attrs import define, field
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 
 from fedcal._typing import TimestampSeries
-from fedcal.utils import ensure_datetimeindex
+from fedcal.utils import ensure_datetimeindex, to_datetimeindex
 
 
 @define(order=True)
@@ -63,7 +63,10 @@ class FedFiscalCal:
         setting instance attrs.
     """
 
-    dates: DatetimeIndex | TimestampSeries | Timestamp | None = field(default=None, converter=ensure_datetimeindex)
+    dates: DatetimeIndex | TimestampSeries | Timestamp | None = field(
+        default=to_datetimeindex((1970, 1, 1), (2199, 12, 31)),
+        converter=ensure_datetimeindex,
+    )
 
     fys_fqs: PeriodIndex | None = field(default=None, init=False)
 
@@ -79,11 +82,13 @@ class FedFiscalCal:
 
     fy_end: PeriodIndex | None = field(default=None, init=False)
 
-    def __attrs_post_init__(self, dates=self.dates) -> None:
+    def __attrs_post_init__(
+        self, dates: DatetimeIndex | TimestampSeries | Timestamp | None = None
+    ) -> None:
         """
         Complete initialization of the instance and sets attributes
         """
-        dates = self.dates
+        self.dates = dates or self.dates
         self.fys_fqs, self.fys, self.fqs = self._get_cal()
         self.fq_start, self.fq_end = self._get_fq_start_end()
         self.fy_start, self.fy_end = self._get_fy_start_end()

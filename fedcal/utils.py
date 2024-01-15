@@ -255,7 +255,7 @@ def find_datetime(
     return None
 
 
-def ensure_datetimeindex(dt: DatetimeScalarOrArray) -> Any:
+def ensure_datetimeindex(dt: DatetimeScalarOrArray | None = None) -> Any:
     """
     Ensures that the argument is a DatetimeIndex.
 
@@ -274,10 +274,11 @@ def ensure_datetimeindex(dt: DatetimeScalarOrArray) -> Any:
 
 
 def to_dt64(
-    dt: DatetimeScalarOrArray, freq: str = "D", to_int64: bool = False
+    dt: DatetimeScalarOrArray | None = None, freq: str = "D", to_int64: bool = False
 ) -> NDArray[datetime64 | int64] | datetime64 | int64:
     """
-    Converts date input to numpy datetime64 array or scalar or optionally int64 timestamp.
+    Converts date input to numpy datetime64 array or scalar or optionally
+    int64 timestamp.
 
     Arguments
     ---------
@@ -384,7 +385,7 @@ class YearMonthDay:
     to_posix_timestamp(self) -> int
         Converts a YearMonthDay object to a POSIX-day integer timestamp.
 
-    to_pdtimestamp(self) -> Timestamp
+    to_ts(self) -> Timestamp
         Converts YearMonthDay to pandas pd.Timestamp.
 
     to_pydate(self) -> date
@@ -424,7 +425,7 @@ class YearMonthDay:
         -------
         A POSIX timestamp as an integer (seconds since the Unix Epoch).
         """
-        return int(self.to_pdtimestamp().timestamp())
+        return int(self.to_ts().timestamp())
 
     def to_timestamp_day(self) -> int:
         """
@@ -435,9 +436,9 @@ class YearMonthDay:
         A POSIX-day timestamp as an integer (whole days since the Unix Epoch).
 
         """
-        return ts_to_posix_day(timestamp=self.to_pdtimestamp())
+        return ts_to_posix_day(timestamp=self.to_ts())
 
-    def to_pdtimestamp(self) -> Timestamp:
+    def to_ts(self) -> Timestamp:
         """
         Converts YearMonthDay to pandas pd.Timestamp.
 
@@ -577,7 +578,7 @@ def _date_to_timestamp(
 @to_timestamp.register(cls=YearMonthDay)
 def _yearmonthday_to_timestamp(date_input: YearMonthDay) -> Timestamp:
     """Conversion for YearMonthDay objects."""
-    return _normalize_timestamp(date_input.to_pdtimestamp())
+    return _normalize_timestamp(date_input.to_ts())
 
 
 @to_timestamp.register(cls=tuple)
@@ -598,9 +599,7 @@ def _timetuple_to_timestamp(date_input: tuple) -> Timestamp:
     if not 1970 <= year <= 2200:
         raise ValueError("Year must be a four-digit number between 1970 and 2199")
 
-    return _normalize_timestamp(
-        YearMonthDay(year=year, month=month, day=day).to_pdtimestamp()
-    )
+    return _normalize_timestamp(YearMonthDay(year=year, month=month, day=day).to_ts())
 
 
 def _check_year(dates: Timestamp | DatetimeIndex) -> Timestamp | DatetimeIndex:

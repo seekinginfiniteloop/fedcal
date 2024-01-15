@@ -270,22 +270,18 @@ class FedHolidays(AbstractHolidayCalendar):
 
     Attributes
     ----------
-    proclaimed_holidays : Series of holidays proclaimed by executive orders.
-    holidays : Combined Series of regular and proclaimed federal
-    holidays.
+    rules : a list of pd.Holiday objects representing all federal holidays,
+        including proclamation holidays.
+    proclaimed_holidays : Separate collection of holidays proclaimed by
+        executive orders.
+    scheduled_holidays : Separate collection of scheduled holidays (omits
+    proclaimed_holidays)
 
     np_holidays : vectorized holidays in a numpy array for faster operations
 
     Methods
     -------
-    get_holidays(date) -> Series[bool]
-        Check if a given date is a federal holiday.
-    get_proclamation_holidays(date) -> Series[bool]
-        Check if a given date was a holiday by proclamation (most were
-        Christmas Eve).
-    guess_proclamation_holidays(dates) -> Series[bool]
-        Guess if any future Christmas Eves in a pd.DatetimeIndex may be a
-        holiday based on Christmas day
+
     """
 
     _prefix: str = "FH"
