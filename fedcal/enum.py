@@ -62,7 +62,7 @@ class Month(HandyEnumMixin, IntEnum):
     DEC = 12
 
     def __str__(self) -> str:
-        return self.name.lower()
+        return self.name.title()
 
 
 @unique

@@ -38,7 +38,7 @@ from fedcal import utils
 from fedcal._base import MagicDelegator
 from fedcal._status_factory import fetch_index
 from fedcal._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
-from fedcal.enum import DeptStatus, depts_set
+from fedcal.enum import Dept, DeptStatus, depts_set
 from fedcal.fiscal import FedFiscalCal
 from fedcal.offsets import (
     FedBusinessDay,

@@ -31,15 +31,15 @@ customization of the rules used to identify passdays.
 from __future__ import annotations
 
 import warnings
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import ClassVar, Literal
 
 import numpy as np
 import pandas as pd
-from attrs import define, field
 from numpy import datetime64, int32, int64, timedelta64
 from numpy.typing import NDArray
-from pandas import DatetimeIndex, Index, Series, Timedelta, Timestamp, to_datetime
+from pandas import DatetimeIndex, Index, Series, Timedelta, Timestamp
 from pandas._libs.tslibs.offsets import SemiMonthOffset, apply_wraps, shift_month
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar,
@@ -65,7 +65,7 @@ from fedcal.utils import (
 )
 
 
-@define(slots=False, order=False, kw_only=True)
+@dataclass(slots=False, order=False)
 class FedPayDay(Week):
     """
     A custom pandas offset class that calculates federal civilian biweekly
@@ -105,14 +105,14 @@ class FedPayDay(Week):
     _prefix: str = "FW"
 
     # changing this will break functionality, represents biweekly pattern
-    _n: int = field(default=1, alias="_n")
+    _n: int = field(default=1)
 
-    _normalize: bool = field(default=True, alias="_normalize")
+    _normalize: bool = field(default=True)
 
     # changing this will break functionality, represents Fridays
-    _weekday: int = field(default=4, alias="_weekday")
+    _weekday: int = field(default=4)
 
-    def __attrs_post_init__(self) -> None:
+    def __post_init__(self) -> None:
         """
         Initializes the parent Week() class.
         """
@@ -231,7 +231,7 @@ class FedPayDay(Week):
 
 # Custom Holiday objects; it bothers me that only half of the rules in
 # USFederalHolidayCalendar have their own variable. I know it's because of
-# their offsets, but... I just had to.
+# their offsets, but... I just had to. 
 
 NewYearsDay = Holiday(name="New Year's Day", month=1, day=1, observance=nearest_workday)
 MartinLutherKingJr: Holiday = USMartinLutherKingJr
@@ -256,7 +256,7 @@ ChristmasDay = Holiday(
 )
 
 
-@define(order=False, slots=False)
+@dataclass(order=False, slots=False)
 class FedHolidays(AbstractHolidayCalendar):
 
     """
@@ -352,14 +352,14 @@ class FedHolidays(AbstractHolidayCalendar):
 
     np_holidays: NDArray[datetime64] | None = field(default=None, init=False)
 
-    def __attrs_post_init__(self) -> None:
+    def __post_init__(self) -> None:
         """
         Make sure Abstract Holiday calendar and our attributes are running
         properly.
         """
         super().__init__(name=type(self).name, rules=type(self).rules)
         if not self.np_holidays:
-            self.np_holidays = self.holidays().to_numpy().astype(dtype="datetime64[D]")
+            self.np_holidays = to_dt64(dt=self.holidays(), freq="D")
 
     def holidays(
         self,
@@ -510,7 +510,7 @@ class FedHolidays(AbstractHolidayCalendar):
         return probabilities
 
 
-@define(order=False, slots=False)
+@dataclass(order=False, slots=False)
 class FedBusinessDay(CustomBusinessDay):
 
     """
@@ -577,15 +577,15 @@ class FedBusinessDay(CustomBusinessDay):
 
     _prefix: str = "F"
 
-    _weekmask: list[str] = field(default="1111100", alias="_weekmask")
-    _normalize: bool = field(default=True, init=False, alias="_normalize")
+    _weekmask: list[str] = field(default="1111100")
+    _normalize: bool = field(default=True, init=False)
 
     _holidays: list[Timestamp] | NDArray[np.datetime64] | None = field(
-        default=FedHolidays().np_holidays, alias="_holidays"
+        default=FedHolidays().np_holidays
     )
     off_set: timedelta | Timedelta = field(default=timedelta(days=0), init=False)
 
-    def __attrs_post_init__(self) -> None:
+    def __post_init__(self) -> None:
         """We make sure CBD initiates properly."""
         cal = np.busdaycalendar(weekmask=self._weekmask, holidays=self._holidays)
         super().__init__(
@@ -694,7 +694,7 @@ class FedBusinessDay(CustomBusinessDay):
                 dates + self
 
 
-@define(slots=False, order=False)
+@dataclass(slots=False, order=False)
 class MilitaryPayDay(SemiMonthOffset):
     """
     Custom date offset class based on pandas' SemiMonthOffset for efficient
@@ -714,11 +714,11 @@ class MilitaryPayDay(SemiMonthOffset):
 
     _min_day_of_month: int = 7
 
-    _normalize: bool = field(default=True, init=False, alias="_normalize")
+    _normalize: bool = field(default=True, init=False)
     b_day: FedBusinessDay = FedBusinessDay()
     calendar: np.busdaycalendar = field(default=b_day.calendar, init=False)
 
-    def __attrs_post_init__(self) -> None:
+    def __post_init__(self) -> None:
         """
         Initializes FedHolidays if not yet initialized; initializes
         SemiMonthOffset parent class.
@@ -847,16 +847,16 @@ class MilitaryPayDay(SemiMonthOffset):
 
         return off_arr
 
-    def rollback(dt: DatetimeScalarOrArray):
+    def rollback(self, dt: DatetimeScalarOrArray):
         raise NotImplementedError("rollback not yet implemented")
 
-    def rollforward(dt: DatetimeScalarOrArray):
+    def rollforward(self, dt: DatetimeScalarOrArray):
         raise NotImplementedError("rollforward not yet implemented")
 
     # TODO: implement custom rollback/rollforward with array support
 
 
-@define(order=False, slots=False)
+@dataclass(order=False, slots=False)
 class MilitaryPassDay(CustomBusinessDay):
     """
     A custom pandas DateOffset class for *probable* military passdays
@@ -915,7 +915,7 @@ class MilitaryPassDay(CustomBusinessDay):
     Notes
     -----
     *Private Methods*:
-        __attrs_post_init__ : initializes the parent CustomBusinessDay class
+        __post_init__ : initializes the parent CustomBusinessDay class
             and sets the internal mapping of holiday-day-of-week to passdays
         _set_map : sets the internal mapping of holiday-day-of-week to passdays
         _passday_reqs : describes the requirements for a valid passday map.
@@ -929,9 +929,8 @@ class MilitaryPassDay(CustomBusinessDay):
 
     _prefix: str = "CDP"
 
-    _normalize: bool = field(default=True, init=False, alias="_normalize")
+    _normalize: bool = field(default=True, init=False)
 
-    off_set: timedelta | Timedelta = field(default=timedelta(days=0), init=False)
 
     b_day = FedBusinessDay()
 
@@ -950,7 +949,7 @@ class MilitaryPassDay(CustomBusinessDay):
 
     _map: dict | None = None
 
-    def __attrs_post_init__(self) -> None:
+    def _post_init__(self) -> None:
         """
         Validates attributes and initializes the parent class.
 
@@ -967,7 +966,6 @@ class MilitaryPassDay(CustomBusinessDay):
             n=1,
             normalize=self._normalize,
             calendar=self.b_day.calendar,
-            offset=self.off_set,
         )
         self._map = self._set_map()
         self._validate_map()
@@ -1192,10 +1190,10 @@ class MilitaryPassDay(CustomBusinessDay):
         diffs = np.abs(other[:, np.newaxis] - holidays)
         return holidays[np.argmin(a=diffs, axis=1)]
 
-    def rollback(dt: DatetimeScalarOrArray):
+    def rollback(self, dt: DatetimeScalarOrArray):
         raise NotImplementedError("rollback not yet implemented")
 
-    def rollforward(dt: DatetimeScalarOrArray):
+    def rollforward(self, dt: DatetimeScalarOrArray):
         raise NotImplementedError("rollforward not yet implemented")
 
 

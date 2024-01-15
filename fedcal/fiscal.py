@@ -19,14 +19,15 @@ data.
 
 from __future__ import annotations
 
-from attrs import define, field
+from dataclasses import dataclass, field
+
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 
 from fedcal._typing import TimestampSeries
 from fedcal.utils import ensure_datetimeindex, to_datetimeindex
 
 
-@define(order=True)
+@dataclass(order=True, slots=True)
 class FedFiscalCal:
     """
     Class representing the federal fiscal year calculations.
@@ -64,8 +65,7 @@ class FedFiscalCal:
     """
 
     dates: DatetimeIndex | TimestampSeries | Timestamp | None = field(
-        default=to_datetimeindex((1970, 1, 1), (2199, 12, 31)),
-        converter=ensure_datetimeindex,
+        default=to_datetimeindex((1970, 1, 1), (2199, 12, 31))
     )
 
     fys_fqs: PeriodIndex | None = field(default=None, init=False)

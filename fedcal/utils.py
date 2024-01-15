@@ -72,12 +72,12 @@ from __future__ import annotations
 
 import datetime
 from array import ArrayType
+from dataclasses import dataclass, field
 from functools import singledispatch
 from typing import Any, Self
 
 import numpy as np
 import pandas as pd
-from attrs import astuple, define, field
 from funcy import decorator
 from numpy import ScalarType, datetime64, int32, int64, uint8
 from numpy.typing import NDArray
@@ -355,7 +355,7 @@ def dt64_to_dow(dtarr: NDArray[datetime64]) -> NDArray[datetime64 | int64]:
     return out
 
 
-@define(order=True, auto_attribs=True)
+@dataclass(order=True, slots=True)
 class YearMonthDay:
 
     """
@@ -470,7 +470,7 @@ class YearMonthDay:
         A tuple of YearMonthDay attributes.
 
         """
-        return astuple(inst=self)
+        return self.year, self.month, self.day
 
 
 @singledispatch
@@ -484,7 +484,8 @@ def to_timestamp(date_input: FedStampConvertibleTypes) -> Timestamp | None:
 
     We roll our own here because pd.to_datetime has multiple outputs depending
     on input type, and we want to consistently get Timestamps and normalize
-    them.
+    them. This also allows us to add some flexibility to how to_datetime
+    handles input. 
 
     Parameters
     ----------

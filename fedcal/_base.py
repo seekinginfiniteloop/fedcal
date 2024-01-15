@@ -23,7 +23,9 @@ and useful class methods
 
 import inspect
 from functools import total_ordering
-from typing import Any, Callable, Generator, Iterable, Type
+from typing import Any, Callable, Generator, Iterable, Mapping, Type
+
+import attr
 
 from fedcal._typing import EnumType
 
@@ -298,6 +300,20 @@ class HandyEnumMixin:
         return sorted(list(map(lambda c: c.value, cls)))
 
     @classmethod
+    def list_by_attr(cls, attr: str) -> list[Any]:
+        """
+        Simple classmethod to return the attributes of members.
+        """
+        return sorted([member.attr for member in cls.members()])
+
+    @classmethod
+    def list_member_attrs(cls, member: EnumType) -> list[Any]:
+        """
+        Simple classmethod to return the attributes of members.
+        """
+        return sorted(member.value + ([getattr(member, attr) for attr in cls._lookup_attributes()]))
+
+    @classmethod
     def members(cls) -> list[Type[EnumType]]:
         """
         Simple classmethod to return the members of the enum class.
@@ -306,15 +322,52 @@ class HandyEnumMixin:
 
     @classmethod
     def zip(cls) -> list[tuple[Any]]:
+        """
+        Classmethod to return a list of tuples containing the enum class
+        members and their values. The list is sorted by the enum class
+        member values.
+
+        Returns
+        -------
+            sorted list of member tuples
+        """
         return sorted(zip(cls.__members__.items()), key=lambda k: k[0].value)
 
     @classmethod
-    def map(cls) -> dict[Any, Any]:
+    def map(cls) -> Mapping[Any, Any]:
+        """
+        Classmethod to return a map of member names to their values.
+
+        Returns
+        -------
+            sorted mapping of member names to member values.
+        """
         return dict(zip(cls._member_names_, cls._value2member_map_.keys()))
 
     @classmethod
-    def get_reverse_member_value_map(cls) -> dict[Any, Any]:
+    def val_attr_map(cls) -> Mapping[Any, Any]:
+        """
+    Returns a map of member names to their values and attributes.attributes.
+
+        Returns
+        -------
+        """
+        return dict(zip(cls._member_names_, cls._value2member_map_.values(), cls.list_member_attrs(member=lambda x: x if getattr(cls.members(), "name") == x in cls._member_names_)))
+
+    @classmethod
+    def attr_member_map(cls, attr: str) -> Mapping[Any, Any]:
+        return {getattr(cls.members(), attr): item for item in cls.val_attr_map().items()}
+
+
+    @classmethod
+    def get_reverse_member_value_map(cls) -> Mapping[Any, Any]:
         return cls._value2member_map_
+
+    @classmethod
+    def member_dict(cls) -> Mapping[Any, Any]:
+        return dict(cls.members(): cls.list_member_attrs(member) for member in cls.members() if member.value is not None)
+
+
 
 
 __all__: list[str] = ["EnumBase", "HandyEnumMixin", "MagicDelegator"]
