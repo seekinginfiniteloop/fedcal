@@ -378,7 +378,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         """
         Sets the status cache if not already set.
         """
-        if not hasattr(type(self), "statuses"):
+        if not hasattr(cls, "statuses"):
             cls.statuses: MultiIndex = fetch_index()
 
     # holiday properties
@@ -644,7 +644,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         pass
 
     @property
-    def all_depts_status(self) -> StatusDictType:
+    def all_depts_status(self):
         """
         Retrieves the status of all departments.
 

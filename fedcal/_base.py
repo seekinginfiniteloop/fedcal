@@ -352,7 +352,7 @@ class HandyEnumMixin:
         Returns
         -------
         """
-        return dict(zip(cls._member_names_, cls._value2member_map_.values(), cls.list_member_attrs(member=lambda x: x if getattr(cls.members(), "name") == x in cls._member_names_)))
+        return dict(zip(cls._member_names_, cls._value2member_map_.values(), cls.list_member_attrs(member=lambda x: x if getattr(cls.members(), "name") == x in cls._member_names_) else None))
 
     @classmethod
     def attr_member_map(cls, attr: str) -> Mapping[Any, Any]:
