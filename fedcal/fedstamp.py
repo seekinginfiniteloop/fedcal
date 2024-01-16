@@ -442,7 +442,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         return self.ts in self._holidays.proclaimed_holidays
 
     @property
-    def possible_future_proclamation_holiday(self) -> float:
+    def future_proclamation_holiday_estimate(self) -> float:
         """
         If given a future date, estimate probability if it may be a proclaimed
         holiday. Uses the small sample of past proclaimed holidays to estimate

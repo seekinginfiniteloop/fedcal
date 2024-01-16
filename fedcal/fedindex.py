@@ -393,17 +393,15 @@ class FedIndex(
         """
         Sets the _fiscalcal attribute for fy/fq retrievals.
         """
-        if not hasattr(offsets.FedFiscalCal, "fqs") or self._fiscalcal is None:
-            self._fiscalcal: FedFiscalCal = offsets.FedFiscalCal(
-                dates=self.datetimeindex
-            )
+        if not hasattr(FedFiscalCal, "fqs") or not self._fiscalcal:
+            self._fiscalcal: FedFiscalCal = FedFiscalCal(dates=self.datetimeindex)
 
     def _set_holidays(self) -> None:
         """
         Sets the self._holidays attribute for FedHolidays retrievals.
         """
-        if not hasattr(offsets.FedHolidays, "holidays") or self._holidays is None:
-            self._holidays: FedHolidays = offsets.FedHolidays()
+        if not self._holidays:
+            self._holidays: FedHolidays = FedHolidays()
 
     # Begin date attribute property methods
     @property
@@ -427,20 +425,16 @@ class FedIndex(
     @property
     def business_days(
         self,
-    ) -> DatetimeIndex:
+    ) -> NDArray[bool]:
         """
-        Determine if the dates in the index are Federal business days.
-
-        This property checks each date in the index to see if it is a business
-        day, based on federal business day rules.
+        Determine if the dates in the index are Federal business days
+        (adjusted for holidays).
 
         Returns
         -------
-        Datetimeindex
-            Datetimeindex of dates that are business days.
+        numpy ndarray of boolean values, True on businessdays
         """
-        bdays: FedBusinessDay = offsets.FedBusinessDay()
-        return self.datetimeindex[bdays.get_business_days(dates=self.datetimeindex)]
+        return FedBusinessDay().is_on_offset(dt=self.datetimeindex)
 
     @property
     def fys(self) -> Index[int]:
@@ -564,85 +558,88 @@ class FedIndex(
         """
         Identify federal holidays in the index.
 
-        This property checks each date in the index to determine if it is a
-        federal holiday.
-
         Returns
         -------
         DatetimeIndex
             DatetimeIndex reflecting dates of holidays
         """
         self._set_holidays()
-        return self.datetimeindex[
-            self.datetimeindex.isin(values=self._holidays.holidays)
-        ]
+        return self.datetimeindex.isin(values=self._holidays.np_holidays)
 
     @property
     def proclaimed_holidays(self) -> DatetimeIndex:
         """
         Check for proclaimed federal holidays in the index.
 
-        This property identifies dates in the index that are proclaimed federal
-        holidays.
+        This property identifies dates in the index that are (historical)
+        proclaimed federal holidays.
 
         Returns
         -------
-        DatetimeIndex
-            DatetimeIndex reflecting dates of proclaimed holidays.
+        boolean NDArray, True on proclaimed holidays.
         """
         self._set_holidays()
-        return self.datetimeindex[
-            self.datetimeindex.isin(
-                values=pd.DatetimeIndex(data=self._holidays.proclaimed_holidays)
-            )
-        ]
+        return self.datetimeindex.isin(values=self._holidays.proclaimed_holidays)
 
     @property
-    def possible_proclamation_holidays(self) -> DatetimeIndex:
+    def future_proclamation_holiday_estimate(self) -> Series[float] | DataFrame:
         """
-        Guesses if the dates in the index are possible *future* proclamation
-        federal holidays.
+        Estimates probability if the dates in the index are possible *future*
+        proclamation federal holidays based on frequency of past proclamations
+        for that day of week relative to the Christmas holiday.
+
+        Importantly, only Christmas Eves or their observed equivalents have any
+        probability, and only future dates are calculated. All but two
+        historical proclamation holidays were Christmas Eves, with the other
+        two, a day after Christmas and a New Years Eve, not providing
+        sufficient data to attempt an estimate.
 
         Returns
         -------
-        DatetimeIndex
-            A DatetimeIndex reflecting possible *future* dates that could see a
-            proclaimed holiday.
+        A series of float probabilities for future Christmas Eve holiday
+        proclamations.
 
         Notes
         -----
-        See notes to FedStamp.possible_proclamation_holiday.
+        If you're curious -- odds are good if Christmas is on a Tuesday,
+        otherwise it's hit or miss.
 
         """
         self._set_holidays()
-        return self.datetimeindex[
-            self._holidays.guess_proclamation_holidays(dates=self.datetimeindex)
-        ]
+        return self._holidays.estimate_future_proclamation_holidays(
+            future_dates=self.datetimeindex
+        )
 
     @property
-    def probable_mil_passdays(self) -> DatetimeIndex:
+    def mil_passdays(self, custom_dow_map: dict[str, str] = None) -> NDArray[bool]:
         """
-        Estimate military pass days within the index's date range.
+        Identify likely business days that will be military passdays based
+        on an adjacent holiday.
 
-        This property calculates the probable military pass days based on the
-        index's date range and ProbableMilitaryPassDay object. See notes on
-        similar properties in FedStamp; while this will be mostly
-        accurate, specific dates for passes vary between commands and locales.
+        Some important caveats:
+        1) Passdays can be highly variable to locale and command
+        2) While passes technically covering a longer period, usually a
+        weekend, here we only concern ourselves with impacted business days as
+        the anomaly from the norm.
+        3) Default behavior puts passdays on Friday if the holiday is a Monday
+        or Thursday, on Monday if the holiday is a Tuesday or Friday, and on
+        Thursday if the holiday is a Wednesday. Wednesday is the most likely
+        to vary but also the least common situation. You may pass a custom day
+        of week map within constraints to calculate alternate behavior (see
+        MilitaryPassDay docs for details.)
 
         Returns
         -------
-        DatetimeIndex
-        A datetimeindex reflecting probable dates for military passdays.
+        NDArray of booleans, True on probable passdays.
         """
 
-        passdays: ProbableMilitaryPassDay = _mil.ProbableMilitaryPassDay(
-            dates=self.datetimeindex
+        return MilitaryPassDay(passday_map=custom_dow_map).is_on_offset(
+            dt=self.datetimeindex
         )
-        return self.datetimeindex[passdays.passdays]
 
     # Payday properties
     @property
-    def mil_paydays(self) -> DatetimeIndex:
+    def mil_paydays(self) -> NDArray[bool]:
         """
         Identify military payday dates within the index.
 
@@ -654,27 +651,22 @@ class FedIndex(
         DatetimeIndex
             A datetimeindex reflecting military payday dates.
         """
-        milpays: MilitaryPayDay = _mil.MilitaryPayDay(dates=self.datetimeindex)
-        return self.datetimeindex[milpays.paydays]
+        return MilitaryPayDay().is_on_offset(dt=self.datetimeindex)
 
     @property
-    def civ_paydays(self) -> Series[bool]:
+    def civ_paydays(self) -> NDArray[bool]:
         """
         Determine civilian payday dates within the index's date range.
 
-        This property calculates the dates that are civilian paydays based on
-        the index's date range.
+        Identifies federal biweekly civilian paydays within the range.
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series indicating civilian payday dates.
-
+        NDArray of booleans, True on paydays.
         """
 
         self.set_self_date_range()
-        pays: FedPayDay = _civpay.FedPayDay()
-        return pays.get_paydays_as_series(start=self.start, end=self.end)
+        return FedPayDay().is_on_offset(dt=self.datetimeindex)
 
     @property
     def departments(self) -> DataFrame:
@@ -692,17 +684,7 @@ class FedIndex(
             departments
             on that date.
         """
-        all_depts: list[str] = ", ".join([dept.short for dept in enum.depts_set])
-        pre_dhs_depts: list[str] = ", ".join(
-            [dept.short for dept in depts_set.difference(Dept.DHS)]
-        )
-
-        dept_df: DataFrame = self.datetimeindex.to_frame(name="Departments")
-        dhs_formed: Timestamp = _status_factory.dhs_formed
-        dept_df["Departments"] = dept_df.index.map(
-            mapper=lambda date: all_depts if date >= dhs_formed else pre_dhs_depts
-        )
-        return dept_df
+        pass
 
     @property
     def departments_bool(self) -> DataFrame:
@@ -722,16 +704,7 @@ class FedIndex(
             date, except for DHS before its formation date, which is False.
         """
 
-        dept_columns: list[str] = [dept.short for dept in Dept]
-        df: DataFrame = pd.DataFrame(
-            index=self.datetimeindex, columns=dept_columns
-        ).fillna(value=True)
-
-        # Adjust for DHS
-        dhs_start_date: Timestamp | None = status_factory.dhs_formed
-        df.loc[df.index < dhs_start_date, "DHS"] = False
-
-        return df
+        pass
 
 
 def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:

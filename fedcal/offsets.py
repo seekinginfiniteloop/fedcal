@@ -231,7 +231,7 @@ class FedPayDay(Week):
 
 # Custom Holiday objects; it bothers me that only half of the rules in
 # USFederalHolidayCalendar have their own variable. I know it's because of
-# their offsets, but... I just had to. 
+# their offsets, but... I just had to.
 
 NewYearsDay = Holiday(name="New Year's Day", month=1, day=1, observance=nearest_workday)
 MartinLutherKingJr: Holiday = USMartinLutherKingJr
@@ -610,8 +610,8 @@ class FedBusinessDay(CustomBusinessDay):
         """
         dt = to_dt64(dt=dt)
         scalar: bool = pd.api.types.is_scalar(val=dt)
-        bdays = np.is_busday(dates=dt, busdaycal=self.calendar)
-        return bdays[0] if scalar and isinstance(bdays, np.ndarray) else bdays
+        b_day = np.is_busday(dates=dt, busdaycal=self.calendar)
+        return b_day[0] if scalar and isinstance(b_day, np.ndarray) else b_day
 
     def _roll(
         self, dt: DatetimeScalarOrArray, roll: Literal["forward", "backward"]
@@ -930,7 +930,6 @@ class MilitaryPassDay(CustomBusinessDay):
     _prefix: str = "CDP"
 
     _normalize: bool = field(default=True, init=False)
-
 
     b_day = FedBusinessDay()
 
