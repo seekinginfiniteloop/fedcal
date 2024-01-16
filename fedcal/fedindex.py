@@ -47,7 +47,6 @@ from fedcal.offsets import (
     MilitaryPassDay,
     MilitaryPayDay,
 )
-from fedcal.utils import YearMonthDay
 
 
 class FedIndex(
@@ -298,10 +297,7 @@ class FedIndex(
         -------
             `pd.DatetimeIndex` with default range of FY99 to FY44.
         """
-        default_range: tuple["YearMonthDay", "YearMonthDay"] = (
-            utils.YearMonthDay(year=1998, month=10, day=1),
-            utils.YearMonthDay(year=2045, month=9, day=30),
-        )
+        default_range: tuple[Timestamp, Timestamp] = pd.Timestamp(year=1998,month=10,day=1), pd.Timestamp(year=2045,month=9,day=30)
         return utils.to_datetimeindex(default_range)
 
     def set_self_date_range(self) -> tuple[Timestamp, Timestamp]:
@@ -706,6 +702,9 @@ class FedIndex(
         """
 
         pass
+
+    @staticmethod
+    def get_status_keys() ->
 
 
 def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:

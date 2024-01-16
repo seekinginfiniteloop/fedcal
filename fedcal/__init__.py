@@ -38,7 +38,6 @@ from .offsets import (
     MilitaryPayDay,
 )
 from .utils import (
-    YearMonthDay,
     dt64_to_date,
     dt64_to_dow,
     iso_to_ts,
@@ -46,6 +45,7 @@ from .utils import (
     to_dt64,
     to_timestamp,
 )
+from .status import GovStatus
 
 __all__: list[str] = [
     "Dept",
@@ -57,11 +57,11 @@ __all__: list[str] = [
     "FedIndex",
     "FedPayDay",
     "FedStamp",
+    "GovStatus",
     "MagicDelegator",
     "MilitaryPassDay",
     "MilitaryPayDay",
     "Month",
-    "YearMonthDay",
     "dt64_to_date",
     "dt64_to_dow",
     "iso_to_ts",

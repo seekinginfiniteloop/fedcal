@@ -25,7 +25,6 @@ from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, Interval, PeriodIndex, Series, Timestamp
 
 if TYPE_CHECKING:
-    from fedcal.utils import YearMonthDay
     from fedcal.enum import EnumBase
 
 TimestampSeries = "Series[Timestamp]"
@@ -38,7 +37,6 @@ FedStampConvertibleTypes = Union[
     int64,
     datetime64,
     float,
-    "YearMonthDay",
     tuple[int, int, int],
     tuple[str, str, str],
     str,

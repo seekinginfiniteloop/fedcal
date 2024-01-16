@@ -39,10 +39,6 @@ DateOffset object calculations.
 dow using numpy vectorized operations. Primarily used for custom DateOffset
 object calculations.
 
-- `YearMonthDay` a class for handling date conversions from year, month, day.
-It's there because I wanted something cleaner than datetime. I like it. It's
-gonna stay.
-
 - `to_timestamp` and `to_datetimeindex` are singledispatch converter functions
 for converting a wide range of possible time inputs to `pd.Timestamp` and
 `pd.DatetimeIndex` respectively. As they can look complex for the uninitiated
@@ -355,124 +351,6 @@ def dt64_to_dow(dtarr: NDArray[datetime64]) -> NDArray[datetime64 | int64]:
     return out
 
 
-@dataclass(order=True, slots=True)
-class YearMonthDay:
-
-    """
-    A class to handle conversion of year,month,day integer input to other date
-    types needed by the calendar.
-
-    Do we *need* YearMonthDay? No, but it does provide clear typing and ensure
-    smooth functioning for the most common form of programmatic date input
-    (i.e. year, month, day). We need it in the same sense that an
-    average person needs a remote controlled drone... they don't, but it beats
-    climbing on a roof. Doesn't YearMonthDay look so much nicer in a type
-    hint than tuple[int, int, int]? I think so. Could we use Python date
-    instead? Also yes.
-
-    Attributes
-    ----------
-    year : Four digit year as an integer
-    month : integer month
-    day : integer day
-
-    Methods
-    -------
-    from_timestamp(date: Timestamp) -> YearMonthDay
-        Convert a pandas pd.Timestamp object into a YearMonthDay
-        object.
-
-    to_posix_timestamp(self) -> int
-        Converts a YearMonthDay object to a POSIX-day integer timestamp.
-
-    to_ts(self) -> Timestamp
-        Converts YearMonthDay to pandas pd.Timestamp.
-
-    to_pydate(self) -> date
-        Converts YearMonthDay to Python date object (datetime.date)
-
-    timetuple(self) -> tuple[int, int, int]
-        Returns a tuple of YearMonthDay attributes.
-
-    """
-
-    year: int = field(converter=int)
-    month: int = field(converter=int)
-    day: int = field(converter=int)
-
-    @staticmethod
-    def from_timestamp(date: Timestamp) -> Self:
-        """
-        Convert a pandas pd.Timestamp object into a
-        YearMonthDay object.
-
-        Parameters
-        ----------
-        date : Date to convert
-
-        Returns
-        -------
-        YearMonthDay object
-
-        """
-        return YearMonthDay(year=date.year, month=date.month, day=date.day)
-
-    def to_timestamp(self) -> int:
-        """
-        Converts a YearMonthDay object to a POSIX-day integer timestamp.
-
-        Returns
-        -------
-        A POSIX timestamp as an integer (seconds since the Unix Epoch).
-        """
-        return int(self.to_ts().timestamp())
-
-    def to_timestamp_day(self) -> int:
-        """
-        Converts a YearMonthDay object to a POSIX-day integer timestamp.
-
-        Returns
-        -------
-        A POSIX-day timestamp as an integer (whole days since the Unix Epoch).
-
-        """
-        return ts_to_posix_day(timestamp=self.to_ts())
-
-    def to_ts(self) -> Timestamp:
-        """
-        Converts YearMonthDay to pandas pd.Timestamp.
-
-        Returns
-        -------
-        A pandas pd.Timestamp object.
-
-        """
-        return pd.Timestamp(year=self.year, month=self.month, day=self.day)
-
-    def to_pydate(self) -> datetime.date:
-        """
-        Converts YearMonthDay to Python datetime.date.
-
-        Returns
-        -------
-        A Python datetime.date object.
-
-        """
-        return datetime.date(year=self.year, month=self.month, day=self.day)
-
-    @property
-    def timetuple(self) -> tuple[int, int, int]:
-        """
-        Returns a tuple of YearMonthDay attributes.
-
-        Returns
-        -------
-        A tuple of YearMonthDay attributes.
-
-        """
-        return self.year, self.month, self.day
-
-
 @singledispatch
 def to_timestamp(date_input: FedStampConvertibleTypes) -> Timestamp | None:
     """
@@ -576,12 +454,6 @@ def _date_to_timestamp(
     return _normalize_timestamp(date_input)
 
 
-@to_timestamp.register(cls=YearMonthDay)
-def _yearmonthday_to_timestamp(date_input: YearMonthDay) -> Timestamp:
-    """Conversion for YearMonthDay objects."""
-    return _normalize_timestamp(date_input.to_ts())
-
-
 @to_timestamp.register(cls=tuple)
 def _timetuple_to_timestamp(date_input: tuple) -> Timestamp:
     if len(date_input) != 3:
@@ -600,7 +472,7 @@ def _timetuple_to_timestamp(date_input: tuple) -> Timestamp:
     if not 1970 <= year <= 2200:
         raise ValueError("Year must be a four-digit number between 1970 and 2199")
 
-    return _normalize_timestamp(YearMonthDay(year=year, month=month, day=day).to_ts())
+    return _normalize_timestamp(pd.Timestamp(year=year, month=month, day=day))
 
 
 def _check_year(dates: Timestamp | DatetimeIndex) -> Timestamp | DatetimeIndex:
@@ -852,7 +724,6 @@ def _normalize_datetimeindex(datetimeindex: DatetimeIndex) -> DatetimeIndex:
 
 
 __all__: list[str] = [
-    "YearMonthDay",
     "check_timestamp",
     "datetime_keys",
     "dt64_to_date",

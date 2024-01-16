@@ -36,7 +36,7 @@ from fedcal.offsets import (
     MilitaryPassDay,
     MilitaryPayDay,
 )
-from fedcal.utils import YearMonthDay, to_timestamp, ts_to_posix_day
+from fedcal.utils import to_timestamp, ts_to_posix_day
 
 
 class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Timestamp):
@@ -65,9 +65,6 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
 
     _fiscalcal: A *private* lazy attribute that caches our FiscalCalendar
     instance once called.
-
-    year_month_day
-        returns the FedStamp as a YearMonthDay object.
 
     posix_day
         Returns the POSIX-day timestamp normalized to midnight.
@@ -311,23 +308,6 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
     # static utility methods
 
     # utility properties
-    @property
-    def year_month_day(self) -> "YearMonthDay":
-        """
-        Returns a YearMonthDay object for the date.
-
-        Returns
-        -------
-        A YearMonthDay object representing the year, month, and day of the
-        ts.
-
-        """
-        return YearMonthDay(
-            year=self.ts.year,
-            month=self.ts.month,
-            day=self.ts.day,
-        )
-
     @property
     def posix_day(self) -> int:
         """
