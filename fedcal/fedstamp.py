@@ -24,7 +24,6 @@ from typing import Any, ClassVar
 import pandas as pd
 from pandas import MultiIndex, Timestamp
 
-from fedcal import offsets, utils
 from fedcal._base import MagicDelegator
 from fedcal.enum import Dept, DeptStatus
 from fedcal._status_factory import fetch_index
@@ -355,7 +354,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         True if the date is a business day, False otherwise.
 
         """
-        b_day: FedBusinessDay = offsets.FedBusinessDay()
+        b_day: FedBusinessDay = FedBusinessDay()
         return b_day.is_on_offset(dt=self.ts)
 
     # instance cache

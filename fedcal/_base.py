@@ -25,8 +25,6 @@ import inspect
 from functools import total_ordering
 from typing import Any, Callable, Generator, Iterable, Mapping, Type
 
-import attr
-
 from fedcal._typing import EnumType
 
 
@@ -311,7 +309,10 @@ class HandyEnumMixin:
         """
         Simple classmethod to return the attributes of members.
         """
-        return sorted(member.value + ([getattr(member, attr) for attr in cls._lookup_attributes()]))
+        return sorted(
+            member.value
+            + ([getattr(member, attr) for attr in cls._lookup_attributes()])
+        )
 
     @classmethod
     def members(cls) -> list[Type[EnumType]]:
@@ -351,16 +352,21 @@ class HandyEnumMixin:
 
         Returns
         -------
-            _description_
+            Returns dictionary map of member' values to its attributes
         """
-        member_attrs = [cls.list_member_attrs(member=x) if x in cls._member_names_ else None for x in cls._member_names_]
-        return dict(zip(cls._member_names_, cls._value2member_map_.values(), member_attrs))
-
+        member_attrs = [
+            cls.list_member_attrs(member=x) if x in cls._member_names_ else None
+            for x in cls._member_names_
+        ]
+        return dict(
+            zip(cls._member_names_, cls._value2member_map_.values(), member_attrs)
+        )
 
     @classmethod
     def attr_member_map(cls, attr: str) -> Mapping[Any, Any]:
-        return {getattr(cls.members(), attr): item for item in cls.val_attr_map().items()}
-
+        return {
+            getattr(cls.members(), attr): item for item in cls.val_attr_map().items()
+        }
 
     @classmethod
     def get_reverse_member_value_map(cls) -> Mapping[Any, Any]:
@@ -368,9 +374,8 @@ class HandyEnumMixin:
 
     @classmethod
     def member_dict(cls) -> Mapping[Any, Any]:
-        return dict(cls.members(): cls.list_member_attrs(member) for member in cls.members() if member.value is not None)
-
-
+        members = cls.members()
+        return {member: cls.list_member_attrs(member=member) for member in members}
 
 
 __all__: list[str] = ["EnumBase", "HandyEnumMixin", "MagicDelegator"]

@@ -485,7 +485,7 @@ def to_timestamp(date_input: FedStampConvertibleTypes) -> Timestamp | None:
     We roll our own here because pd.to_datetime has multiple outputs depending
     on input type, and we want to consistently get Timestamps and normalize
     them. This also allows us to add some flexibility to how to_datetime
-    handles input. 
+    handles input.
 
     Parameters
     ----------
