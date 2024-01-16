@@ -666,6 +666,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
 
         """
         pass
+
     @property
     def all_depts_cr(self) -> bool:
         """
@@ -678,6 +679,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         otherwise.
         """
         pass
+
     @property
     def all_depts_funded(self) -> bool:
         """
@@ -777,7 +779,6 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         fully operational or under a continuing resolution.
         """
 
-
     @property
     def cr_depts(self):
         """
@@ -803,7 +804,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         appropriations gap.
 
         """
-        return pass
+        pass
 
     @property
     def shutdown_depts(self):
@@ -830,6 +831,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
 
         """
         pass
+
 
 def to_fedstamp(*date: FedStampConvertibleTypes) -> FedStamp:
     """
