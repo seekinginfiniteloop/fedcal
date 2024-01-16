@@ -243,7 +243,8 @@ class FedIndex(
         AttributeError
             if attribute can't be found
         """
-        # this shouldn't be necessary, but... seems to be until I can work it out.
+        # this shouldn't be necessary, but...
+        # seems to be until I can work out why
         if name in type(self).__dict__:
             return type(self).__dict__[name].__get__(self, type(self))
 

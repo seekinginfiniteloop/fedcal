@@ -26,7 +26,7 @@ from pandas import DatetimeIndex, Index, Interval, PeriodIndex, Series, Timestam
 
 if TYPE_CHECKING:
     from fedcal.utils import YearMonthDay
-    from fedcal.enum import Dept, DeptStatus
+    from fedcal.enum import Dept, DeptStatus, EnumBase
 
 TimestampSeries = "Series[Timestamp]"
 

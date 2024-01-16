@@ -631,7 +631,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         """
         pass
 
-@property
+    @property
     def departments(self) -> set[str]:
         """
         Retrieves the set of executive departments active on the date.
