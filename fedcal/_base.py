@@ -347,12 +347,15 @@ class HandyEnumMixin:
     @classmethod
     def val_attr_map(cls) -> Mapping[Any, Any]:
         """
-    Returns a map of member names to their values and attributes.attributes.
+        Maps member values (as keys) to the members' attributes.
 
         Returns
         -------
+            _description_
         """
-        return dict(zip(cls._member_names_, cls._value2member_map_.values(), cls.list_member_attrs(member=lambda x: x if getattr(cls.members(), "name") == x in cls._member_names_) else None))
+        member_attrs = [cls.list_member_attrs(member=x) if x in cls._member_names_ else None for x in cls._member_names_]
+        return dict(zip(cls._member_names_, cls._value2member_map_.values(), member_attrs))
+
 
     @classmethod
     def attr_member_map(cls, attr: str) -> Mapping[Any, Any]:
