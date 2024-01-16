@@ -654,23 +654,19 @@ class FedIndex(
         return MilitaryPayDay().is_on_offset(dt=self.datetimeindex)
 
     @property
-    def civ_paydays(self) -> Series[bool]:
+    def civ_paydays(self) -> NDArray[bool]:
         """
         Determine civilian payday dates within the index's date range.
 
-        This property calculates the dates that are civilian paydays based on
-        the index's date range.
+        Identifies federal biweekly civilian paydays within the range.
 
         Returns
         -------
-        pd.Series
-            A Pandas pd.Series indicating civilian payday dates.
-
+        NDArray of booleans, True on paydays.
         """
 
         self.set_self_date_range()
-        pays: FedPayDay = FedPayDay()
-        return pays.get_paydays_as_series(start=self.start, end=self.end)
+        return FedPayDay().is_on_offset(dt=self.datetimeindex)
 
     @property
     def departments(self) -> DataFrame:
@@ -688,17 +684,7 @@ class FedIndex(
             departments
             on that date.
         """
-        all_depts: list[str] = ", ".join([dept.short for dept in enum.depts_set])
-        pre_dhs_depts: list[str] = ", ".join(
-            [dept.short for dept in depts_set.difference(Dept.DHS)]
-        )
-
-        dept_df: DataFrame = self.datetimeindex.to_frame(name="Departments")
-        dhs_formed: Timestamp = _status_factory.dhs_formed
-        dept_df["Departments"] = dept_df.index.map(
-            mapper=lambda date: all_depts if date >= dhs_formed else pre_dhs_depts
-        )
-        return dept_df
+        pass
 
     @property
     def departments_bool(self) -> DataFrame:
@@ -718,16 +704,7 @@ class FedIndex(
             date, except for DHS before its formation date, which is False.
         """
 
-        dept_columns: list[str] = [dept.short for dept in Dept]
-        df: DataFrame = pd.DataFrame(
-            index=self.datetimeindex, columns=dept_columns
-        ).fillna(value=True)
-
-        # Adjust for DHS
-        dhs_start_date: Timestamp | None = status_factory.dhs_formed
-        df.loc[df.index < dhs_start_date, "DHS"] = False
-
-        return df
+        pass
 
 
 def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:
