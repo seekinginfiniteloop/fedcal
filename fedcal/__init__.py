@@ -27,8 +27,9 @@ fdx = fc.to_fedindex(dates)
 
 from ._base import MagicDelegator
 from .enum import Dept, DeptStatus, DoW, Month
-from .fedindex import FedIndex, to_fedindex
-from .fedstamp import FedStamp, to_fedstamp
+
+# from .fedindex import FedIndex, to_fedindex
+# from .fedstamp import FedStamp, to_fedstamp
 from .fiscal import FedFiscalCal
 from .offsets import (
     FedBusinessDay,
@@ -37,6 +38,8 @@ from .offsets import (
     MilitaryPassDay,
     MilitaryPayDay,
 )
+
+# from .status import GovStatus
 from .utils import (
     dt64_to_date,
     dt64_to_dow,
@@ -45,7 +48,6 @@ from .utils import (
     to_dt64,
     to_timestamp,
 )
-from .status import GovStatus
 
 __all__: list[str] = [
     "Dept",
@@ -54,9 +56,9 @@ __all__: list[str] = [
     "FedBusinessDay",
     "FedFiscalCal",
     "FedHolidays",
-    "FedIndex",
+    #    "FedIndex",
     "FedPayDay",
-    "FedStamp",
+    #    "FedStamp",
     "GovStatus",
     "MagicDelegator",
     "MilitaryPassDay",
@@ -67,7 +69,7 @@ __all__: list[str] = [
     "iso_to_ts",
     "to_datetimeindex",
     "to_dt64",
-    "to_fedindex",
-    "to_fedstamp",
+    #    "to_fedindex",
+    #    "to_fedstamp",
     "to_timestamp",
 ]
