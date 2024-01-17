@@ -295,7 +295,6 @@ class HandyEnumMixin:
         """
         Simple classmethod to return the values of members.
         """
-        get_
         return sorted(list(map(lambda c: c.value, cls)))
 
     @classmethod
