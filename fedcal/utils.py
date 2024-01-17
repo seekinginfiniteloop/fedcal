@@ -77,7 +77,7 @@ from __future__ import annotations
 import datetime
 from array import ArrayType
 from functools import singledispatch
-from typing import Any, Self
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -87,7 +87,6 @@ from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.frequencies import to_offset
 
-from fedcal.enum import Dept
 from fedcal._typing import (
     DatetimeScalarOrArray,
     FedIndexConvertibleTypes,
@@ -117,6 +116,7 @@ datetime_keys: list[str] = [
     "time",
     "timestamp",
 ]
+
 
 def set_default_range() -> DatetimeIndex:
     """
@@ -196,7 +196,6 @@ def ts_to_posix_day(timestamp: Timestamp) -> int:
     -------
     int
         POSIX-day timestamp in days.
-
     """
     return int(timestamp.normalize().timestamp() // 86400)
 
