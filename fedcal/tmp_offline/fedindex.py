@@ -38,7 +38,7 @@ from fedcal import utils
 from fedcal._base import MagicDelegator
 from fedcal._status_factory import fetch_index
 from fedcal._typing import FedIndexConvertibleTypes, FedStampConvertibleTypes
-from fedcal.enum import Dept, DeptStatus, depts_set
+from fedcal.enum import Dept, DeptStatus
 from fedcal.fiscal import FedFiscalCal
 from fedcal.offsets import (
     FedBusinessDay,
@@ -297,7 +297,9 @@ class FedIndex(
         -------
             `pd.DatetimeIndex` with default range of FY99 to FY44.
         """
-        default_range: tuple[Timestamp, Timestamp] = pd.Timestamp(year=1998,month=10,day=1), pd.Timestamp(year=2045,month=9,day=30)
+        default_range: tuple[Timestamp, Timestamp] = pd.Timestamp(
+            year=1998, month=10, day=1
+        ), pd.Timestamp(year=2045, month=9, day=30)
         return utils.to_datetimeindex(default_range)
 
     def set_self_date_range(self) -> tuple[Timestamp, Timestamp]:
@@ -615,7 +617,7 @@ class FedIndex(
 
         Some important caveats:
         1) Passdays can be highly variable to locale and command
-        2) While passes technically covering a longer period, usually a
+        2) While passes technically cover a longer period, usually a
         weekend, here we only concern ourselves with impacted business days as
         the anomaly from the norm.
         3) Default behavior puts passdays on Friday if the holiday is a Monday
@@ -704,7 +706,8 @@ class FedIndex(
         pass
 
     @staticmethod
-    def get_status_keys() ->
+    def get_status_keys():
+        pass
 
 
 def to_fedindex(*dates: FedIndexConvertibleTypes) -> FedIndex:

@@ -25,9 +25,9 @@ import pandas as pd
 from pandas import MultiIndex, Timestamp
 
 from fedcal._base import MagicDelegator
-from fedcal.enum import Dept, DeptStatus
 from fedcal._status_factory import fetch_index
 from fedcal._typing import FedStampConvertibleTypes
+from fedcal.enum import Dept, DeptStatus
 from fedcal.fiscal import FedFiscalCal
 from fedcal.offsets import (
     FedBusinessDay,
@@ -36,6 +36,7 @@ from fedcal.offsets import (
     MilitaryPassDay,
     MilitaryPayDay,
 )
+from fedcal.status import GovStatus
 from fedcal.utils import to_timestamp, ts_to_posix_day
 
 
@@ -305,8 +306,6 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         """
         return object.__getattribute__(self, name)
 
-    # static utility methods
-
     # utility properties
     @property
     def posix_day(self) -> int:
@@ -446,27 +445,29 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         )
 
     @property
-    def probable_mil_passday(self) -> bool:
+    def mil_passday(self, custom_dow_map: dict[str, str] = None) -> bool:
         """
-        Estimates if the ts is likely a military pass day.
+        Identified whether the ts falls on a (probable) military passday,
+        based on heuristics. Days that are business-day adjacent to a Federal
+        holiday are potentially eligible based on day of week of both the holiday and the possible passday.
+
+        Some important caveats:
+        1) Passdays can be highly variable to locale and command
+        2) While passes technically cover a longer period, usually a
+        weekend, here we only concern ourselves with impacted business days as
+        the anomaly from the norm.
+        3) Default behavior puts passdays on Friday if the holiday is a Monday
+        or Thursday, on Monday if the holiday is a Tuesday or Friday, and on
+        Thursday if the holiday is a Wednesday. Wednesday is the most likely
+        to vary but also the least common situation. You may pass a custom day
+        of week map within constraints to calculate alternate behavior (see
+        MilitaryPassDay docs for details on constraints and format.)
 
         Returns
         -------
         True if the ts is likely a military pass day, False otherwise.
-
-        Notes
-        -----
-        Future versions of this method will add customization options for the
-        heuristic used to determine these dates. Military passdays associated
-        with holidays are highly variable across commands and locations based
-        on a range of factors. However, the majority fall into a reasonably
-        predictable pattern. Results from this method should be accurate for
-        the majority of cases, and otherwise provide an approximation
-        for predictable gaps in military person-power.
-
         """
-        passday = MilitaryPassDay()
-        return passday.is_on_offset(dt=self.ts)
+        return MilitaryPassDay().is_on_offset(dt=self.ts)
 
     # payday properties
     @property
@@ -479,8 +480,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         True if the ts is a military payday, False otherwise.
 
         """
-        milpay = MilitaryPayDay()
-        return milpay.is_on_offset(dt=self.ts)
+        return MilitaryPayDay().is_on_offset(dt=self.ts)
 
     @property
     def civ_payday(self) -> bool:
@@ -497,8 +497,7 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         *nearly* all, but **not all**, Federal employee.
 
         """
-        payday = FedPayDay()
-        return payday.is_on_offset(dt=self.ts)
+        return FedPayDay().is_on_offset(dt=self.ts)
 
     # FY/FQ properties
     @property
@@ -611,16 +610,44 @@ class FedStamp(metaclass=MagicDelegator, delegate_to="ts", delegate_class=pd.Tim
         pass
 
     @property
-    def departments(self) -> set[str]:
+    def departments(
+        self,
+        short_form: bool = True,
+        long_form: bool = False,
+        abbrev: bool = False,
+        obj: bool = False,
+    ) -> set[str | Dept]:
         """
         Retrieves the set of executive departments active on the date.
 
+        Parameters
+        ----------
+        *all optional*
+        short_form : default True, if true, returns the short-form name of
+            the departments (e.g. 'Commerce') if no flags provided as
+        arguments. If you pass False to short_form and provide no other True
+        flags, will return the string representation of the department, which
+        is a concatenation of the long form and abbreviation (i.e. "Department
+        of State (DoS)")
+
+        long_form : if true, returns the full name of the departments.
+
+        abbrev : if true, returns the three or four letter abbreviation for
+            the department in mixed case
+
+        obj : if true, returns the Dept enum objects representing the
+            departments
+
         Returns
         -------
-        A set of Dept enums.
-
+        A set of top-level executive departments for the date, by default
+        returns the departments as short-form strings (e.g. 'Commerce') if no
+        flags provided as arguments.
         """
-        pass
+        return {
+            dept.get_representation(short_form, long_form, abbrev, obj)
+            for dept in GovStatus.depts(dt=self.ts)
+        }
 
     @property
     def all_depts_status(self):

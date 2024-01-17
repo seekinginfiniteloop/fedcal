@@ -24,10 +24,11 @@ import json
 from pathlib import Path
 
 import pandas as pd
+from pandas import MultiIndex, Timestamp
+
 from fedcal._typing import RefinedIntervalType
 from fedcal.enum import Dept, DeptStatus
 from fedcal.utils import iso_to_ts
-from pandas import MultiIndex, Timestamp
 
 # set path to our JSON data as path to our module... plus filename, of course.
 json_file_path: Path = Path(__file__).parent / "status_intervals.json"

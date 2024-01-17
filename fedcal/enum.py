@@ -110,6 +110,24 @@ class Dept(EnumBase, HandyEnumMixin, Enum):
         self.full: str = full_name  # full name in mixed case
         self.short: str = short_name  # shortened name in mixed case
 
+    def get_representation(
+        self,
+        short_form: bool = True,
+        long_form: bool = False,
+        abbrev: bool = False,
+        obj: bool = False,
+    ) -> Dept | str:
+        representation_map = {
+            "obj": self,
+            "short_form": self.short,
+            "long_form": self.full,
+            "abbrev": self.abbrev,
+        }
+        return next(
+            (value for key, value in representation_map.items() if locals()[key]),
+            self.__str__,
+        )
+
     def __str__(self) -> str:
         """
         Customized string representation of enum
@@ -159,33 +177,6 @@ class Dept(EnumBase, HandyEnumMixin, Enum):
         list[str]: List of attributes for lookup.
         """
         return ["abbrev", "full", "short"]
-
-
-depts_set: set[Dept] = {
-    Dept.DHS,
-    Dept.DOC,
-    Dept.DOD,
-    Dept.DOE,
-    Dept.DOI,
-    Dept.DOJ,
-    Dept.DOL,
-    Dept.DOS,
-    Dept.DOT,
-    Dept.ED,
-    Dept.HHS,
-    Dept.HUD,
-    Dept.IA,
-    Dept.PRES,
-    Dept.USDA,
-    Dept.USDT,
-    Dept.VA,
-}
-
-"""
-depts_set: A set of top-level executive departments as enum
-objects. Data currently omit judiciary and legislative budgets (federal courts
-and Congress).
-"""
 
 
 @unique

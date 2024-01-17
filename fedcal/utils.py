@@ -17,6 +17,14 @@ time conversions in fedcal. We expose it publicly because they're probably
 generally useful for other things.
 
 It includes:
+- `set_default_range` a zero-argument default factory which sets the default
+date range for several classes. (Classes serving appropriations status
+information have a narrower range.)
+
+- `find_nearest` a function to find the nearest date among an array of dates
+to another date can also be used with any other data type that supports
+comparison, subtraction and abs.
+
 - `iso_to_ts` streamlines conversion of ISO8601 formatted strings to pandas
 Timestamp, primarily for loading json status input in _status_factory.py
 
@@ -68,7 +76,6 @@ from __future__ import annotations
 
 import datetime
 from array import ArrayType
-from dataclasses import dataclass, field
 from functools import singledispatch
 from typing import Any, Self
 
@@ -80,11 +87,14 @@ from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, PeriodIndex, Series, Timestamp
 from pandas.tseries.frequencies import to_offset
 
+from fedcal.enum import Dept
 from fedcal._typing import (
     DatetimeScalarOrArray,
     FedIndexConvertibleTypes,
     FedStampConvertibleTypes,
 )
+
+# Time and date utilities
 
 datetime_types = (
     datetime.datetime,
@@ -107,6 +117,17 @@ datetime_keys: list[str] = [
     "time",
     "timestamp",
 ]
+
+def set_default_range() -> DatetimeIndex:
+    """
+    A default_factory function for setting default range on several classes.
+    Produces a pd.DatetimeIndex with default range of FY71 to end of FY2199.
+
+    Returns
+    -------
+        pd.DatetimeIndex with default range of FY71 to end of FY2199.
+    """
+    return to_datetimeindex(pd.Timestamp(year=1970, month=10, day=1), pd.Timestamp(year=2199, month=9, day=30))
 
 
 def find_nearest(
@@ -734,6 +755,7 @@ __all__: list[str] = [
     "get_today",
     "is_datetime_like",
     "iso_to_ts",
+    "set_default_range",
     "to_datetimeindex",
     "to_dt64",
     "to_timestamp",

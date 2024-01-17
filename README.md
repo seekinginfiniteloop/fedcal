@@ -4,6 +4,12 @@
 
 Current version - unstable alpha 0.1
 
+### Current Status
+
+**In active early-stage development.** Completely overhauled/refactored back-end, now it's time for the front end. I'm branching off that development from dev until further along. **Offsets module and its helpers are functional but mostly untested**, but I wanted to make it available while I overhaul the rest of the front-end. With the exception of FedHolidays, offsets are fully vectorized for snappy scalar and array operations (which isn't entirely true for pandas native offsets, at some point I may try to rewrite pd.AbstractHolidayCalendar to be more vectorized... maybe even pull it into Cython). On the branch, I'm **working to fully integrate fedcal functionality into Pandas' extensions API** (and maybe some more direct reverse engineering hacks--if necessary--like I did with the offsets module), **providing fedcal accessors to Index, Series, and DataFrame for seamless integration, and once tested, joining the pydata extensions community**. This will be functionally similar to the 'dt' accessor for datetime Series, (e.g. my_series.fc.fy will yield the Federal fiscal year for the date(s)). I'm not yet sure how I'm going to build in front-end executive department appropriations status data, possibly with a custom pandas ExtensionArray and supporting dtype for rich functionality. In digging through Pandas source to get the library where it is, I learned a lot about how pandas ticks, so I'm hoping to put that knowledge to work for fedcal.
+
+### fedcal
+
 fedcal is a simple calendar library with **_one big goal big goal_:** **enable new perspective on the U.S. Government to build transparency, improve government, and bolster democracy.**
 
 ### a calendar... why?
@@ -15,7 +21,7 @@ Time is at the heart of those impacts. I'm a federal manager, and I started writ
 ### fedcal is about answering big and small questions, improving predictions, and understanding the U.S. Government, its effect on society and the world
 
 > [!NOTE]
-> The Federal Government is a big control group (of sorts) if you think about it. **Two million people are mostly at work... or they aren't** because of holidays, weekends, military passdays, or government shutdowns. One minute the government is 'on', and the next it is 'off'. Of course, it's more complicated than that -- sometimes only half, a third, or 90% of the government is impacted, which offers opportunities for even richer differential analysis (and one fedcal hopes to enable). But it's not just shutdowns -- a continuing resolution instead of a full year appropriation is another kind of binary relationship, or even whether a holiday falls on a Monday or Tuesday. fedcal aims to give you the tools to explore these relationships and their significance (...or insignificance).
+> If you think about it, the U.S. Government is a big control group, of sorts. **Two million people are mostly at work... or they aren't** because of holidays, weekends, military passdays, or government shutdowns. One minute the government is 'on', and the next it is 'off'. Of course, it's more complicated than that -- sometimes only half, a third, or 90% of the government is impacted, which offers opportunities for even richer differential analysis (and one fedcal hopes to enable). But it's not just shutdowns -- a continuing resolution instead of a full year appropriation is another kind of binary relationship, or even whether a holiday falls on a Monday or Tuesday. fedcal aims to give you the tools to explore these relationships and their significance (...or insignificance).
 
 #### A few example questions fedcal can help answer:
 

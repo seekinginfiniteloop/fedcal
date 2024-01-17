@@ -295,6 +295,7 @@ class HandyEnumMixin:
         """
         Simple classmethod to return the values of members.
         """
+        get_
         return sorted(list(map(lambda c: c.value, cls)))
 
     @classmethod
@@ -302,7 +303,7 @@ class HandyEnumMixin:
         """
         Simple classmethod to return the attributes of members.
         """
-        return sorted([member.attr for member in cls.members()])
+        return sorted([getattr(member, attr) for member in cls.members()])
 
     @classmethod
     def list_member_attrs(cls, member: EnumType) -> list[Any]:
@@ -315,11 +316,15 @@ class HandyEnumMixin:
         )
 
     @classmethod
-    def members(cls) -> list[Type[EnumType]]:
+    def member_names(cls) -> list[str]:
         """
-        Simple classmethod to return the members of the enum class.
+        Simple classmethod to return the member names of the enum class.
         """
         return sorted(list(cls.__members__))
+
+    @classmethod
+    def members(cls) -> list[Type[EnumType]]:
+        return [cls.__members__.get(name) for name in cls.__members__]
 
     @classmethod
     def zip(cls) -> list[tuple[Any]]:

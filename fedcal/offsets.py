@@ -40,17 +40,17 @@ import pandas as pd
 from numpy import datetime64, int32, int64, timedelta64
 from numpy.typing import NDArray
 from pandas import DatetimeIndex, Index, Series, Timedelta, Timestamp
-from pandas._libs.tslibs.offsets import SemiMonthOffset, apply_wraps, shift_month
+from pandas._libs.tslibs.offsets import apply_wraps, SemiMonthOffset, shift_month
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar,
     Holiday,
+    nearest_workday,
     USColumbusDay,
     USLaborDay,
     USMartinLutherKingJr,
     USMemorialDay,
     USPresidentsDay,
     USThanksgivingDay,
-    nearest_workday,
 )
 from pandas.tseries.offsets import CustomBusinessDay, Week
 
@@ -581,7 +581,7 @@ class FedBusinessDay(CustomBusinessDay):
     _normalize: bool = field(default=True, init=False)
 
     _holidays: list[Timestamp] | NDArray[np.datetime64] | None = field(
-        default=FedHolidays().np_holidays
+        default_factory=FedHolidays().np_holidays
     )
     off_set: timedelta | Timedelta = field(default=timedelta(days=0), init=False)
 
@@ -715,8 +715,8 @@ class MilitaryPayDay(SemiMonthOffset):
     _min_day_of_month: int = 7
 
     _normalize: bool = field(default=True, init=False)
-    b_day: FedBusinessDay = FedBusinessDay()
-    calendar: np.busdaycalendar = field(default=b_day.calendar, init=False)
+    b_day: FedBusinessDay = None
+    calendar: np.busdaycalendar = field(init=False)
 
     def __post_init__(self) -> None:
         """
@@ -856,6 +856,19 @@ class MilitaryPayDay(SemiMonthOffset):
     # TODO: implement custom rollback/rollforward with array support
 
 
+def _set_default_passday_map() -> dict[str, str]:
+    """
+    Default passday mapping for MilitaryPassDay.
+    """
+    return {
+        "Mon": "Fri",  # [key] holiday day of observance to:
+        "Tue": "Mon",  # value day of associated passday
+        "Wed": "Thu",
+        "Thu": "Fri",
+        "Fri": "Mon",
+    }
+
+
 @dataclass(order=False, slots=False)
 class MilitaryPassDay(CustomBusinessDay):
     """
@@ -931,20 +944,12 @@ class MilitaryPassDay(CustomBusinessDay):
 
     _normalize: bool = field(default=True, init=False)
 
-    b_day = FedBusinessDay()
+    b_day = None
 
     # mapping of holiday-day-of-the-week to passday-day-of-the-week
     # default is Friday passday for Thursday or Monday holiday, Monday passday
     # for Friday or Tuesday holiday, and Thursday passday for Wednesday holiday
-    passday_map: dict[str, str] = field(
-        default={
-            "Mon": "Fri",  # [key] holiday day of observance to:
-            "Tue": "Mon",  # value day of associated passday
-            "Wed": "Thu",
-            "Thu": "Fri",
-            "Fri": "Mon",
-        }
-    )
+    passday_map: dict[str, str] = field(default_factory=_set_default_passday_map)
 
     _map: dict | None = None
 
@@ -959,7 +964,6 @@ class MilitaryPassDay(CustomBusinessDay):
             values.
         """
         if not hasattr(self.b_day, "calendar"):
-            FedHolidays()
             self.b_day = FedBusinessDay()
         super().__init__(
             n=1,
