@@ -1,12 +1,8 @@
 ## fedcal, a democratic python calendar enhancement to pandas
 
-![fedcal logo](docs/imgs/fedcal-sm.png)
+![fedcal logo](docs/imgs/fedcal-sm.png
 
-Current version - unstable alpha 0.1
-
-### Current Status
-
-**In active early-stage development.** 16 Jan 2024 - Completely overhauled/refactored back-end, now it's time for the front end. I'm branching off that development from dev until further along. **Offsets module and its helpers are functional but mostly untested**, but I wanted to make it available while I overhaul the rest of the front-end. With the exception of FedHolidays, offsets are fully vectorized for snappy scalar and array operations (which isn't entirely true for pandas native offsets, at some point I may try to rewrite pd.AbstractHolidayCalendar to be more vectorized... maybe even pull it into Cython). On the branch, I'm **working to fully integrate fedcal functionality into Pandas' extensions API** (and maybe some more direct reverse engineering hacks--if necessary--like I did with the offsets module), **providing fedcal accessors to Index, Series, and DataFrame for seamless integration, and once tested, joining the pydata extensions community**. This will be functionally similar to the 'dt' accessor for datetime Series, (e.g. my_series.fc.fy will yield the Federal fiscal year for the date(s)). I'm not yet sure how I'm going to build in front-end executive department appropriations status data, possibly with a custom pandas ExtensionArray and supporting dtype for rich functionality. In digging through Pandas source to get the library where it is, I learned a lot about how pandas ticks, so I'm hoping to put that knowledge to work for fedcal.
+# Not dead; just taking a break to work on other things.
 
 Available/Functional but untested:
 offsets.py - custom pandas DateOffsets for civilian and military paydays (FedPayDay, MilitaryPayDay), Federal holidays including past proclamation holidays (FedHolidays), federal business days accounting for federal holidays (FedBusinessDay), and a class to identify likely military passdays falling on business days and adjacent to federal holidays (MilitaryPassDay).
