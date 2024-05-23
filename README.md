@@ -1,6 +1,6 @@
 ## fedcal, a democratic python calendar enhancement to pandas
 
-![fedcal logo](docs/imgs/fedcal-sm.png
+![fedcal logo](docs/imgs/fedcal-sm.png)
 
 # Not dead; just taking a break to work on other things.
 
