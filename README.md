@@ -2,7 +2,7 @@
 
 ![fedcal logo](docs/imgs/fedcal-sm.png)
 
-# Not dead; just taking a break to work on other things.
+# ok ok; it is dead. 
 
 Available/Functional but untested:
 offsets.py - custom pandas DateOffsets for civilian and military paydays (FedPayDay, MilitaryPayDay), Federal holidays including past proclamation holidays (FedHolidays), federal business days accounting for federal holidays (FedBusinessDay), and a class to identify likely military passdays falling on business days and adjacent to federal holidays (MilitaryPassDay).
